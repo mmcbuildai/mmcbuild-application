@@ -48,4 +48,11 @@ export type Events = {
       filePath: string;
     };
   };
+  "rd/commit.detected": {
+    data: {
+      commitLogId: string;
+      orgId: string;
+      sha: string;
+    };
+  };
 };

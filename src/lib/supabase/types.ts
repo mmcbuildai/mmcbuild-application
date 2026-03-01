@@ -44,6 +44,10 @@ export type RdTag = "core_rd" | "rd_supporting" | "not_eligible";
 
 export type ExperimentStatus = "planned" | "in_progress" | "completed";
 
+export type CommitLogStatus = "pending" | "processing" | "classified" | "error";
+
+export type ReviewStatus = "pending" | "approved" | "rejected";
+
 export type Json =
   | string
   | number
@@ -694,6 +698,214 @@ export interface Database {
           },
         ];
       };
+      rd_tracking_config: {
+        Row: {
+          id: string;
+          org_id: string;
+          enabled: boolean;
+          github_repo: string | null;
+          webhook_secret: string | null;
+          default_hours_per_commit: number;
+          auto_approve_threshold: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          enabled?: boolean;
+          github_repo?: string | null;
+          webhook_secret?: string | null;
+          default_hours_per_commit?: number;
+          auto_approve_threshold?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          enabled?: boolean;
+          github_repo?: string | null;
+          webhook_secret?: string | null;
+          default_hours_per_commit?: number;
+          auto_approve_threshold?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rd_tracking_config_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: true;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rd_commit_logs: {
+        Row: {
+          id: string;
+          org_id: string;
+          sha: string;
+          author_name: string | null;
+          author_email: string | null;
+          message: string | null;
+          files_changed: Json | null;
+          repo: string | null;
+          branch: string | null;
+          committed_at: string | null;
+          status: CommitLogStatus;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          sha: string;
+          author_name?: string | null;
+          author_email?: string | null;
+          message?: string | null;
+          files_changed?: Json | null;
+          repo?: string | null;
+          branch?: string | null;
+          committed_at?: string | null;
+          status?: CommitLogStatus;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          sha?: string;
+          author_name?: string | null;
+          author_email?: string | null;
+          message?: string | null;
+          files_changed?: Json | null;
+          repo?: string | null;
+          branch?: string | null;
+          committed_at?: string | null;
+          status?: CommitLogStatus;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rd_commit_logs_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rd_auto_entries: {
+        Row: {
+          id: string;
+          org_id: string;
+          commit_id: string;
+          date: string;
+          hours: number;
+          stage: string;
+          deliverable: string;
+          rd_tag: RdTag;
+          description: string | null;
+          ai_reasoning: string | null;
+          confidence: number | null;
+          review_status: ReviewStatus;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          commit_id: string;
+          date: string;
+          hours: number;
+          stage: string;
+          deliverable: string;
+          rd_tag?: RdTag;
+          description?: string | null;
+          ai_reasoning?: string | null;
+          confidence?: number | null;
+          review_status?: ReviewStatus;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          date?: string;
+          hours?: number;
+          stage?: string;
+          deliverable?: string;
+          rd_tag?: RdTag;
+          description?: string | null;
+          ai_reasoning?: string | null;
+          confidence?: number | null;
+          review_status?: ReviewStatus;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rd_auto_entries_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rd_auto_entries_commit_id_fkey";
+            columns: ["commit_id"];
+            isOneToOne: false;
+            referencedRelation: "rd_commit_logs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rd_auto_entries_reviewed_by_fkey";
+            columns: ["reviewed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rd_file_mappings: {
+        Row: {
+          id: string;
+          org_id: string;
+          pattern: string;
+          stage: string;
+          deliverable: string;
+          rd_tag: RdTag;
+          priority: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          pattern: string;
+          stage: string;
+          deliverable: string;
+          rd_tag?: RdTag;
+          priority?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          pattern?: string;
+          stage?: string;
+          deliverable?: string;
+          rd_tag?: RdTag;
+          priority?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rd_file_mappings_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       rd_experiments: {
         Row: {
           id: string;
@@ -810,6 +1022,8 @@ export interface Database {
       kb_document_status: KbDocumentStatus;
       rd_tag: RdTag;
       experiment_status: ExperimentStatus;
+      commit_log_status: CommitLogStatus;
+      review_status: ReviewStatus;
     };
     CompositeTypes: Record<string, never>;
   };

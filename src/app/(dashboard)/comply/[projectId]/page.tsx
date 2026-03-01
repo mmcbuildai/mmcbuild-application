@@ -201,6 +201,51 @@ export default async function ProjectComplyPage({
         </Card>
       </div>
 
+      {/* Ecosystem Pipeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">MMC Pipeline</CardTitle>
+          <CardDescription>
+            Your project journey through the MMC ecosystem
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 overflow-x-auto">
+            {[
+              { label: "Comply", active: true, desc: "NCC compliance check" },
+              { label: "Build", active: false, desc: "Design optimisation" },
+              { label: "Quote", active: false, desc: "Cost estimation" },
+              { label: "Directory", active: false, desc: "Find trades" },
+              { label: "Train", active: false, desc: "Upskill your team" },
+            ].map((step, i) => (
+              <div key={step.label} className="flex items-center gap-2">
+                {i > 0 && (
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
+                <div
+                  className={`rounded-md border px-3 py-2 text-center min-w-[100px] ${
+                    step.active
+                      ? "border-primary bg-primary/10"
+                      : "border-dashed opacity-50"
+                  }`}
+                >
+                  <p
+                    className={`text-sm font-medium ${
+                      step.active ? "text-primary" : "text-muted-foreground"
+                    }`}
+                  >
+                    {step.label}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {step.active ? step.desc : "Coming soon"}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Past checks */}
       {checks.length > 0 && (
         <div>

@@ -4,8 +4,9 @@ import { testFunction } from "@/lib/inngest/functions/test-function";
 import { processPlan } from "@/lib/inngest/functions/process-plan";
 import { runComplianceCheck } from "@/lib/inngest/functions/run-compliance-check";
 import { processKbDocument } from "@/lib/inngest/functions/process-kb-document";
+import { classifyRdCommit } from "@/lib/inngest/functions/classify-rd-commit";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [testFunction, processPlan, runComplianceCheck, processKbDocument],
+  functions: [testFunction, processPlan, runComplianceCheck, processKbDocument, classifyRdCommit],
 });

@@ -1,3 +1,8 @@
+-- DEPRECATED: Use supabase/setup_complete.sql instead.
+-- This file is kept for git history only. The complete setup script
+-- includes everything here plus storage buckets, feedback/audit tables,
+-- RPC functions, and is idempotent (safe to re-run).
+--
 -- MMC Build Foundation Schema
 -- Stage 0: Organisations, Profiles, Projects, Project Members with RLS
 

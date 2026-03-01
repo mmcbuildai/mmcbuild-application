@@ -54,14 +54,44 @@ export type NccCategory =
   | "termite"
   | "bushfire";
 
-export const NCC_CATEGORIES: { key: NccCategory; label: string }[] = [
-  { key: "fire_safety", label: "Fire Safety" },
-  { key: "structural", label: "Structural" },
-  { key: "energy_efficiency", label: "Energy Efficiency" },
-  { key: "accessibility", label: "Accessibility" },
-  { key: "waterproofing", label: "Waterproofing" },
-  { key: "ventilation", label: "Ventilation" },
-  { key: "glazing", label: "Glazing" },
-  { key: "termite", label: "Termite Management" },
-  { key: "bushfire", label: "Bushfire" },
+export type NccVolume = 1 | 2;
+
+export const NCC_CATEGORIES: {
+  key: NccCategory;
+  label: string;
+  volume: NccVolume;
+}[] = [
+  { key: "fire_safety", label: "Fire Safety", volume: 2 },
+  { key: "structural", label: "Structural", volume: 2 },
+  { key: "energy_efficiency", label: "Energy Efficiency", volume: 2 },
+  { key: "accessibility", label: "Accessibility", volume: 1 },
+  { key: "waterproofing", label: "Waterproofing", volume: 2 },
+  { key: "ventilation", label: "Ventilation", volume: 2 },
+  { key: "glazing", label: "Glazing", volume: 2 },
+  { key: "termite", label: "Termite Management", volume: 2 },
+  { key: "bushfire", label: "Bushfire", volume: 2 },
 ];
+
+export function getCategoryVolume(category: string): NccVolume {
+  const cat = NCC_CATEGORIES.find((c) => c.key === category);
+  return cat?.volume ?? 2;
+}
+
+export function getCategoryLabel(category: string): string {
+  const cat = NCC_CATEGORIES.find((c) => c.key === category);
+  return cat?.label ?? category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export type CategoryStatus = "passed" | "issues" | "failed";
+
+export function getCategoryStatus(
+  findings: { severity: string }[]
+): CategoryStatus {
+  const hasCritical = findings.some(
+    (f) => f.severity === "critical" || f.severity === "non_compliant"
+  );
+  if (hasCritical) return "failed";
+  const hasAdvisory = findings.some((f) => f.severity === "advisory");
+  if (hasAdvisory) return "issues";
+  return "passed";
+}

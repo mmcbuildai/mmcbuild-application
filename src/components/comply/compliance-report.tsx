@@ -1,6 +1,9 @@
 import { RiskSummary } from "./risk-summary";
 import { FindingCard } from "./finding-card";
 import { FeedbackWidget } from "./feedback-widget";
+import { CategoryRollup } from "./category-rollup";
+import { ExportButton } from "./export-button";
+import { getCategoryLabel } from "@/lib/ai/types";
 
 interface Finding {
   id: string;
@@ -32,6 +35,11 @@ export function ComplianceReport({ check, findings }: ComplianceReportProps) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div />
+        <ExportButton checkId={check.id} />
+      </div>
+
       {check.summary && check.overall_risk && (
         <RiskSummary
           summary={check.summary}
@@ -39,6 +47,8 @@ export function ComplianceReport({ check, findings }: ComplianceReportProps) {
           findings={findings}
         />
       )}
+
+      <CategoryRollup findings={findings} />
 
       <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
         <p className="text-xs text-yellow-800">
@@ -50,7 +60,7 @@ export function ComplianceReport({ check, findings }: ComplianceReportProps) {
 
       {categories.map((category) => {
         const catFindings = findings.filter((f) => f.category === category);
-        const label = category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        const label = getCategoryLabel(category);
 
         return (
           <div key={category}>

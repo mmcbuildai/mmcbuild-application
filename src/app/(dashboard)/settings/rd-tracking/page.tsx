@@ -3,12 +3,20 @@ import {
   getTimeSummary,
   listExperiments,
   deleteTimeEntry,
+  listAutoEntries,
+  getAutoTrackingConfig,
+  listFileMappings,
+  getAutoTrackingStats,
 } from "./actions";
 import { RD_STAGES, RD_DELIVERABLES, RD_TAG_OPTIONS } from "@/lib/rd-constants";
 import { TimeEntryForm } from "@/components/rd/time-entry-form";
 import { RdSummary } from "@/components/rd/rd-summary";
 import { ExperimentLog } from "@/components/rd/experiment-log";
 import { ExportCsvButton } from "@/components/rd/export-csv-button";
+import { AutoEntryReview } from "@/components/rd/auto-entry-review";
+import { AutoTrackingConfig } from "@/components/rd/auto-tracking-config";
+import { FileMappingEditor } from "@/components/rd/file-mapping-editor";
+import { AutoTrackingStats } from "@/components/rd/auto-tracking-stats";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +30,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { headers } from "next/headers";
 
 const tagColors: Record<string, "default" | "secondary" | "outline"> = {
   core_rd: "default",
@@ -29,12 +38,43 @@ const tagColors: Record<string, "default" | "secondary" | "outline"> = {
   not_eligible: "outline",
 };
 
+const AUTO_STATS_DEFAULT = {
+  totalAutoHours: 0,
+  pendingCount: 0,
+  approvedCount: 0,
+  rejectedCount: 0,
+  approvalRate: 0,
+};
+
 export default async function RdTrackingPage() {
+  // Core data (always available)
   const [entries, summary, experiments] = await Promise.all([
     listTimeEntries(),
     getTimeSummary(),
     listExperiments(),
   ]);
+
+  // Auto-tracking data (may fail if migration not yet run)
+  let autoEntries: Awaited<ReturnType<typeof listAutoEntries>> = [];
+  let autoConfig: Awaited<ReturnType<typeof getAutoTrackingConfig>> = null;
+  let fileMappings: Awaited<ReturnType<typeof listFileMappings>> = [];
+  let autoStats = AUTO_STATS_DEFAULT;
+
+  try {
+    [autoEntries, autoConfig, fileMappings, autoStats] = await Promise.all([
+      listAutoEntries(),
+      getAutoTrackingConfig(),
+      listFileMappings(),
+      getAutoTrackingStats(),
+    ]);
+  } catch {
+    // Tables not yet created — auto-tracking tab will show defaults
+  }
+
+  const headersList = await headers();
+  const host = headersList.get("host") ?? "localhost:3000";
+  const protocol = host.startsWith("localhost") ? "http" : "https";
+  const webhookUrl = `${protocol}://${host}/api/rd/webhook`;
 
   return (
     <div className="space-y-6">
@@ -60,11 +100,20 @@ export default async function RdTrackingPage() {
         <TabsList>
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="log">Time Log</TabsTrigger>
+          <TabsTrigger value="auto">
+            Auto-Tracked
+            {autoStats.pendingCount > 0 && (
+              <Badge variant="secondary" className="ml-1.5 text-xs px-1.5">
+                {autoStats.pendingCount}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="experiments">Experiments</TabsTrigger>
         </TabsList>
 
         <TabsContent value="summary" className="space-y-6 mt-4">
           <RdSummary summary={summary} />
+          <AutoTrackingStats stats={autoStats} />
         </TabsContent>
 
         <TabsContent value="log" className="space-y-6 mt-4">
@@ -131,6 +180,12 @@ export default async function RdTrackingPage() {
               </TableBody>
             </Table>
           )}
+        </TabsContent>
+
+        <TabsContent value="auto" className="space-y-6 mt-4">
+          <AutoTrackingConfig config={autoConfig} webhookUrl={webhookUrl} />
+          <FileMappingEditor mappings={fileMappings} />
+          <AutoEntryReview entries={autoEntries} />
         </TabsContent>
 
         <TabsContent value="experiments" className="mt-4">

@@ -3,7 +3,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { RdTag, ExperimentStatus } from "@/lib/supabase/types";
+import type { RdTag, ExperimentStatus, ReviewStatus } from "@/lib/supabase/types";
+import { randomBytes } from "crypto";
 
 async function getProfile() {
   const supabase = await createClient();
@@ -186,4 +187,309 @@ export async function exportTimeEntriesCsv() {
   );
 
   return [header, ...rows].join("\n");
+}
+
+// ============================================================
+// Auto-Tracking Actions
+// ============================================================
+
+export async function getAutoTrackingConfig() {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from("rd_tracking_config")
+    .select("*")
+    .eq("org_id", profile.org_id)
+    .single();
+
+  return data;
+}
+
+export async function updateAutoTrackingConfig(updates: {
+  enabled?: boolean;
+  github_repo?: string | null;
+  webhook_secret?: string | null;
+  default_hours_per_commit?: number;
+  auto_approve_threshold?: number;
+}) {
+  const profile = await getProfile();
+  if (!["owner", "admin"].includes(profile.role)) {
+    throw new Error("Admin access required");
+  }
+
+  const admin = createAdminClient();
+
+  // Upsert — create if doesn't exist
+  const { data: existing } = await admin
+    .from("rd_tracking_config")
+    .select("id")
+    .eq("org_id", profile.org_id)
+    .single();
+
+  if (existing) {
+    const { error } = await admin
+      .from("rd_tracking_config")
+      .update(updates as never)
+      .eq("org_id", profile.org_id);
+    if (error) throw new Error(`Failed to update config: ${error.message}`);
+  } else {
+    const { error } = await admin.from("rd_tracking_config").insert({
+      org_id: profile.org_id,
+      webhook_secret: randomBytes(32).toString("hex"),
+      ...updates,
+    } as never);
+    if (error) throw new Error(`Failed to create config: ${error.message}`);
+  }
+
+  revalidatePath("/settings/rd-tracking");
+}
+
+export async function generateWebhookSecret() {
+  const profile = await getProfile();
+  if (!["owner", "admin"].includes(profile.role)) {
+    throw new Error("Admin access required");
+  }
+
+  const secret = randomBytes(32).toString("hex");
+  const admin = createAdminClient();
+
+  const { error } = await admin
+    .from("rd_tracking_config")
+    .update({ webhook_secret: secret } as never)
+    .eq("org_id", profile.org_id);
+
+  if (error) throw new Error(`Failed to generate secret: ${error.message}`);
+  revalidatePath("/settings/rd-tracking");
+  return secret;
+}
+
+export async function listAutoEntries(filters?: {
+  reviewStatus?: ReviewStatus;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  let query = admin
+    .from("rd_auto_entries")
+    .select(
+      "*, rd_commit_logs(sha, message, repo, branch, author_name, committed_at, files_changed)"
+    )
+    .eq("org_id", profile.org_id)
+    .order("created_at", { ascending: false });
+
+  if (filters?.reviewStatus) {
+    query = query.eq("review_status", filters.reviewStatus);
+  }
+  if (filters?.startDate) {
+    query = query.gte("date", filters.startDate);
+  }
+  if (filters?.endDate) {
+    query = query.lte("date", filters.endDate);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to list auto entries: ${error.message}`);
+  return data ?? [];
+}
+
+export async function approveAutoEntry(entryId: string) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  // Get the entry
+  const { data: entry, error: fetchError } = await admin
+    .from("rd_auto_entries")
+    .select("*")
+    .eq("id", entryId)
+    .eq("org_id", profile.org_id)
+    .single();
+
+  if (fetchError || !entry) {
+    throw new Error("Entry not found");
+  }
+
+  // Update review status
+  await admin
+    .from("rd_auto_entries")
+    .update({
+      review_status: "approved",
+      reviewed_by: profile.id,
+      reviewed_at: new Date().toISOString(),
+    } as never)
+    .eq("id", entryId);
+
+  // Copy to rd_time_entries
+  await admin.from("rd_time_entries").insert({
+    profile_id: profile.id,
+    org_id: profile.org_id,
+    date: entry.date,
+    hours: entry.hours,
+    stage: entry.stage,
+    deliverable: entry.deliverable,
+    rd_tag: entry.rd_tag as RdTag,
+    description: entry.description,
+  } as never);
+
+  revalidatePath("/settings/rd-tracking");
+}
+
+export async function rejectAutoEntry(entryId: string) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { error } = await admin
+    .from("rd_auto_entries")
+    .update({
+      review_status: "rejected",
+      reviewed_by: profile.id,
+      reviewed_at: new Date().toISOString(),
+    } as never)
+    .eq("id", entryId)
+    .eq("org_id", profile.org_id);
+
+  if (error) throw new Error(`Failed to reject entry: ${error.message}`);
+  revalidatePath("/settings/rd-tracking");
+}
+
+export async function bulkApproveEntries(entryIds: string[]) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  // Fetch all entries
+  const { data: entries, error: fetchError } = await admin
+    .from("rd_auto_entries")
+    .select("*")
+    .in("id", entryIds)
+    .eq("org_id", profile.org_id)
+    .eq("review_status", "pending");
+
+  if (fetchError || !entries) {
+    throw new Error("Failed to fetch entries");
+  }
+
+  // Update all to approved
+  await admin
+    .from("rd_auto_entries")
+    .update({
+      review_status: "approved",
+      reviewed_by: profile.id,
+      reviewed_at: new Date().toISOString(),
+    } as never)
+    .in("id", entryIds)
+    .eq("org_id", profile.org_id);
+
+  // Copy all to rd_time_entries
+  const timeEntries = entries.map((e) => ({
+    profile_id: profile.id,
+    org_id: profile.org_id,
+    date: e.date,
+    hours: e.hours,
+    stage: e.stage,
+    deliverable: e.deliverable,
+    rd_tag: e.rd_tag as RdTag,
+    description: e.description,
+  }));
+
+  if (timeEntries.length > 0) {
+    await admin.from("rd_time_entries").insert(timeEntries as never);
+  }
+
+  revalidatePath("/settings/rd-tracking");
+}
+
+export async function listFileMappings() {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("rd_file_mappings")
+    .select("*")
+    .eq("org_id", profile.org_id)
+    .order("priority", { ascending: false });
+
+  if (error) throw new Error(`Failed to list mappings: ${error.message}`);
+  return data ?? [];
+}
+
+export async function saveFileMappings(
+  mappings: Array<{
+    id?: string;
+    pattern: string;
+    stage: string;
+    deliverable: string;
+    rd_tag: RdTag;
+    priority: number;
+  }>
+) {
+  const profile = await getProfile();
+  if (!["owner", "admin"].includes(profile.role)) {
+    throw new Error("Admin access required");
+  }
+
+  const admin = createAdminClient();
+
+  // Delete existing mappings for this org
+  await admin
+    .from("rd_file_mappings")
+    .delete()
+    .eq("org_id", profile.org_id);
+
+  // Insert new mappings
+  if (mappings.length > 0) {
+    const rows = mappings.map((m) => ({
+      org_id: profile.org_id,
+      pattern: m.pattern,
+      stage: m.stage,
+      deliverable: m.deliverable,
+      rd_tag: m.rd_tag,
+      priority: m.priority,
+    }));
+
+    const { error } = await admin
+      .from("rd_file_mappings")
+      .insert(rows as never);
+
+    if (error) throw new Error(`Failed to save mappings: ${error.message}`);
+  }
+
+  revalidatePath("/settings/rd-tracking");
+}
+
+export async function getAutoTrackingStats() {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { data: autoEntries, error } = await admin
+    .from("rd_auto_entries")
+    .select("hours, review_status")
+    .eq("org_id", profile.org_id);
+
+  if (error) throw new Error(`Failed to get stats: ${error.message}`);
+
+  const entries = autoEntries ?? [];
+  let totalAutoHours = 0;
+  let pendingCount = 0;
+  let approvedCount = 0;
+  let rejectedCount = 0;
+
+  for (const e of entries) {
+    totalAutoHours += Number(e.hours);
+    if (e.review_status === "pending") pendingCount++;
+    else if (e.review_status === "approved") approvedCount++;
+    else if (e.review_status === "rejected") rejectedCount++;
+  }
+
+  const totalReviewed = approvedCount + rejectedCount;
+  const approvalRate = totalReviewed > 0 ? approvedCount / totalReviewed : 0;
+
+  return {
+    totalAutoHours,
+    pendingCount,
+    approvedCount,
+    rejectedCount,
+    approvalRate,
+  };
 }

@@ -51,5 +51,7 @@ export async function GET(request: Request) {
   }
 
   // Auth error — redirect to login with error
-  return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+  return NextResponse.redirect(
+    `${origin}/login?error=${encodeURIComponent("Authentication failed. Please try signing in again.")}`
+  );
 }
