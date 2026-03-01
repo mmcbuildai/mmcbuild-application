@@ -133,98 +133,48 @@ export async function listKbDocuments(kbId: string) {
   return data ?? [];
 }
 
-const ACCEPTED_EXTENSIONS = [
-  "pdf", "dwg", "ifc", "jpg", "jpeg", "png", "doc", "docx", "pln", "txt",
-];
-
-function getMimeType(fileName: string): string {
-  const ext = fileName.split(".").pop()?.toLowerCase();
-  const mimeMap: Record<string, string> = {
-    pdf: "application/pdf",
-    dwg: "application/acad",
-    ifc: "application/x-step",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    png: "image/png",
-    doc: "application/msword",
-    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    pln: "application/octet-stream",
-    txt: "text/plain",
-  };
-  return mimeMap[ext ?? ""] ?? "application/octet-stream";
-}
-
-export async function uploadKbDocument(formData: FormData) {
+/**
+ * Register a document that was already uploaded to Supabase Storage
+ * from the browser. This avoids the Vercel 4.5MB body size limit.
+ */
+export async function registerKbDocument(
+  kbId: string,
+  fileName: string,
+  filePath: string,
+  fileSizeBytes: number
+) {
   const profile = await getProfile();
   const admin = createAdminClient();
 
-  const kbId = formData.get("kbId") as string;
-  const files = formData.getAll("files") as File[];
+  const { data: doc, error: docError } = await admin
+    .from("knowledge_documents")
+    .insert({
+      kb_id: kbId,
+      file_name: fileName,
+      file_path: filePath,
+      file_size_bytes: fileSizeBytes,
+      status: "pending",
+      created_by: profile.id,
+    } as never)
+    .select("id")
+    .single();
 
-  if (!kbId) throw new Error("Missing kbId");
-  if (!files || files.length === 0) throw new Error("No files provided");
+  if (docError) throw new Error(`Failed to create doc: ${docError.message}`);
 
-  const results: { id: string; fileName: string }[] = [];
+  const docId = (doc as { id: string }).id;
 
-  for (const file of files) {
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!ext || !ACCEPTED_EXTENSIONS.includes(ext)) {
-      console.warn(`Skipping unsupported file: ${file.name}`);
-      continue;
-    }
-
-    // Sanitize filename
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const filePath = `${kbId}/${Date.now()}_${safeName}`;
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    const { error: uploadError } = await admin.storage
-      .from("kb-uploads")
-      .upload(filePath, buffer, {
-        contentType: getMimeType(file.name),
-      });
-
-    if (uploadError) {
-      console.error(`Upload failed for ${file.name}: ${uploadError.message}`);
-      continue;
-    }
-
-    const { data: doc, error: docError } = await admin
-      .from("knowledge_documents")
-      .insert({
-        kb_id: kbId,
-        file_name: file.name,
-        file_path: filePath,
-        file_size_bytes: file.size,
-        status: "pending",
-        created_by: profile.id,
-      } as never)
-      .select("id")
-      .single();
-
-    if (docError) {
-      console.error(`Doc record failed for ${file.name}: ${docError.message}`);
-      continue;
-    }
-
-    const docId = (doc as { id: string }).id;
-
-    await inngest.send({
-      name: "kb/document.uploaded",
-      data: {
-        documentId: docId,
-        kbId,
-        fileName: file.name,
-        filePath,
-      },
-    });
-
-    results.push({ id: docId, fileName: file.name });
-  }
+  await inngest.send({
+    name: "kb/document.uploaded",
+    data: {
+      documentId: docId,
+      kbId,
+      fileName,
+      filePath,
+    },
+  });
 
   revalidatePath(`/settings/knowledge/${kbId}`);
-  return results;
+  return { id: docId };
 }
 
 export async function uploadKbManualText(kbId: string, title: string, content: string) {

@@ -2,10 +2,11 @@
 
 import { useState, useRef } from "react";
 import {
-  uploadKbDocument,
+  registerKbDocument,
   uploadKbManualText,
   uploadKbUrl,
 } from "@/app/(dashboard)/settings/knowledge/actions";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,17 +18,22 @@ import { Upload, FileText, Globe, Type } from "lucide-react";
 const ACCEPTED_EXTENSIONS =
   ".pdf,.dwg,.ifc,.jpg,.jpeg,.png,.doc,.docx,.pln,.txt";
 
-const ACCEPTED_MIME_TYPES = [
-  "application/pdf",
-  "application/acad",
-  "application/x-step",
-  "image/jpeg",
-  "image/png",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/octet-stream",
-  "text/plain",
-].join(",");
+function getMimeType(fileName: string): string {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  const mimeMap: Record<string, string> = {
+    pdf: "application/pdf",
+    dwg: "application/acad",
+    ifc: "application/x-step",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    pln: "application/octet-stream",
+    txt: "text/plain",
+  };
+  return mimeMap[ext ?? ""] ?? "application/octet-stream";
+}
 
 export function KbDocumentUpload({ kbId }: { kbId: string }) {
   const [uploading, setUploading] = useState(false);
@@ -52,16 +58,50 @@ export function KbDocumentUpload({ kbId }: { kbId: string }) {
     setUploading(true);
     setUploadStatus(`Uploading ${fileArray.length} file(s)...`);
 
+    const supabase = createClient();
+    let successCount = 0;
+
     try {
-      const formData = new FormData();
-      formData.set("kbId", kbId);
       for (const file of fileArray) {
-        formData.append("files", file);
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${kbId}/${Date.now()}_${safeName}`;
+
+        setUploadStatus(
+          `Uploading ${file.name} (${successCount + 1}/${fileArray.length})...`
+        );
+
+        // Upload directly to Supabase Storage from browser
+        const { error: storageError } = await supabase.storage
+          .from("kb-uploads")
+          .upload(filePath, file, {
+            contentType: getMimeType(file.name),
+          });
+
+        if (storageError) {
+          console.error(
+            `Storage upload failed for ${file.name}:`,
+            storageError.message
+          );
+          setUploadStatus(`Failed to upload ${file.name}: ${storageError.message}`);
+          continue;
+        }
+
+        // Register in DB + trigger Inngest via lightweight server action
+        try {
+          await registerKbDocument(kbId, file.name, filePath, file.size);
+          successCount++;
+        } catch (err) {
+          console.error(`Register failed for ${file.name}:`, err);
+        }
       }
-      const results = await uploadKbDocument(formData);
-      setUploadStatus(
-        `Uploaded ${results.length} file(s). Processing in background...`
-      );
+
+      if (successCount > 0) {
+        setUploadStatus(
+          `Uploaded ${successCount} file(s). Processing in background...`
+        );
+      } else {
+        setUploadStatus("No files were uploaded. Check formats and try again.");
+      }
       setTimeout(() => setUploadStatus(null), 5000);
     } catch (err) {
       console.error("Upload failed:", err);
@@ -183,7 +223,7 @@ export function KbDocumentUpload({ kbId }: { kbId: string }) {
                   <input
                     ref={inputRef}
                     type="file"
-                    accept={`${ACCEPTED_EXTENSIONS},${ACCEPTED_MIME_TYPES}`}
+                    accept={ACCEPTED_EXTENSIONS}
                     multiple
                     className="hidden"
                     onChange={handleInputChange}
