@@ -10,6 +10,7 @@ export async function retrieveContext(
     sourceId?: string;
     matchThreshold?: number;
     matchCount?: number;
+    includeSystem?: boolean;
   }
 ): Promise<RetrievedDocument[]> {
   const {
@@ -18,6 +19,7 @@ export async function retrieveContext(
     sourceId,
     matchThreshold = 0.7,
     matchCount = 10,
+    includeSystem = false,
   } = options;
 
   // Generate query embedding
@@ -33,6 +35,7 @@ export async function retrieveContext(
     filter_org_id: orgId,
     filter_source_type: sourceType ?? null,
     filter_source_id: sourceId ?? null,
+    include_system: includeSystem,
   });
 
   if (error) {

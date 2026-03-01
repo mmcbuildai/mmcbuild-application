@@ -36,6 +36,14 @@ export type FindingSeverity =
   | "non_compliant"
   | "critical";
 
+export type KbScope = "system" | "org";
+
+export type KbDocumentStatus = "pending" | "processing" | "ready" | "error";
+
+export type RdTag = "core_rd" | "rd_supporting" | "not_eligible";
+
+export type ExperimentStatus = "planned" | "in_progress" | "completed";
+
 export type Json =
   | string
   | number
@@ -534,6 +542,212 @@ export interface Database {
         };
         Relationships: [];
       };
+      knowledge_bases: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          source_type: string;
+          scope: KbScope;
+          org_id: string | null;
+          is_active: boolean;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          source_type?: string;
+          scope?: KbScope;
+          org_id?: string | null;
+          is_active?: boolean;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          source_type?: string;
+          scope?: KbScope;
+          org_id?: string | null;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_bases_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      knowledge_documents: {
+        Row: {
+          id: string;
+          kb_id: string;
+          file_name: string;
+          file_path: string;
+          file_size_bytes: number;
+          page_count: number | null;
+          chunk_count: number | null;
+          status: KbDocumentStatus;
+          error_message: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          kb_id: string;
+          file_name: string;
+          file_path: string;
+          file_size_bytes?: number;
+          page_count?: number | null;
+          chunk_count?: number | null;
+          status?: KbDocumentStatus;
+          error_message?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          file_name?: string;
+          file_path?: string;
+          file_size_bytes?: number;
+          page_count?: number | null;
+          chunk_count?: number | null;
+          status?: KbDocumentStatus;
+          error_message?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_documents_kb_id_fkey";
+            columns: ["kb_id"];
+            isOneToOne: false;
+            referencedRelation: "knowledge_bases";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rd_time_entries: {
+        Row: {
+          id: string;
+          profile_id: string;
+          org_id: string;
+          date: string;
+          hours: number;
+          stage: string;
+          deliverable: string;
+          rd_tag: RdTag;
+          description: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          org_id: string;
+          date: string;
+          hours: number;
+          stage: string;
+          deliverable: string;
+          rd_tag?: RdTag;
+          description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          date?: string;
+          hours?: number;
+          stage?: string;
+          deliverable?: string;
+          rd_tag?: RdTag;
+          description?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rd_time_entries_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rd_time_entries_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      rd_experiments: {
+        Row: {
+          id: string;
+          org_id: string;
+          title: string;
+          hypothesis: string;
+          methodology: string | null;
+          outcome: string | null;
+          status: ExperimentStatus;
+          stage: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          title: string;
+          hypothesis: string;
+          methodology?: string | null;
+          outcome?: string | null;
+          status?: ExperimentStatus;
+          stage?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          hypothesis?: string;
+          methodology?: string | null;
+          outcome?: string | null;
+          status?: ExperimentStatus;
+          stage?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rd_experiments_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rd_experiments_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -572,6 +786,7 @@ export interface Database {
           filter_org_id?: string | null;
           filter_source_type?: string | null;
           filter_source_id?: string | null;
+          include_system?: boolean;
         };
         Returns: {
           id: string;
@@ -591,6 +806,10 @@ export interface Database {
       check_status: CheckStatus;
       risk_level: RiskLevel;
       finding_severity: FindingSeverity;
+      kb_scope: KbScope;
+      kb_document_status: KbDocumentStatus;
+      rd_tag: RdTag;
+      experiment_status: ExperimentStatus;
     };
     CompositeTypes: Record<string, never>;
   };

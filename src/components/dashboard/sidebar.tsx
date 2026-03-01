@@ -13,6 +13,7 @@ import {
   CreditCard,
   Settings,
   LogOut,
+  BookOpen,
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const navigation = [
 ];
 
 const bottomNavigation = [
+  { name: "Knowledge", href: "/settings/knowledge", icon: BookOpen },
   { name: "Billing", href: "/billing", icon: CreditCard },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

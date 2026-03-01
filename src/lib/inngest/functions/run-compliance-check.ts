@@ -88,7 +88,7 @@ export const runComplianceCheck = inngest.createFunction(
       const result = await step.run(
         `analyse-${category}`,
         async () => {
-          // Retrieve relevant NCC context via RAG
+          // Retrieve relevant NCC context via RAG (includes system KB documents)
           const nccDocs = await retrieveContext(
             `NCC ${category.replace(/_/g, " ")} requirements Australian residential`,
             {
@@ -96,6 +96,7 @@ export const runComplianceCheck = inngest.createFunction(
               sourceType: "ncc_volume",
               matchThreshold: 0.5,
               matchCount: 5,
+              includeSystem: true,
             }
           );
 

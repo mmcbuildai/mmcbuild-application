@@ -40,4 +40,12 @@ export type Events = {
       status: string;
     };
   };
+  "kb/document.uploaded": {
+    data: {
+      documentId: string;
+      kbId: string;
+      fileName: string;
+      filePath: string;
+    };
+  };
 };
