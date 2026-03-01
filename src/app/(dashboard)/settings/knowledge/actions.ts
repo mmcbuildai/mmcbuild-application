@@ -163,15 +163,19 @@ export async function registerKbDocument(
 
   const docId = (doc as { id: string }).id;
 
-  await inngest.send({
-    name: "kb/document.uploaded",
-    data: {
-      documentId: docId,
-      kbId,
-      fileName,
-      filePath,
-    },
-  });
+  try {
+    await inngest.send({
+      name: "kb/document.uploaded",
+      data: {
+        documentId: docId,
+        kbId,
+        fileName,
+        filePath,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
 
   revalidatePath(`/settings/knowledge/${kbId}`);
   return { id: docId };
@@ -214,15 +218,19 @@ export async function uploadKbManualText(kbId: string, title: string, content: s
 
   const docId = (doc as { id: string }).id;
 
-  await inngest.send({
-    name: "kb/document.uploaded",
-    data: {
-      documentId: docId,
-      kbId,
-      fileName: `${title}.txt`,
-      filePath,
-    },
-  });
+  try {
+    await inngest.send({
+      name: "kb/document.uploaded",
+      data: {
+        documentId: docId,
+        kbId,
+        fileName: `${title}.txt`,
+        filePath,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
 
   revalidatePath(`/settings/knowledge/${kbId}`);
   return { id: docId };
@@ -273,15 +281,19 @@ export async function uploadKbUrl(kbId: string, url: string, title?: string) {
 
   const docId = (doc as { id: string }).id;
 
-  await inngest.send({
-    name: "kb/document.uploaded",
-    data: {
-      documentId: docId,
-      kbId,
-      fileName: `${displayTitle}.txt`,
-      filePath,
-    },
-  });
+  try {
+    await inngest.send({
+      name: "kb/document.uploaded",
+      data: {
+        documentId: docId,
+        kbId,
+        fileName: `${displayTitle}.txt`,
+        filePath,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
 
   revalidatePath(`/settings/knowledge/${kbId}`);
   return { id: docId };

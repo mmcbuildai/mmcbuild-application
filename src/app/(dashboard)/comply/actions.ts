@@ -52,16 +52,20 @@ export async function registerPlan(
     return { error: `Failed to create plan record: ${insertError.message}` };
   }
 
-  // Send Inngest event for async processing
-  await inngest.send({
-    name: "plan/uploaded",
-    data: {
-      projectId,
-      fileUrl: filePath,
-      fileName,
-      uploadedBy: profile.id,
-    },
-  });
+  // Send Inngest event for async processing (non-blocking)
+  try {
+    await inngest.send({
+      name: "plan/uploaded",
+      data: {
+        projectId,
+        fileUrl: filePath,
+        fileName,
+        uploadedBy: profile.id,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
 
   return { success: true, planId: (plan as { id: string }).id };
 }
@@ -194,15 +198,19 @@ export async function requestComplianceCheck(
     return { error: `Failed to create check: ${error.message}` };
   }
 
-  // Send Inngest event
-  await inngest.send({
-    name: "compliance/check.requested",
-    data: {
-      projectId,
-      planId,
-      questionnaireData,
-    },
-  });
+  // Send Inngest event (non-blocking)
+  try {
+    await inngest.send({
+      name: "compliance/check.requested",
+      data: {
+        projectId,
+        planId,
+        questionnaireData,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
 
   return { success: true, checkId: (check as { id: string }).id };
 }
