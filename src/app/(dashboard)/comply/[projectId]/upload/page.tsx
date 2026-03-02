@@ -2,9 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PlanDropzone } from "@/components/comply/plan-dropzone";
+import { PlanList } from "@/components/comply/plan-list";
 import { getProjectPlans } from "../../actions";
-import { Badge } from "@/components/ui/badge";
-import { FileText } from "lucide-react";
 
 export default async function UploadPage({
   params,
@@ -43,46 +42,7 @@ export default async function UploadPage({
 
       <PlanDropzone projectId={projectId} />
 
-      {plans.length > 0 && (
-        <div>
-          <h2 className="mb-3 text-sm font-semibold">Uploaded Plans</h2>
-          <div className="space-y-2">
-            {plans.map(
-              (plan: {
-                id: string;
-                file_name: string;
-                status: string;
-                file_size_bytes: number;
-                page_count: number | null;
-              }) => (
-                <div
-                  key={plan.id}
-                  className="flex items-center justify-between rounded-md border p-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium">{plan.file_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(plan.file_size_bytes / 1024 / 1024).toFixed(1)} MB
-                        {plan.page_count && ` · ${plan.page_count} pages`}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge
-                    variant={
-                      plan.status === "ready" ? "default" : "secondary"
-                    }
-                    className="text-xs capitalize"
-                  >
-                    {plan.status}
-                  </Badge>
-                </div>
-              )
-            )}
-          </div>
-        </div>
-      )}
+      <PlanList plans={plans} />
     </div>
   );
 }

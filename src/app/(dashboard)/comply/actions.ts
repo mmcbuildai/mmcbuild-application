@@ -302,6 +302,55 @@ export async function getProjectPlans(projectId: string) {
   return data ?? [];
 }
 
+export async function deletePlan(planId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id, role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found" };
+  }
+
+  const admin = createAdminClient();
+
+  // Fetch plan to verify ownership and get file_path
+  const { data: plan } = await admin
+    .from("plans")
+    .select("id, org_id, file_path")
+    .eq("id", planId)
+    .single();
+
+  if (!plan || plan.org_id !== profile.org_id) {
+    return { error: "Plan not found" };
+  }
+
+  // Delete embeddings for this plan
+  await admin
+    .from("document_embeddings")
+    .delete()
+    .eq("source_type", "plan")
+    .eq("source_id", planId);
+
+  // Delete plan record
+  await admin.from("plans").delete().eq("id", planId);
+
+  // Delete file from storage
+  await admin.storage.from("plan-uploads").remove([plan.file_path]);
+
+  return { success: true };
+}
+
 export async function getProjectQuestionnaire(projectId: string) {
   const admin = createAdminClient();
 
