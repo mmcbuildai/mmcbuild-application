@@ -10,4 +10,7 @@ import { processCertification } from "@/lib/inngest/functions/process-certificat
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [testFunction, processPlan, runComplianceCheck, processKbDocument, classifyRdCommit, processCertification],
+  // Force Inngest to call back to the production URL instead of the
+  // deployment-specific URL which is behind Vercel Deployment Protection.
+  serveHost: process.env.NEXT_PUBLIC_APP_URL || undefined,
 });
