@@ -316,6 +316,92 @@ export async function getProjectQuestionnaire(projectId: string) {
   return data;
 }
 
+export async function registerCertification(
+  projectId: string,
+  fileName: string,
+  filePath: string,
+  fileSizeBytes: number,
+  certType: string,
+  metadata?: {
+    issuerName?: string;
+    issueDate?: string;
+    notes?: string;
+    state?: string;
+  }
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found" };
+  }
+
+  const admin = createAdminClient();
+  const { data: cert, error: insertError } = await admin
+    .from("project_certifications")
+    .insert({
+      project_id: projectId,
+      org_id: profile.org_id,
+      cert_type: certType,
+      file_name: fileName,
+      file_path: filePath,
+      file_size_bytes: fileSizeBytes,
+      status: "uploading",
+      state: metadata?.state ?? null,
+      issuer_name: metadata?.issuerName ?? null,
+      issue_date: metadata?.issueDate ?? null,
+      notes: metadata?.notes ?? null,
+      created_by: profile.id,
+    } as never)
+    .select("id")
+    .single();
+
+  if (insertError) {
+    return { error: `Failed to create certification record: ${insertError.message}` };
+  }
+
+  try {
+    await inngest.send({
+      name: "certification/uploaded",
+      data: {
+        projectId,
+        certificationId: (cert as { id: string }).id,
+        fileName,
+        filePath,
+        certType,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
+
+  return { success: true, certificationId: (cert as { id: string }).id };
+}
+
+export async function getProjectCertifications(projectId: string) {
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from("project_certifications")
+    .select("id, cert_type, file_name, file_size_bytes, status, issuer_name, issue_date, notes, error_message, created_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  return data ?? [];
+}
+
 export async function getProjectChecks(projectId: string) {
   const admin = createAdminClient();
 

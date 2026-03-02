@@ -55,4 +55,13 @@ export type Events = {
       sha: string;
     };
   };
+  "certification/uploaded": {
+    data: {
+      projectId: string;
+      certificationId: string;
+      fileName: string;
+      filePath: string;
+      certType: string;
+    };
+  };
 };

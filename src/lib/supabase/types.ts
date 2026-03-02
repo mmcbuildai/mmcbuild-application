@@ -48,6 +48,31 @@ export type CommitLogStatus = "pending" | "processing" | "classified" | "error";
 
 export type ReviewStatus = "pending" | "approved" | "rejected";
 
+export type CertType =
+  | "structural"
+  | "geotechnical"
+  | "energy_nathers"
+  | "energy_jv3"
+  | "bushfire_bal"
+  | "acoustic"
+  | "hydraulic"
+  | "electrical"
+  | "waterproofing"
+  | "form_15_qld"
+  | "form_16_qld"
+  | "form_21_qld"
+  | "cdc_nsw"
+  | "cc_nsw"
+  | "oc_nsw"
+  | "building_permit_vic"
+  | "reg_126_vic"
+  | "design_compliance_wa"
+  | "building_rules_sa"
+  | "likely_compliance_tas"
+  | "other";
+
+export type CertStatus = "uploading" | "processing" | "ready" | "error";
+
 export type Json =
   | string
   | number
@@ -162,6 +187,87 @@ export interface Database {
             columns: ["created_by"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      project_site_intel: {
+        Row: {
+          id: string;
+          project_id: string;
+          org_id: string;
+          latitude: number | null;
+          longitude: number | null;
+          formatted_address: string | null;
+          suburb: string | null;
+          postcode: string | null;
+          state: string | null;
+          climate_zone: number | null;
+          wind_region: string | null;
+          bal_rating: string | null;
+          council_name: string | null;
+          council_code: string | null;
+          zoning: string | null;
+          overlays: Json;
+          static_map_url: string | null;
+          derived_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          org_id: string;
+          latitude?: number | null;
+          longitude?: number | null;
+          formatted_address?: string | null;
+          suburb?: string | null;
+          postcode?: string | null;
+          state?: string | null;
+          climate_zone?: number | null;
+          wind_region?: string | null;
+          bal_rating?: string | null;
+          council_name?: string | null;
+          council_code?: string | null;
+          zoning?: string | null;
+          overlays?: Json;
+          static_map_url?: string | null;
+          derived_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          latitude?: number | null;
+          longitude?: number | null;
+          formatted_address?: string | null;
+          suburb?: string | null;
+          postcode?: string | null;
+          state?: string | null;
+          climate_zone?: number | null;
+          wind_region?: string | null;
+          bal_rating?: string | null;
+          council_name?: string | null;
+          council_code?: string | null;
+          zoning?: string | null;
+          overlays?: Json;
+          static_map_url?: string | null;
+          derived_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_site_intel_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: true;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_site_intel_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
             referencedColumns: ["id"];
           },
         ];
@@ -906,6 +1012,84 @@ export interface Database {
           },
         ];
       };
+      project_certifications: {
+        Row: {
+          id: string;
+          project_id: string;
+          org_id: string;
+          cert_type: CertType;
+          file_name: string;
+          file_path: string;
+          file_size_bytes: number;
+          status: CertStatus;
+          state: string | null;
+          issuer_name: string | null;
+          issue_date: string | null;
+          expiry_date: string | null;
+          notes: string | null;
+          error_message: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          org_id: string;
+          cert_type?: CertType;
+          file_name: string;
+          file_path: string;
+          file_size_bytes?: number;
+          status?: CertStatus;
+          state?: string | null;
+          issuer_name?: string | null;
+          issue_date?: string | null;
+          expiry_date?: string | null;
+          notes?: string | null;
+          error_message?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          cert_type?: CertType;
+          file_name?: string;
+          file_path?: string;
+          file_size_bytes?: number;
+          status?: CertStatus;
+          state?: string | null;
+          issuer_name?: string | null;
+          issue_date?: string | null;
+          expiry_date?: string | null;
+          notes?: string | null;
+          error_message?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "project_certifications_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_certifications_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "project_certifications_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       rd_experiments: {
         Row: {
           id: string;
@@ -1024,6 +1208,8 @@ export interface Database {
       experiment_status: ExperimentStatus;
       commit_log_status: CommitLogStatus;
       review_status: ReviewStatus;
+      cert_type: CertType;
+      cert_status: CertStatus;
     };
     CompositeTypes: Record<string, never>;
   };

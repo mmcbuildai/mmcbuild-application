@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { QuestionnaireForm } from "@/components/comply/questionnaire-form";
 import { getProjectQuestionnaire } from "../../actions";
+import { getProjectSiteIntel } from "@/app/(dashboard)/projects/actions";
 
 export default async function QuestionnairePage({
   params,
@@ -22,7 +23,10 @@ export default async function QuestionnairePage({
     redirect("/comply");
   }
 
-  const questionnaire = await getProjectQuestionnaire(projectId);
+  const [questionnaire, siteIntel] = await Promise.all([
+    getProjectQuestionnaire(projectId),
+    getProjectSiteIntel(projectId),
+  ]);
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -43,6 +47,15 @@ export default async function QuestionnairePage({
         projectId={projectId}
         existingResponses={
           questionnaire?.responses as Record<string, unknown> | null
+        }
+        siteIntel={
+          siteIntel
+            ? {
+                climate_zone: siteIntel.climate_zone,
+                bal_rating: siteIntel.bal_rating,
+                wind_region: siteIntel.wind_region,
+              }
+            : null
         }
       />
     </div>

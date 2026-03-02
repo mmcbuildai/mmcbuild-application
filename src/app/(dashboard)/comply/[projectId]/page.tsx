@@ -13,6 +13,7 @@ import {
   ClipboardList,
   Play,
   FileText,
+  FileCheck,
   ArrowRight,
   CheckCircle,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import {
   getProjectPlans,
   getProjectQuestionnaire,
   getProjectChecks,
+  getProjectCertifications,
   requestComplianceCheck,
 } from "../actions";
 
@@ -44,9 +46,12 @@ export default async function ProjectComplyPage({
     redirect("/comply");
   }
 
-  const plans = await getProjectPlans(projectId);
-  const questionnaire = await getProjectQuestionnaire(projectId);
-  const checks = await getProjectChecks(projectId);
+  const [plans, questionnaire, checks, certifications] = await Promise.all([
+    getProjectPlans(projectId),
+    getProjectQuestionnaire(projectId),
+    getProjectChecks(projectId),
+    getProjectCertifications(projectId),
+  ]);
 
   const readyPlan = plans.find(
     (p: { status: string }) => p.status === "ready"
@@ -70,7 +75,7 @@ export default async function ProjectComplyPage({
       </div>
 
       {/* Step cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {/* Step 1: Upload */}
         <Card>
           <CardHeader>
@@ -158,12 +163,47 @@ export default async function ProjectComplyPage({
           </CardContent>
         </Card>
 
-        {/* Step 3: Run Check */}
+        {/* Step 3: Certifications */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FileCheck className="h-5 w-5" />
+              <CardTitle className="text-base">3. Certifications</CardTitle>
+            </div>
+            <CardDescription>
+              Upload engineering certs (optional)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {certifications.length > 0 ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-green-600">
+                  <CheckCircle className="h-4 w-4" />
+                  {certifications.length} uploaded
+                </div>
+                <Link href={`/comply/${projectId}/certifications`}>
+                  <Button variant="outline" size="sm" className="w-full">
+                    Manage Certs
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <Link href={`/comply/${projectId}/certifications`}>
+                <Button variant="outline" size="sm" className="w-full">
+                  <FileCheck className="mr-2 h-4 w-4" />
+                  Upload Certs
+                </Button>
+              </Link>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Step 4: Run Check */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <Play className="h-5 w-5" />
-              <CardTitle className="text-base">3. Run Check</CardTitle>
+              <CardTitle className="text-base">4. Run Check</CardTitle>
             </div>
             <CardDescription>
               Generate AI compliance report

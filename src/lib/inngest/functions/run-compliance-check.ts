@@ -52,33 +52,60 @@ export const runComplianceCheck = inngest.createFunction(
       return await retrievePlanChunks(check.org_id, check.plan_id);
     });
 
-    // 4. Build project context from questionnaire
+    // 4. Build project context from questionnaire (pass raw data to expanded template)
     const projectContext = await step.run("build-context", async () => {
-      const q = questionnaireData as Record<string, string | number>;
-      return COMPLIANCE_USER_CONTEXT_TEMPLATE({
-        buildingClass: String(q.building_class ?? "Class 1a"),
-        constructionType: String(q.construction_type ?? "Type C"),
-        storeys: Number(q.storeys ?? 1),
-        floorArea: Number(q.floor_area ?? 0),
-        climateZone: Number(q.climate_zone ?? 6),
-        balRating: String(q.bal_rating ?? "N/A"),
-        siteConditions: String(q.site_conditions ?? "Not specified"),
-        services: String(q.services ?? "Not specified"),
-        specialRequirements: String(q.special_requirements ?? "None"),
-      });
+      const q = questionnaireData as Record<string, string | number | boolean>;
+      return COMPLIANCE_USER_CONTEXT_TEMPLATE(q);
     });
+
+    // 4b. Load certifications on file
+    const certContext = await step.run("load-certifications", async () => {
+      const admin = createAdminClient();
+      const { data } = await admin
+        .from("project_certifications")
+        .select("cert_type, file_name, issuer_name, issue_date, status")
+        .eq("project_id", projectId)
+        .eq("status", "ready");
+
+      if (!data || data.length === 0) return "";
+
+      const lines = (data as { cert_type: string; file_name: string; issuer_name: string | null; issue_date: string | null }[])
+        .map((c) => {
+          let line = `- ${c.cert_type}: ${c.file_name}`;
+          if (c.issuer_name) line += ` (by ${c.issuer_name})`;
+          if (c.issue_date) line += ` [${c.issue_date}]`;
+          return line;
+        });
+
+      return `\n\nENGINEERING CERTIFICATIONS ON FILE:\n${lines.join("\n")}`;
+    });
+
+    const fullContext = projectContext + certContext;
 
     // 5. Determine which categories to analyse
     const categoriesToAnalyse = await step.run("select-categories", async () => {
       const q = questionnaireData as Record<string, string>;
       const categories = NCC_CATEGORIES.map((c) => c.key);
 
-      // Skip bushfire if BAL is N/A
+      const skip: NccCategory[] = [];
+
+      // Skip bushfire if BAL is N/A or BAL-LOW
       if (!q.bal_rating || q.bal_rating === "N/A" || q.bal_rating === "BAL-LOW") {
-        return categories.filter((c) => c !== "bushfire");
+        skip.push("bushfire");
       }
 
-      return categories;
+      // Skip ancillary if no pool AND no heating appliance
+      if (q.has_swimming_pool !== "true" && q.has_heating_appliance !== "true") {
+        skip.push("ancillary");
+      }
+
+      // Skip livable_housing, health_amenity, safe_movement for Class 10 buildings
+      const buildingClass = q.building_class ?? "";
+      if (buildingClass.startsWith("Class 10")) {
+        skip.push("livable_housing", "health_amenity", "safe_movement");
+      }
+
+      return categories.filter((c) => !skip.includes(c));
     });
 
     // 6. Run analysis per category (sequential to manage rate limits)
@@ -100,14 +127,26 @@ export const runComplianceCheck = inngest.createFunction(
             }
           );
 
-          const nccContext = nccDocs
-            .map((d) => d.content)
-            .join("\n\n---\n\n");
+          // Also retrieve certification embeddings for this category
+          const certDocs = await retrieveContext(
+            `${category.replace(/_/g, " ")} certification engineering`,
+            {
+              orgId: check.org_id,
+              sourceType: "certification",
+              matchThreshold: 0.6,
+              matchCount: 3,
+            }
+          );
+
+          const nccContext = [
+            ...nccDocs.map((d) => d.content),
+            ...certDocs.map((d) => `[FROM CERTIFICATION] ${d.content}`),
+          ].join("\n\n---\n\n");
 
           return await analyseCompliance(
             category as NccCategory,
             planContent,
-            projectContext,
+            fullContext,
             nccContext
           );
         }
@@ -142,7 +181,7 @@ export const runComplianceCheck = inngest.createFunction(
 
     // 8. Generate summary
     const summary = await step.run("generate-summary", async () => {
-      return await generateSummary(allResults, projectContext);
+      return await generateSummary(allResults, fullContext);
     });
 
     // 9. Update check as completed

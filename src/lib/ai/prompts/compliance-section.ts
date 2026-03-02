@@ -94,6 +94,68 @@ Focus on:
 - Water supply and access requirements
 
 Note: Only applicable if BAL rating is BAL-LOW or higher. If BAL is N/A or BAL-LOW, note that standard construction is acceptable.`,
+
+  weatherproofing: `Analyse the building plan and project details for WEATHERPROOFING (BUILDING ENVELOPE) compliance under NCC Volume Two — Housing Provisions Part H2.
+
+Focus on:
+- Roof covering adequacy and compliance with AS 4654 (waterproof membranes)
+- Sarking requirements for the climate zone and roof type
+- Damp-proof course (DPC) installation and compliance
+- Flashings to roof penetrations, wall junctions, and window openings
+- Wall cladding weatherproofing and installation requirements
+- Sub-floor moisture management and ventilation
+- External waterproofing to wet areas above ground floor
+- Weatherproofing of building envelope junctions (wall-to-roof, wall-to-floor)`,
+
+  health_amenity: `Analyse the building plan and project details for HEALTH & AMENITY compliance under NCC Volume Two — Housing Provisions Part H4.
+
+Focus on:
+- Wet area waterproofing (AS 3740) — bathrooms, laundries, WCs
+- Ceiling heights — minimum 2.4m habitable rooms, 2.1m non-habitable rooms
+- Room sizes and proportions for habitable rooms
+- Exhaust fan requirements for wet areas (kitchen, bathroom, laundry)
+- Natural light — minimum 10% window-to-floor area ratio for habitable rooms
+- Sound insulation between dwellings (if attached/party wall)
+- Condensation management provisions
+- Room ventilation openings (minimum 5% of floor area)`,
+
+  safe_movement: `Analyse the building plan and project details for SAFE MOVEMENT & ACCESS compliance under NCC Volume Two — Housing Provisions Part H5.
+
+Focus on:
+- Stairway compliance: rise (max 190mm), going (min 240mm), width (min 600mm)
+- Balustrade heights — minimum 1000mm for fall heights >1m
+- Barriers and fall prevention for balconies, decks, mezzanines, and landings
+- Handrail requirements for stairs and ramps
+- Safe movement provisions per AS 1657 where applicable
+- Landing dimensions and door swing clearances at stairs
+- Fall protection for openable windows above ground floor
+- Swimming pool barrier compliance (if applicable, link to H7)`,
+
+  ancillary: `Analyse the building plan and project details for ANCILLARY PROVISIONS compliance under NCC Volume Two — Housing Provisions Part H7.
+
+Focus on:
+- Swimming pool barriers — AS 1926.1 compliance (if pool on site)
+- Heating appliance clearances and installation requirements (wood heater, gas fire)
+- Gas installation compliance (AS 5601) if gas appliances specified
+- Alpine area requirements (if applicable — climate zone 8)
+- Fencing and retaining wall requirements where relevant
+- Subfloor and roof space access requirements
+- Condensation management for appliances
+- Garage/carport minimum dimensions and provisions`,
+
+  livable_housing: `Analyse the building plan and project details for LIVABLE HOUSING DESIGN compliance under NCC Volume Two — Housing Provisions Part H8.
+
+Focus on:
+- Step-free entry — at least one accessible entry path
+- Door widths — minimum 820mm clear opening to main rooms
+- Corridor widths — minimum 1000mm for main circulation paths
+- Accessible bathroom — reinforcement for future grab rails, minimum dimensions
+- Toilet accessibility — clearances and future adaptability
+- Hobless shower provision or capability
+- Living space on entry level for future adaptability
+- Light switch and power outlet heights (accessible range 600-1200mm)
+
+Note: H8 applies to new Class 1a dwellings under NCC 2022+. Requirements may vary by state — verify local adoption date.`,
 };
 
 export function getSectionPrompt(category: NccCategory): string {

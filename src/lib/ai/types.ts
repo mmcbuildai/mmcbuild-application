@@ -52,7 +52,12 @@ export type NccCategory =
   | "ventilation"
   | "glazing"
   | "termite"
-  | "bushfire";
+  | "bushfire"
+  | "weatherproofing"
+  | "health_amenity"
+  | "safe_movement"
+  | "ancillary"
+  | "livable_housing";
 
 export type NccVolume = 1 | 2;
 
@@ -70,6 +75,11 @@ export const NCC_CATEGORIES: {
   { key: "glazing", label: "Glazing", volume: 2 },
   { key: "termite", label: "Termite Management", volume: 2 },
   { key: "bushfire", label: "Bushfire", volume: 2 },
+  { key: "weatherproofing", label: "Building Envelope (H2)", volume: 2 },
+  { key: "health_amenity", label: "Health & Amenity (H4)", volume: 2 },
+  { key: "safe_movement", label: "Safe Movement & Access (H5)", volume: 2 },
+  { key: "ancillary", label: "Ancillary Provisions (H7)", volume: 2 },
+  { key: "livable_housing", label: "Livable Housing Design (H8)", volume: 2 },
 ];
 
 export function getCategoryVolume(category: string): NccVolume {
