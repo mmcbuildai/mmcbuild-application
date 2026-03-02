@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { ProjectHeader } from "@/components/projects/project-header";
 import { SiteIntelCard } from "@/components/projects/site-intel-card";
+import { EditProjectDialog } from "@/components/projects/edit-project-dialog";
+import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { getProjectSiteIntel } from "../actions";
 import {
   ArrowLeft,
@@ -72,12 +74,26 @@ export default async function ProjectOverviewPage({
           <ArrowLeft className="h-4 w-4" />
           Back to Projects
         </Link>
-        <ProjectHeader
-          name={project.name}
-          status={project.status}
-          address={project.address}
-          createdAt={project.created_at}
-        />
+        <div className="flex items-start justify-between">
+          <ProjectHeader
+            name={project.name}
+            status={project.status}
+            address={project.address}
+            createdAt={project.created_at}
+          />
+          <div className="flex items-center gap-2">
+            <EditProjectDialog
+              projectId={project.id}
+              name={project.name}
+              address={project.address}
+              status={project.status}
+            />
+            <DeleteProjectButton
+              projectId={project.id}
+              projectName={project.name}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

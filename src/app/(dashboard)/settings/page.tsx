@@ -13,8 +13,8 @@ const settingsCards = [
     title: "Organisation Settings",
     description: "Manage your team, roles, and organisation details.",
     icon: Settings,
-    href: "#",
-    disabled: true,
+    href: "/settings/organisation",
+    disabled: false,
   },
   {
     title: "Knowledge Bases",

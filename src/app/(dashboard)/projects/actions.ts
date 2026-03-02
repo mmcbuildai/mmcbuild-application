@@ -102,6 +102,126 @@ export async function getProjectSiteIntel(projectId: string) {
   return data;
 }
 
+export async function updateProject(
+  projectId: string,
+  data: {
+    name?: string;
+    address?: string;
+    status?: string;
+  }
+) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  // Verify project belongs to org
+  const { data: project } = await admin
+    .from("projects")
+    .select("org_id")
+    .eq("id", projectId)
+    .single();
+
+  if (!project || project.org_id !== profile.org_id) {
+    return { error: "Project not found" };
+  }
+
+  if (data.name !== undefined && !data.name.trim()) {
+    return { error: "Project name cannot be empty" };
+  }
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (data.name !== undefined) updateData.name = data.name.trim();
+  if (data.address !== undefined) updateData.address = data.address.trim() || null;
+  if (data.status !== undefined) updateData.status = data.status;
+
+  const { error } = await admin
+    .from("projects")
+    .update(updateData as never)
+    .eq("id", projectId);
+
+  if (error) return { error: `Failed to update project: ${error.message}` };
+
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
+export async function deleteProject(projectId: string) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  // Verify project belongs to org
+  const { data: project } = await admin
+    .from("projects")
+    .select("org_id")
+    .eq("id", projectId)
+    .single();
+
+  if (!project || project.org_id !== profile.org_id) {
+    return { error: "Project not found" };
+  }
+
+  // Delete related data in order (embeddings, plans, checks, findings, etc.)
+  // Cascade should handle most via FK ON DELETE CASCADE, but clean up storage files
+
+  // Get plans to delete storage files
+  const { data: plans } = await admin
+    .from("plans")
+    .select("id, file_path")
+    .eq("project_id", projectId);
+
+  if (plans && plans.length > 0) {
+    // Delete embeddings for all plans
+    for (const plan of plans) {
+      await admin
+        .from("document_embeddings")
+        .delete()
+        .eq("source_type", "plan")
+        .eq("source_id", plan.id);
+    }
+
+    // Delete storage files
+    const filePaths = plans.map((p) => p.file_path).filter(Boolean);
+    if (filePaths.length > 0) {
+      await admin.storage.from("plan-uploads").remove(filePaths);
+    }
+  }
+
+  // Get certifications to delete storage files
+  const { data: certs } = await admin
+    .from("project_certifications")
+    .select("id, file_path")
+    .eq("project_id", projectId);
+
+  if (certs && certs.length > 0) {
+    for (const cert of certs) {
+      await admin
+        .from("document_embeddings")
+        .delete()
+        .eq("source_type", "certification")
+        .eq("source_id", cert.id);
+    }
+
+    const certPaths = certs.map((c) => c.file_path).filter(Boolean);
+    if (certPaths.length > 0) {
+      await admin.storage.from("plan-uploads").remove(certPaths);
+    }
+  }
+
+  // Delete the project (cascades to plans, checks, findings, contributors, site_intel, etc.)
+  const { error } = await admin
+    .from("projects")
+    .delete()
+    .eq("id", projectId);
+
+  if (error) return { error: `Failed to delete project: ${error.message}` };
+
+  revalidatePath("/projects");
+  revalidatePath("/comply");
+  return { success: true };
+}
+
 export async function rederiveSiteIntel(projectId: string) {
   const profile = await getProfile();
   const admin = createAdminClient();
