@@ -25,6 +25,8 @@ interface Finding {
   amended_action: string | null;
   amended_discipline: string | null;
   sent_at: string | null;
+  remediation_status: string | null;
+  remediation_responded_at: string | null;
 }
 
 interface Contributor {
@@ -44,12 +46,14 @@ interface WorkflowTabsProps {
   };
   findings: Finding[];
   contributors: Contributor[];
+  projectId?: string;
 }
 
 export function WorkflowTabs({
   check,
   findings,
   contributors,
+  projectId,
 }: WorkflowTabsProps) {
   return (
     <Tabs defaultValue="workflow">
@@ -59,7 +63,7 @@ export function WorkflowTabs({
       </TabsList>
 
       <TabsContent value="workflow">
-        <WorkflowReport findings={findings} contributors={contributors} />
+        <WorkflowReport findings={findings} contributors={contributors} projectId={projectId} />
       </TabsContent>
 
       <TabsContent value="report">

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/lib/inngest/client";
+import { randomBytes } from "crypto";
 
 /**
  * Register a plan that was already uploaded to Supabase Storage from the browser.
@@ -954,6 +955,23 @@ export async function amendFinding(
 }
 
 export async function sendFindingToContributor(findingId: string) {
+  // Legacy redirect — now calls shareFindingWithContributor if contributor is assigned
+  const admin = createAdminClient();
+  const { data: finding } = await admin
+    .from("compliance_findings")
+    .select("assigned_contributor_id" as never)
+    .eq("id", findingId)
+    .single();
+
+  const contributorId = finding
+    ? (finding as unknown as Record<string, unknown>).assigned_contributor_id as string | null
+    : null;
+
+  if (contributorId) {
+    return shareFindingWithContributor(findingId, contributorId);
+  }
+
+  // Fallback to mark-as-sent if no contributor
   const supabase = await createClient();
   const {
     data: { user },
@@ -968,8 +986,6 @@ export async function sendFindingToContributor(findingId: string) {
     .single();
 
   if (!profile) return { error: "Profile not found" };
-
-  const admin = createAdminClient();
 
   const { error } = await admin
     .from("compliance_findings")
@@ -989,6 +1005,126 @@ export async function sendFindingToContributor(findingId: string) {
   } as never);
 
   return { success: true };
+}
+
+export async function shareFindingWithContributor(
+  findingId: string,
+  contributorId: string
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" };
+
+  const admin = createAdminClient();
+
+  // Load contributor
+  const { data: contributor } = await admin
+    .from("project_contributors" as never)
+    .select("id, project_id, contact_name, contact_email")
+    .eq("id", contributorId)
+    .single();
+
+  if (!contributor) return { error: "Contributor not found" };
+  const c = contributor as { id: string; project_id: string; contact_name: string; contact_email: string | null };
+
+  if (!c.contact_email) {
+    return { error: "Contributor has no email address" };
+  }
+
+  // Generate secure token
+  const token = randomBytes(32).toString("hex");
+
+  // Insert share token
+  const { data: shareToken, error: insertError } = await admin
+    .from("finding_share_tokens" as never)
+    .insert({
+      finding_id: findingId,
+      contributor_id: contributorId,
+      project_id: c.project_id,
+      org_id: profile.org_id,
+      token,
+      email_to: c.contact_email,
+      created_by: profile.id,
+    } as never)
+    .select("id")
+    .single();
+
+  if (insertError) return { error: `Failed to create share token: ${insertError.message}` };
+
+  // Update finding status
+  await admin
+    .from("compliance_findings")
+    .update({
+      review_status: "sent",
+      sent_at: new Date().toISOString(),
+      remediation_status: "awaiting",
+    } as never)
+    .eq("id", findingId);
+
+  // Log activity
+  await admin.from("finding_activity_log").insert({
+    finding_id: findingId,
+    action: "shared",
+    actor_id: profile.id,
+    details: { contributor_id: contributorId, email_to: c.contact_email },
+  } as never);
+
+  // Fire Inngest event for async email
+  try {
+    await inngest.send({
+      name: "finding/share.requested",
+      data: {
+        shareTokenId: (shareToken as { id: string }).id,
+        findingId,
+        projectId: c.project_id,
+        contributorId,
+        recipientEmail: c.contact_email,
+        recipientName: c.contact_name,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
+
+  return { success: true };
+}
+
+export async function addContributorAndShareFinding(
+  projectId: string,
+  findingId: string,
+  contributorData: {
+    contact_name: string;
+    discipline: string;
+    contact_email: string;
+    company_name?: string;
+  }
+) {
+  // Step 1: Create contributor
+  const result = await addProjectContributor(projectId, contributorData);
+  if ("error" in result) return result;
+
+  // Step 2: Assign contributor to finding
+  const admin = createAdminClient();
+  await admin
+    .from("compliance_findings")
+    .update({
+      assigned_contributor_id: result.contributorId,
+    } as never)
+    .eq("id", findingId);
+
+  // Step 3: Share finding
+  return shareFindingWithContributor(findingId, result.contributorId!);
 }
 
 export async function bulkReviewFindings(
@@ -1043,44 +1179,51 @@ export async function bulkReviewFindings(
   return { success: true };
 }
 
-export async function bulkSendFindings(findingIds: string[]) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: "Not authenticated" };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, org_id")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!profile) return { error: "Profile not found" };
-
-  const admin = createAdminClient();
-
-  const { error } = await admin
-    .from("compliance_findings")
-    .update({
-      review_status: "sent",
-      sent_at: new Date().toISOString(),
-    } as never)
-    .in("id", findingIds);
-
-  if (error) return { error: `Failed to bulk send: ${error.message}` };
+export async function bulkShareFindings(findingIds: string[]) {
+  const results: { findingId: string; success: boolean; error?: string }[] = [];
 
   for (const findingId of findingIds) {
-    await admin.from("finding_activity_log").insert({
-      finding_id: findingId,
-      action: "sent",
-      actor_id: profile.id,
-      details: {},
-    } as never);
+    const result = await sendFindingToContributor(findingId);
+    results.push({
+      findingId,
+      success: !("error" in result),
+      error: "error" in result ? result.error : undefined,
+    });
   }
 
-  return { success: true };
+  const succeeded = results.filter((r) => r.success).length;
+  return { success: true, shared: succeeded, total: findingIds.length };
+}
+
+export async function getShareTokensForCheck(checkId: string) {
+  const admin = createAdminClient();
+
+  // Get finding IDs for this check
+  const { data: findings } = await admin
+    .from("compliance_findings")
+    .select("id")
+    .eq("check_id", checkId);
+
+  if (!findings || findings.length === 0) return [];
+
+  const findingIds = findings.map((f: { id: string }) => f.id);
+
+  const { data: tokens } = await admin
+    .from("finding_share_tokens" as never)
+    .select("id, finding_id, contributor_id, email_to, sent_at, remediation_status, response_notes, responded_at")
+    .in("finding_id", findingIds)
+    .order("created_at", { ascending: false });
+
+  return (tokens ?? []) as {
+    id: string;
+    finding_id: string;
+    contributor_id: string;
+    email_to: string;
+    sent_at: string | null;
+    remediation_status: string;
+    response_notes: string | null;
+    responded_at: string | null;
+  }[];
 }
 
 export async function getWorkflowSummary(checkId: string) {

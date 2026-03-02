@@ -48,6 +48,7 @@ export default async function CertificationsPage({
           status: string;
           issuer_name: string | null;
           issue_date: string | null;
+          notes: string | null;
           error_message: string | null;
           created_at: string;
         }[]}

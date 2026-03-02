@@ -48,6 +48,8 @@ export default async function CheckPage({
     amended_action: string | null;
     amended_discipline: string | null;
     sent_at: string | null;
+    remediation_status: string | null;
+    remediation_responded_at: string | null;
   }[];
 
   // Detect workflow findings (review_status IS NOT NULL) vs legacy
@@ -76,6 +78,7 @@ export default async function CheckPage({
             check={check}
             findings={findings}
             contributors={contributors}
+            projectId={projectId}
           />
         ) : (
           <ComplianceReport check={check} findings={findings} />

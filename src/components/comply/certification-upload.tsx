@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Upload, FileCheck, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Upload, FileCheck, Loader2, Pencil, Trash2, File, X } from "lucide-react";
 import {
   registerCertification,
   updateCertification,
@@ -96,6 +96,11 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Staged file (selected but not yet uploaded)
+  const [stagedFile, setStagedFile] = useState<File | null>(null);
+
+  // Form fields
   const [certType, setCertType] = useState("structural");
   const [issuerName, setIssuerName] = useState("");
   const [issueDate, setIssueDate] = useState("");
@@ -112,16 +117,44 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleFile = useCallback(async (file: File) => {
+  const stageFile = useCallback((file: File) => {
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setError("Only PDF, JPEG, PNG, and TIFF files are accepted");
       return;
     }
-
     if (file.size > 100 * 1024 * 1024) {
       setError("File size must be under 100MB");
       return;
     }
+    setError(null);
+    setStagedFile(file);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = e.dataTransfer.files[0];
+      if (file) stageFile(file);
+    },
+    [stageFile]
+  );
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) stageFile(file);
+    },
+    [stageFile]
+  );
+
+  function clearStaged() {
+    setStagedFile(null);
+    setError(null);
+  }
+
+  async function handleUploadAndSave() {
+    if (!stagedFile) return;
 
     setError(null);
     setUploading(true);
@@ -148,13 +181,13 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
         return;
       }
 
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const safeName = stagedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const filePath = `${profile.org_id}/${projectId}/${Date.now()}_${safeName}`;
 
       const { error: storageError } = await supabase.storage
         .from("engineering-certs")
-        .upload(filePath, file, {
-          contentType: file.type,
+        .upload(filePath, stagedFile, {
+          contentType: stagedFile.type,
         });
 
       if (storageError) {
@@ -165,9 +198,9 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
 
       const result = await registerCertification(
         projectId,
-        file.name,
+        stagedFile.name,
         filePath,
-        file.size,
+        stagedFile.size,
         certType,
         {
           issuerName: issuerName || undefined,
@@ -181,6 +214,9 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
       if (result.error) {
         setError(result.error);
       } else {
+        // Reset form
+        setStagedFile(null);
+        setCertType("structural");
         setIssuerName("");
         setIssueDate("");
         setNotes("");
@@ -191,25 +227,7 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
       setError("Upload failed. Please try again.");
       setUploading(false);
     }
-  }, [projectId, certType, issuerName, issueDate, notes, router]);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file) handleFile(file);
-    },
-    [handleFile]
-  );
-
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) handleFile(file);
-    },
-    [handleFile]
-  );
+  }
 
   function openEdit(cert: ExistingCert) {
     setEditingCert(cert);
@@ -247,104 +265,156 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
 
   return (
     <div className="space-y-6">
-      {/* Upload form */}
-      <div className="space-y-4">
-        <div>
-          <Label>Certification Type</Label>
-          <select
-            className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-            value={certType}
-            onChange={(e) => setCertType(e.target.value)}
-          >
-            {CERT_TYPE_OPTIONS.map((group) => (
-              <optgroup key={group.group} label={group.group}>
-                {group.options.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>Issuer Name (optional)</Label>
-            <Input
-              placeholder="e.g., Smith Engineering"
-              value={issuerName}
-              onChange={(e) => setIssuerName(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Issue Date (optional)</Label>
-            <Input
-              type="date"
-              value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div>
-          <Label>Notes (optional)</Label>
-          <Input
-            placeholder="e.g., Rev B, updated for wind region change"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* Dropzone */}
-      <Card
-        className={`border-2 border-dashed transition-colors ${
-          isDragging
-            ? "border-primary bg-primary/5"
-            : "border-muted-foreground/25 hover:border-muted-foreground/50"
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
-      >
-        <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-          {uploading ? (
-            <>
-              <Loader2 className="mb-3 h-10 w-10 animate-spin text-primary" />
-              <p className="text-sm font-medium">Uploading certification...</p>
-            </>
-          ) : (
-            <>
-              <Upload className="mb-3 h-10 w-10 text-muted-foreground" />
-              <p className="text-sm font-medium">
-                Drag and drop certification file here
-              </p>
-              <p className="mb-3 text-xs text-muted-foreground">
-                PDF, JPEG, PNG, or TIFF — max 100MB
-              </p>
-              <Button variant="outline" size="sm" asChild>
-                <label className="cursor-pointer">
-                  Browse Files
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif"
-                    className="hidden"
-                    onChange={handleInputChange}
-                  />
-                </label>
+      {/* Step 1: Select file */}
+      {!stagedFile ? (
+        <Card
+          className={`border-2 border-dashed transition-colors ${
+            isDragging
+              ? "border-primary bg-primary/5"
+              : "border-muted-foreground/25 hover:border-muted-foreground/50"
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+        >
+          <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+            <Upload className="mb-3 h-10 w-10 text-muted-foreground" />
+            <p className="text-sm font-medium">
+              Drag and drop certification file here
+            </p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              PDF, JPEG, PNG, or TIFF — max 100MB
+            </p>
+            <Button variant="outline" size="sm" asChild>
+              <label className="cursor-pointer">
+                Browse Files
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif"
+                  className="hidden"
+                  onChange={handleInputChange}
+                />
+              </label>
+            </Button>
+            {error && !stagedFile && (
+              <p className="mt-3 text-sm text-red-600">{error}</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        /* Step 2: File selected — fill details and save */
+        <Card>
+          <CardContent className="py-5 space-y-4">
+            {/* Selected file indicator */}
+            <div className="flex items-center justify-between rounded-md border bg-muted/50 px-3 py-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <File className="h-4 w-4 shrink-0 text-primary" />
+                <span className="text-sm font-medium truncate">{stagedFile.name}</span>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  ({(stagedFile.size / 1024 / 1024).toFixed(1)} MB)
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={clearStaged}
+                disabled={uploading}
+                title="Remove file"
+              >
+                <X className="h-3.5 w-3.5" />
               </Button>
-            </>
-          )}
+            </div>
 
-          {error && (
-            <p className="mt-3 text-sm text-red-600">{error}</p>
-          )}
-        </CardContent>
-      </Card>
+            {/* Details form */}
+            <div>
+              <Label>Certification Type</Label>
+              <select
+                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                value={certType}
+                onChange={(e) => setCertType(e.target.value)}
+                disabled={uploading}
+              >
+                {CERT_TYPE_OPTIONS.map((group) => (
+                  <optgroup key={group.group} label={group.group}>
+                    {group.options.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Issuer Name (optional)</Label>
+                <Input
+                  placeholder="e.g., Smith Engineering"
+                  value={issuerName}
+                  onChange={(e) => setIssuerName(e.target.value)}
+                  disabled={uploading}
+                />
+              </div>
+              <div>
+                <Label>Issue Date (optional)</Label>
+                <Input
+                  type="date"
+                  value={issueDate}
+                  onChange={(e) => setIssueDate(e.target.value)}
+                  disabled={uploading}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Notes (optional)</Label>
+              <Input
+                placeholder="e.g., Rev B, updated for wind region change"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                disabled={uploading}
+              />
+            </div>
+
+            {error && (
+              <p className="text-sm text-red-600">{error}</p>
+            )}
+
+            {/* Save button */}
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                onClick={handleUploadAndSave}
+                disabled={uploading}
+                className="flex-1"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading & Saving...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload & Save
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={clearStaged}
+                disabled={uploading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Existing certifications */}
       {existingCerts.length > 0 && (

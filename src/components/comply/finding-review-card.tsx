@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "./severity-badge";
 import { DisciplineBadge } from "./project-contributors";
+import { RemediationBadge } from "./remediation-badge";
 import { FindingAmendDialog } from "./finding-amend-dialog";
 import { FindingRejectDialog } from "./finding-reject-dialog";
+import { ShareFindingDialog } from "./share-finding-dialog";
 import {
   Check,
   X,
@@ -14,10 +16,11 @@ import {
   Send,
   ChevronDown,
   ChevronUp,
+  UserPlus,
 } from "lucide-react";
 import {
   reviewFinding,
-  sendFindingToContributor,
+  shareFindingWithContributor,
 } from "@/app/(dashboard)/comply/actions";
 import { useRouter } from "next/navigation";
 
@@ -49,11 +52,14 @@ interface ReviewFinding {
   amended_action: string | null;
   amended_discipline: string | null;
   sent_at: string | null;
+  remediation_status: string | null;
+  remediation_responded_at: string | null;
 }
 
 interface FindingReviewCardProps {
   finding: ReviewFinding;
   contributors: Contributor[];
+  projectId?: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -75,12 +81,14 @@ const STATUS_LABELS: Record<string, string> = {
 export function FindingReviewCard({
   finding,
   contributors,
+  projectId,
 }: FindingReviewCardProps) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [amendOpen, setAmendOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const status = finding.review_status ?? "pending";
   const canReview = status === "pending";
@@ -96,6 +104,10 @@ export function FindingReviewCard({
     (c) => c.id === finding.assigned_contributor_id
   );
 
+  // Determine share button state
+  const hasContributor = !!assignedContributor;
+  const hasEmail = !!assignedContributor?.contact_email;
+
   function handleAccept() {
     startTransition(async () => {
       await reviewFinding(finding.id, "accepted");
@@ -103,11 +115,17 @@ export function FindingReviewCard({
     });
   }
 
-  function handleSend() {
-    startTransition(async () => {
-      await sendFindingToContributor(finding.id);
-      router.refresh();
-    });
+  function handleShare() {
+    if (hasContributor && hasEmail) {
+      // 1-click share
+      startTransition(async () => {
+        await shareFindingWithContributor(finding.id, assignedContributor!.id);
+        router.refresh();
+      });
+    } else {
+      // Open dialog for assign & share
+      setShareOpen(true);
+    }
   }
 
   return (
@@ -128,6 +146,9 @@ export function FindingReviewCard({
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
                   {STATUS_LABELS[status] ?? status}
                 </span>
+                {finding.remediation_status && (
+                  <RemediationBadge status={finding.remediation_status} />
+                )}
               </div>
               <CardTitle className="text-sm font-medium">
                 {finding.title}
@@ -196,6 +217,24 @@ export function FindingReviewCard({
               </div>
             )}
 
+            {/* Remediation response display */}
+            {finding.remediation_status && finding.remediation_status !== "awaiting" && (
+              <div className="rounded-md bg-purple-50 border border-purple-200 p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-purple-800">
+                    Contributor Response
+                  </p>
+                  <RemediationBadge status={finding.remediation_status} />
+                </div>
+                {finding.remediation_responded_at && (
+                  <p className="text-xs text-purple-600">
+                    Responded{" "}
+                    {new Date(finding.remediation_responded_at).toLocaleString("en-AU")}
+                  </p>
+                )}
+              </div>
+            )}
+
             {finding.sent_at && (
               <p className="text-xs text-muted-foreground">
                 Sent{" "}
@@ -241,11 +280,25 @@ export function FindingReviewCard({
                 <Button
                   size="sm"
                   variant="default"
-                  onClick={handleSend}
+                  onClick={handleShare}
                   disabled={isPending}
                 >
-                  <Send className="mr-1 h-3.5 w-3.5" />
-                  Mark as Sent
+                  {hasContributor && hasEmail ? (
+                    <>
+                      <Send className="mr-1 h-3.5 w-3.5" />
+                      Share with {assignedContributor!.contact_name}
+                    </>
+                  ) : hasContributor && !hasEmail ? (
+                    <>
+                      <Send className="mr-1 h-3.5 w-3.5" />
+                      Add Email to Share
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="mr-1 h-3.5 w-3.5" />
+                      Assign &amp; Share
+                    </>
+                  )}
                 </Button>
               )}
             </div>
@@ -265,6 +318,17 @@ export function FindingReviewCard({
         onOpenChange={setRejectOpen}
         findingId={finding.id}
       />
+
+      {projectId && (
+        <ShareFindingDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          findingId={finding.id}
+          projectId={projectId}
+          discipline={discipline}
+          contributors={contributors}
+        />
+      )}
     </>
   );
 }

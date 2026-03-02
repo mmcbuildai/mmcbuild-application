@@ -74,6 +74,13 @@ export type CertType =
 
 export type CertStatus = "uploading" | "processing" | "ready" | "error";
 
+export type RemediationStatus =
+  | "awaiting"
+  | "acknowledged"
+  | "in_progress"
+  | "completed"
+  | "disputed";
+
 export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
 
 export interface OrgInvitation {
@@ -576,6 +583,8 @@ export interface Database {
           ncc_citation: string | null;
           page_references: number[] | null;
           sort_order: number;
+          remediation_status: RemediationStatus | null;
+          remediation_responded_at: string | null;
         };
         Insert: {
           id?: string;
@@ -590,6 +599,8 @@ export interface Database {
           ncc_citation?: string | null;
           page_references?: number[] | null;
           sort_order?: number;
+          remediation_status?: RemediationStatus | null;
+          remediation_responded_at?: string | null;
         };
         Update: {
           id?: string;
@@ -603,6 +614,8 @@ export interface Database {
           ncc_citation?: string | null;
           page_references?: number[] | null;
           sort_order?: number;
+          remediation_status?: RemediationStatus | null;
+          remediation_responded_at?: string | null;
         };
         Relationships: [
           {
@@ -610,6 +623,93 @@ export interface Database {
             columns: ["check_id"];
             isOneToOne: false;
             referencedRelation: "compliance_checks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      finding_share_tokens: {
+        Row: {
+          id: string;
+          finding_id: string;
+          contributor_id: string;
+          project_id: string;
+          org_id: string;
+          token: string;
+          email_to: string;
+          sent_at: string | null;
+          remediation_status: RemediationStatus;
+          response_notes: string | null;
+          response_file_path: string | null;
+          response_file_name: string | null;
+          responded_at: string | null;
+          expires_at: string;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          finding_id: string;
+          contributor_id: string;
+          project_id: string;
+          org_id: string;
+          token: string;
+          email_to: string;
+          sent_at?: string | null;
+          remediation_status?: RemediationStatus;
+          response_notes?: string | null;
+          response_file_path?: string | null;
+          response_file_name?: string | null;
+          responded_at?: string | null;
+          expires_at?: string;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          sent_at?: string | null;
+          remediation_status?: RemediationStatus;
+          response_notes?: string | null;
+          response_file_path?: string | null;
+          response_file_name?: string | null;
+          responded_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "finding_share_tokens_finding_id_fkey";
+            columns: ["finding_id"];
+            isOneToOne: false;
+            referencedRelation: "compliance_findings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "finding_share_tokens_contributor_id_fkey";
+            columns: ["contributor_id"];
+            isOneToOne: false;
+            referencedRelation: "project_contributors";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "finding_share_tokens_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "finding_share_tokens_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "finding_share_tokens_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];
@@ -1276,6 +1376,7 @@ export interface Database {
       review_status: ReviewStatus;
       cert_type: CertType;
       cert_status: CertStatus;
+      remediation_status: RemediationStatus;
     };
     CompositeTypes: Record<string, never>;
   };

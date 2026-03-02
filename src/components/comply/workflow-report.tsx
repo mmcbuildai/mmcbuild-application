@@ -8,7 +8,7 @@ import { FindingReviewCard } from "./finding-review-card";
 import { DisciplineBadge } from "./project-contributors";
 import { DISCIPLINE_LABELS, type ContributorDiscipline } from "@/lib/ai/types";
 import { Send } from "lucide-react";
-import { bulkSendFindings } from "@/app/(dashboard)/comply/actions";
+import { bulkShareFindings } from "@/app/(dashboard)/comply/actions";
 import { useRouter } from "next/navigation";
 
 interface ReviewFinding {
@@ -31,6 +31,8 @@ interface ReviewFinding {
   amended_action: string | null;
   amended_discipline: string | null;
   sent_at: string | null;
+  remediation_status: string | null;
+  remediation_responded_at: string | null;
 }
 
 interface Contributor {
@@ -44,11 +46,13 @@ interface Contributor {
 interface WorkflowReportProps {
   findings: ReviewFinding[];
   contributors: Contributor[];
+  projectId?: string;
 }
 
 export function WorkflowReport({
   findings,
   contributors,
+  projectId,
 }: WorkflowReportProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -76,15 +80,21 @@ export function WorkflowReport({
       f.review_status === "rejected" ||
       f.review_status === "sent"
   ).length;
-  const sendable = findings.filter(
+  const shareable = findings.filter(
     (f) =>
       f.review_status === "accepted" || f.review_status === "amended"
   );
 
-  function handleBulkSend() {
-    if (sendable.length === 0) return;
+  // Remediation stats
+  const remediationAwait = findings.filter((f) => f.remediation_status === "awaiting").length;
+  const remediationProgress = findings.filter((f) => f.remediation_status === "in_progress").length;
+  const remediationDone = findings.filter((f) => f.remediation_status === "completed").length;
+  const remediationDisputed = findings.filter((f) => f.remediation_status === "disputed").length;
+
+  function handleBulkShare() {
+    if (shareable.length === 0) return;
     startTransition(async () => {
-      await bulkSendFindings(sendable.map((f) => f.id));
+      await bulkShareFindings(shareable.map((f) => f.id));
       router.refresh();
     });
   }
@@ -108,7 +118,7 @@ export function WorkflowReport({
                 />
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <StatusCount
                 label="Pending"
                 count={
@@ -147,15 +157,26 @@ export function WorkflowReport({
             </div>
           </div>
 
-          {sendable.length > 0 && (
+          {/* Remediation status summary */}
+          {(remediationAwait > 0 || remediationProgress > 0 || remediationDone > 0 || remediationDisputed > 0) && (
+            <div className="mt-3 pt-3 border-t flex items-center gap-3 flex-wrap">
+              <span className="text-xs font-medium text-muted-foreground">Remediation:</span>
+              <StatusCount label="Awaiting" count={remediationAwait} color="bg-yellow-100 text-yellow-800" />
+              <StatusCount label="In Progress" count={remediationProgress} color="bg-orange-100 text-orange-800" />
+              <StatusCount label="Completed" count={remediationDone} color="bg-green-100 text-green-800" />
+              <StatusCount label="Disputed" count={remediationDisputed} color="bg-red-100 text-red-800" />
+            </div>
+          )}
+
+          {shareable.length > 0 && (
             <div className="mt-3 pt-3 border-t flex justify-end">
               <Button
                 size="sm"
-                onClick={handleBulkSend}
+                onClick={handleBulkShare}
                 disabled={isPending}
               >
                 <Send className="mr-2 h-3.5 w-3.5" />
-                Mark All Accepted as Sent ({sendable.length})
+                Share All Accepted ({shareable.length})
               </Button>
             </div>
           )}
@@ -179,6 +200,7 @@ export function WorkflowReport({
                 contributors={contributors.filter(
                   (c) => c.discipline === discipline || c.discipline === "other"
                 )}
+                projectId={projectId}
               />
             ))}
           </div>

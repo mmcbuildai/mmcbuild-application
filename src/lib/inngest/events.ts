@@ -64,4 +64,14 @@ export type Events = {
       certType: string;
     };
   };
+  "finding/share.requested": {
+    data: {
+      shareTokenId: string;
+      findingId: string;
+      projectId: string;
+      contributorId: string;
+      recipientEmail: string;
+      recipientName: string;
+    };
+  };
 };
