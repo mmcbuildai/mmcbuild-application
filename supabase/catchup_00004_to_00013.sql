@@ -280,18 +280,22 @@ create trigger project_site_intel_updated_at
 -- =============================================================================
 alter table public.project_site_intel enable row level security;
 
+DROP POLICY IF EXISTS "Users can view own org site intel" ON public.project_site_intel;
 create policy "Users can view own org site intel"
   on public.project_site_intel for select
   using (org_id = public.get_user_org_id());
 
+DROP POLICY IF EXISTS "Users can insert own org site intel" ON public.project_site_intel;
 create policy "Users can insert own org site intel"
   on public.project_site_intel for insert
   with check (org_id = public.get_user_org_id());
 
+DROP POLICY IF EXISTS "Users can update own org site intel" ON public.project_site_intel;
 create policy "Users can update own org site intel"
   on public.project_site_intel for update
   using (org_id = public.get_user_org_id());
 
+DROP POLICY IF EXISTS "Users can delete own org site intel" ON public.project_site_intel;
 create policy "Users can delete own org site intel"
   on public.project_site_intel for delete
   using (org_id = public.get_user_org_id());
@@ -466,6 +470,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_usage_log_check ON ai_usage_log(check_id) WHER
 -- RLS: org-scoped SELECT only (inserts via service role)
 ALTER TABLE ai_usage_log ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own org AI usage" ON ai_usage_log;
 CREATE POLICY "Users can view own org AI usage"
   ON ai_usage_log FOR SELECT
   USING (org_id = get_user_org_id());
@@ -567,10 +572,12 @@ CREATE INDEX IF NOT EXISTS idx_finding_feedback_check ON finding_feedback(check_
 -- RLS
 ALTER TABLE finding_feedback ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own org feedback" ON finding_feedback;
 CREATE POLICY "Users can view own org feedback"
   ON finding_feedback FOR SELECT
   USING (org_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "Users can insert own org feedback" ON finding_feedback;
 CREATE POLICY "Users can insert own org feedback"
   ON finding_feedback FOR INSERT
   WITH CHECK (org_id = get_user_org_id() AND user_id = auth.uid());
@@ -660,18 +667,22 @@ CREATE INDEX IF NOT EXISTS idx_project_contributors_org ON project_contributors(
 
 ALTER TABLE project_contributors ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Contributors visible to org members" ON project_contributors;
 CREATE POLICY "Contributors visible to org members"
   ON project_contributors FOR SELECT
   USING (org_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "Contributors manageable by org members" ON project_contributors;
 CREATE POLICY "Contributors manageable by org members"
   ON project_contributors FOR INSERT
   WITH CHECK (org_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "Contributors updatable by org members" ON project_contributors;
 CREATE POLICY "Contributors updatable by org members"
   ON project_contributors FOR UPDATE
   USING (org_id = get_user_org_id());
 
+DROP POLICY IF EXISTS "Contributors deletable by org members" ON project_contributors;
 CREATE POLICY "Contributors deletable by org members"
   ON project_contributors FOR DELETE
   USING (org_id = get_user_org_id());
@@ -718,6 +729,7 @@ ALTER TABLE finding_activity_log ENABLE ROW LEVEL SECURITY;
 
 -- Activity log inherits visibility from the finding's check → org scope.
 -- Using a subquery to check org ownership through the chain.
+DROP POLICY IF EXISTS "Activity log visible to org members" ON finding_activity_log;
 CREATE POLICY "Activity log visible to org members"
   ON finding_activity_log FOR SELECT
   USING (
@@ -729,6 +741,7 @@ CREATE POLICY "Activity log visible to org members"
     )
   );
 
+DROP POLICY IF EXISTS "Activity log insertable by org members" ON finding_activity_log;
 CREATE POLICY "Activity log insertable by org members"
   ON finding_activity_log FOR INSERT
   WITH CHECK (
