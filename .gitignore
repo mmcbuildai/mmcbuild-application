@@ -14,6 +14,10 @@ out/
 .env.local
 .env.*.local
 
+# ─── Data files ───
+*.geojson
+*.zip
+
 # ─── IDE ───
 .idea/
 .vscode/
