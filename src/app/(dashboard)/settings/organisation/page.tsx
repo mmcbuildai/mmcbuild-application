@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getOrganisation, getMembers } from "./actions";
+import { getOrganisation, getMembers, listInvitations } from "./actions";
 import { OrgDetailsForm } from "@/components/settings/org-details-form";
 import { MembersTable } from "@/components/settings/members-table";
 
@@ -11,7 +11,10 @@ export default async function OrganisationSettingsPage() {
     redirect("/settings");
   }
 
-  const { members, currentProfileId, currentRole } = await getMembers();
+  const [{ members, currentProfileId, currentRole }, invitations] = await Promise.all([
+    getMembers(),
+    listInvitations(),
+  ]);
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -38,6 +41,7 @@ export default async function OrganisationSettingsPage() {
         members={members}
         currentProfileId={currentProfileId}
         currentRole={currentRole}
+        invitations={invitations}
       />
     </div>
   );

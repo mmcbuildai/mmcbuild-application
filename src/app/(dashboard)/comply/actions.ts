@@ -439,6 +439,109 @@ export async function registerCertification(
   return { success: true, certificationId: (cert as { id: string }).id };
 }
 
+export async function updateCertification(
+  certId: string,
+  updates: {
+    certType?: string;
+    issuerName?: string;
+    issueDate?: string;
+    notes?: string;
+  }
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" };
+
+  const admin = createAdminClient();
+
+  const { data: cert } = await admin
+    .from("project_certifications")
+    .select("org_id")
+    .eq("id", certId)
+    .single();
+
+  if (!cert || cert.org_id !== profile.org_id) {
+    return { error: "Certification not found" };
+  }
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (updates.certType !== undefined) updateData.cert_type = updates.certType;
+  if (updates.issuerName !== undefined) updateData.issuer_name = updates.issuerName || null;
+  if (updates.issueDate !== undefined) updateData.issue_date = updates.issueDate || null;
+  if (updates.notes !== undefined) updateData.notes = updates.notes || null;
+
+  const { error } = await admin
+    .from("project_certifications")
+    .update(updateData as never)
+    .eq("id", certId);
+
+  if (error) return { error: `Failed to update certification: ${error.message}` };
+
+  return { success: true };
+}
+
+export async function deleteCertification(certId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" };
+
+  const admin = createAdminClient();
+
+  const { data: cert } = await admin
+    .from("project_certifications")
+    .select("id, org_id, file_path")
+    .eq("id", certId)
+    .single();
+
+  if (!cert || cert.org_id !== profile.org_id) {
+    return { error: "Certification not found" };
+  }
+
+  // Delete embeddings
+  await admin
+    .from("document_embeddings")
+    .delete()
+    .eq("source_type", "certification")
+    .eq("source_id", certId);
+
+  // Delete storage file
+  await admin.storage.from("engineering-certs").remove([cert.file_path]);
+
+  // Delete record
+  const { error } = await admin
+    .from("project_certifications")
+    .delete()
+    .eq("id", certId);
+
+  if (error) return { error: `Failed to delete certification: ${error.message}` };
+
+  return { success: true };
+}
+
 export async function getProjectCertifications(projectId: string) {
   const admin = createAdminClient();
 
@@ -491,6 +594,84 @@ export async function submitFindingFeedback(
   if (error) {
     return { error: `Failed to submit feedback: ${error.message}` };
   }
+
+  return { success: true };
+}
+
+export async function deleteComplianceCheck(checkId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id, role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" };
+
+  if (profile.role !== "owner" && profile.role !== "admin") {
+    return { error: "Only owners and admins can delete compliance checks" };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: check } = await admin
+    .from("compliance_checks")
+    .select("id, org_id")
+    .eq("id", checkId)
+    .single();
+
+  if (!check || check.org_id !== profile.org_id) {
+    return { error: "Check not found" };
+  }
+
+  // Get finding IDs for cleanup
+  const { data: findings } = await admin
+    .from("compliance_findings")
+    .select("id")
+    .eq("check_id", checkId);
+
+  const findingIds = (findings ?? []).map((f: { id: string }) => f.id);
+
+  if (findingIds.length > 0) {
+    // Delete finding activity log
+    await admin
+      .from("finding_activity_log" as never)
+      .delete()
+      .in("finding_id", findingIds);
+
+    // Delete finding feedback
+    await admin
+      .from("finding_feedback")
+      .delete()
+      .in("finding_id", findingIds);
+
+    // Delete findings
+    await admin
+      .from("compliance_findings")
+      .delete()
+      .eq("check_id", checkId);
+  }
+
+  // Delete embeddings for this check
+  await admin
+    .from("document_embeddings")
+    .delete()
+    .eq("source_type", "compliance_check")
+    .eq("source_id", checkId);
+
+  // Delete the check record
+  const { error } = await admin
+    .from("compliance_checks")
+    .delete()
+    .eq("id", checkId);
+
+  if (error) return { error: `Failed to delete check: ${error.message}` };
 
   return { success: true };
 }

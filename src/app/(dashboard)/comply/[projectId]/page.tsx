@@ -17,9 +17,11 @@ import {
   ArrowRight,
   CheckCircle,
   Users,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import {
   getProjectPlans,
   getProjectQuestionnaire,
@@ -27,6 +29,7 @@ import {
   getProjectCertifications,
   getProjectContributors,
   requestComplianceCheck,
+  deleteComplianceCheck,
 } from "../actions";
 
 export default async function ProjectComplyPage({
@@ -47,6 +50,13 @@ export default async function ProjectComplyPage({
   if (!project) {
     redirect("/comply");
   }
+
+  // Get current user's role
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = user
+    ? await supabase.from("profiles").select("role").eq("user_id", user.id).single()
+    : { data: null };
+  const canDeleteChecks = profile?.role === "owner" || profile?.role === "admin";
 
   const [plans, questionnaire, checks, certifications, contributors] = await Promise.all([
     getProjectPlans(projectId),
@@ -359,7 +369,27 @@ export default async function ProjectComplyPage({
                           </p>
                         </div>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex items-center gap-2">
+                        {canDeleteChecks && (
+                          <form
+                            action={async () => {
+                              "use server";
+                              await deleteComplianceCheck(check.id);
+                              revalidatePath(`/comply/${projectId}`);
+                            }}
+                          >
+                            <Button
+                              type="submit"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </form>
+                        )}
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
                     </CardContent>
                   </Card>
                 </Link>

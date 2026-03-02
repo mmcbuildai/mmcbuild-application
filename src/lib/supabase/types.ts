@@ -1,6 +1,7 @@
 export type UserRole =
   | "owner"
   | "admin"
+  | "project_manager"
   | "architect"
   | "builder"
   | "trade"
@@ -73,6 +74,21 @@ export type CertType =
 
 export type CertStatus = "uploading" | "processing" | "ready" | "error";
 
+export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+
+export interface OrgInvitation {
+  id: string;
+  org_id: string;
+  email: string;
+  role: UserRole;
+  invited_by: string;
+  status: InvitationStatus;
+  token: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
 export type Json =
   | string
   | number
@@ -106,6 +122,55 @@ export interface Database {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      org_invitations: {
+        Row: {
+          id: string;
+          org_id: string;
+          email: string;
+          role: UserRole;
+          invited_by: string;
+          status: InvitationStatus;
+          token: string;
+          expires_at: string;
+          accepted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          email: string;
+          role?: UserRole;
+          invited_by: string;
+          status?: InvitationStatus;
+          token?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          status?: InvitationStatus;
+          token?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "org_invitations_org_id_fkey";
+            columns: ["org_id"];
+            isOneToOne: false;
+            referencedRelation: "organisations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_invitations_invited_by_fkey";
+            columns: ["invited_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       profiles: {
         Row: {
@@ -1197,6 +1262,7 @@ export interface Database {
     };
     Enums: {
       user_role: UserRole;
+      invitation_status: InvitationStatus;
       project_status: ProjectStatus;
       plan_status: PlanStatus;
       check_status: CheckStatus;

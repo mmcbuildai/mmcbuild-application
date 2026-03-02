@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { canManageMembers, canAssignRole } from "@/lib/auth/roles";
 
 async function getProfile() {
   const supabase = await createClient();
@@ -95,7 +96,7 @@ export async function getMembers() {
 export async function updateMemberRole(memberId: string, role: string) {
   const profile = await getProfile();
 
-  if (profile.role !== "owner" && profile.role !== "admin") {
+  if (!canManageMembers(profile.role)) {
     return { error: "Only owners and admins can change roles" };
   }
 
@@ -103,9 +104,13 @@ export async function updateMemberRole(memberId: string, role: string) {
     return { error: "You cannot change your own role" };
   }
 
-  const validRoles = ["owner", "admin", "architect", "builder", "trade", "viewer"];
+  const validRoles = ["owner", "admin", "project_manager", "architect", "builder", "trade", "viewer"];
   if (!validRoles.includes(role)) {
     return { error: "Invalid role" };
+  }
+
+  if (!canAssignRole(profile.role, role)) {
+    return { error: "You cannot assign a role equal to or above your own" };
   }
 
   const admin = createAdminClient();
@@ -166,6 +171,182 @@ export async function removeMember(memberId: string) {
     .eq("id", memberId);
 
   if (error) return { error: `Failed to remove member: ${error.message}` };
+
+  revalidatePath("/settings/organisation");
+  return { success: true };
+}
+
+// ============================================================
+// Invitations
+// ============================================================
+
+export async function inviteUser(email: string, role: string) {
+  const profile = await getProfile();
+
+  if (!canManageMembers(profile.role)) {
+    return { error: "Only owners and admins can invite members" };
+  }
+
+  if (!email?.trim() || !email.includes("@")) {
+    return { error: "Valid email is required" };
+  }
+
+  if (!canAssignRole(profile.role, role)) {
+    return { error: "You cannot invite someone with a role equal to or above your own" };
+  }
+
+  const admin = createAdminClient();
+
+  // Check no existing member with this email in the org
+  const { data: existingMember } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("org_id", profile.org_id)
+    .eq("email", email.trim().toLowerCase())
+    .single();
+
+  if (existingMember) {
+    return { error: "This email is already a member of your organisation" };
+  }
+
+  // Check no pending invite for this email
+  const { data: existingInvite } = await admin
+    .from("org_invitations")
+    .select("id")
+    .eq("org_id", profile.org_id)
+    .eq("email", email.trim().toLowerCase())
+    .eq("status", "pending")
+    .single();
+
+  if (existingInvite) {
+    return { error: "A pending invitation already exists for this email" };
+  }
+
+  // Create invitation record
+  const { error: insertError } = await admin
+    .from("org_invitations")
+    .insert({
+      org_id: profile.org_id,
+      email: email.trim().toLowerCase(),
+      role,
+      invited_by: profile.id,
+    } as never);
+
+  if (insertError) {
+    return { error: `Failed to create invitation: ${insertError.message}` };
+  }
+
+  // Send Supabase auth invite email
+  try {
+    await admin.auth.admin.inviteUserByEmail(email.trim().toLowerCase());
+  } catch {
+    // User may already have an account — that's OK, they'll join on next login
+  }
+
+  revalidatePath("/settings/organisation");
+  return { success: true };
+}
+
+export async function listInvitations() {
+  const profile = await getProfile();
+
+  if (!canManageMembers(profile.role)) {
+    return [];
+  }
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("org_invitations")
+    .select("id, email, role, status, expires_at, created_at")
+    .eq("org_id", profile.org_id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+
+  return (data ?? []) as {
+    id: string;
+    email: string;
+    role: string;
+    status: string;
+    expires_at: string;
+    created_at: string;
+  }[];
+}
+
+export async function revokeInvitation(invitationId: string) {
+  const profile = await getProfile();
+
+  if (!canManageMembers(profile.role)) {
+    return { error: "Only owners and admins can revoke invitations" };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: invite } = await admin
+    .from("org_invitations")
+    .select("org_id")
+    .eq("id", invitationId)
+    .single();
+
+  if (!invite || (invite as { org_id: string }).org_id !== profile.org_id) {
+    return { error: "Invitation not found" };
+  }
+
+  const { error } = await admin
+    .from("org_invitations")
+    .update({ status: "revoked" } as never)
+    .eq("id", invitationId);
+
+  if (error) return { error: `Failed to revoke invitation: ${error.message}` };
+
+  revalidatePath("/settings/organisation");
+  return { success: true };
+}
+
+export async function resendInvitation(invitationId: string) {
+  const profile = await getProfile();
+
+  if (!canManageMembers(profile.role)) {
+    return { error: "Only owners and admins can resend invitations" };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: invite } = await admin
+    .from("org_invitations")
+    .select("org_id, email, status")
+    .eq("id", invitationId)
+    .single();
+
+  if (!invite) {
+    return { error: "Invitation not found" };
+  }
+
+  const inv = invite as { org_id: string; email: string; status: string };
+  if (inv.org_id !== profile.org_id) {
+    return { error: "Invitation not found" };
+  }
+
+  if (inv.status !== "pending") {
+    return { error: "Can only resend pending invitations" };
+  }
+
+  // Regenerate token and extend expiry
+  const { error: updateError } = await admin
+    .from("org_invitations")
+    .update({
+      token: crypto.randomUUID(),
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    } as never)
+    .eq("id", invitationId);
+
+  if (updateError) return { error: `Failed to resend: ${updateError.message}` };
+
+  // Re-send auth invite
+  try {
+    await admin.auth.admin.inviteUserByEmail(inv.email);
+  } catch {
+    // User may already exist
+  }
 
   revalidatePath("/settings/organisation");
   return { success: true };

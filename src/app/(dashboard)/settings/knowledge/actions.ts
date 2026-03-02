@@ -299,6 +299,24 @@ export async function uploadKbUrl(kbId: string, url: string, title?: string) {
   return { id: docId };
 }
 
+export async function updateKbDocumentTitle(docId: string, kbId: string, newTitle: string) {
+  await getProfile();
+
+  if (!newTitle?.trim()) {
+    throw new Error("Title is required");
+  }
+
+  const admin = createAdminClient();
+
+  const { error } = await admin
+    .from("knowledge_documents")
+    .update({ file_name: newTitle.trim(), updated_at: new Date().toISOString() } as never)
+    .eq("id", docId);
+
+  if (error) throw new Error(`Failed to update title: ${error.message}`);
+  revalidatePath(`/settings/knowledge/${kbId}`);
+}
+
 export async function deleteKbDocument(docId: string, kbId: string) {
   await getProfile();
   const admin = createAdminClient();

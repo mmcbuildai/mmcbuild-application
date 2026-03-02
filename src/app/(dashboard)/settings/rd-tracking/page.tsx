@@ -17,6 +17,7 @@ import { AutoEntryReview } from "@/components/rd/auto-entry-review";
 import { AutoTrackingConfig } from "@/components/rd/auto-tracking-config";
 import { FileMappingEditor } from "@/components/rd/file-mapping-editor";
 import { AutoTrackingStats } from "@/components/rd/auto-tracking-stats";
+import { TimeEntryEditDialog } from "@/components/rd/time-entry-edit-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -159,21 +160,24 @@ export default async function RdTrackingPage() {
                       {entry.description ?? "—"}
                     </TableCell>
                     <TableCell>
-                      <form
-                        action={async () => {
-                          "use server";
-                          await deleteTimeEntry(entry.id);
-                        }}
-                      >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          type="submit"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      <div className="flex items-center gap-1">
+                        <TimeEntryEditDialog entry={entry} />
+                        <form
+                          action={async () => {
+                            "use server";
+                            await deleteTimeEntry(entry.id);
+                          }}
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </form>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            type="submit"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </form>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

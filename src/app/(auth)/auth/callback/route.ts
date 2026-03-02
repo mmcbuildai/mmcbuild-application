@@ -21,28 +21,61 @@ export async function GET(request: Request) {
 
       if (!existingProfile) {
         const admin = createAdminClient();
+        const userEmail = data.user.email!.toLowerCase();
+        const fullName =
+          data.user.user_metadata?.full_name ||
+          data.user.email?.split("@")[0] ||
+          "User";
 
-        // Create organisation
-        const { data: org, error: orgError } = await admin
-          .from("organisations")
-          .insert({
-            name: data.user.user_metadata?.org_name || "My Organisation",
-          })
-          .select("id")
+        // Check for a pending org invitation
+        const { data: invite } = await admin
+          .from("org_invitations")
+          .select("id, org_id, role")
+          .eq("email", userEmail)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(1)
           .single();
 
-        if (!orgError && org) {
-          // Create profile as owner
+        if (invite) {
+          const inv = invite as { id: string; org_id: string; role: string };
+
+          // Create profile in the inviter's org with pre-assigned role
           await admin.from("profiles").insert({
-            org_id: org.id as string,
+            org_id: inv.org_id,
             user_id: data.user.id,
-            role: "owner",
-            full_name:
-              data.user.user_metadata?.full_name ||
-              data.user.email?.split("@")[0] ||
-              "User",
-            email: data.user.email!,
+            role: inv.role as "owner" | "admin" | "project_manager" | "architect" | "builder" | "trade" | "viewer",
+            full_name: fullName,
+            email: userEmail,
           });
+
+          // Mark invitation as accepted
+          await admin
+            .from("org_invitations")
+            .update({
+              status: "accepted",
+              accepted_at: new Date().toISOString(),
+            } as never)
+            .eq("id", inv.id);
+        } else {
+          // No invite — create new org + owner profile (existing behaviour)
+          const { data: org, error: orgError } = await admin
+            .from("organisations")
+            .insert({
+              name: data.user.user_metadata?.org_name || "My Organisation",
+            })
+            .select("id")
+            .single();
+
+          if (!orgError && org) {
+            await admin.from("profiles").insert({
+              org_id: org.id as string,
+              user_id: data.user.id,
+              role: "owner",
+              full_name: fullName,
+              email: userEmail,
+            });
+          }
         }
       }
 

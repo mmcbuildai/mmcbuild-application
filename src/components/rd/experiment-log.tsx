@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   createExperiment,
   updateExperiment,
+  deleteExperiment,
 } from "@/app/(dashboard)/settings/rd-tracking/actions";
 import { RD_STAGES } from "@/lib/rd-constants";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, FlaskConical } from "lucide-react";
+import { Plus, FlaskConical, Trash2 } from "lucide-react";
 import type { Database, ExperimentStatus } from "@/lib/supabase/types";
 
 type Experiment = Database["public"]["Tables"]["rd_experiments"]["Row"];
@@ -67,6 +68,15 @@ export function ExperimentLog({
 
   async function handleStatusChange(id: string, status: ExperimentStatus) {
     await updateExperiment(id, { status });
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this experiment? This cannot be undone.")) return;
+    try {
+      await deleteExperiment(id);
+    } catch (err) {
+      console.error("Failed to delete experiment:", err);
+    }
   }
 
   return (
@@ -185,6 +195,14 @@ export function ExperimentLog({
                         </SelectContent>
                       </Select>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(exp.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
                 {exp.stage && (

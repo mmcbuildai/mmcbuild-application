@@ -76,6 +76,39 @@ export async function listTimeEntries(filters?: {
   return data ?? [];
 }
 
+export async function updateTimeEntry(
+  entryId: string,
+  updates: {
+    date?: string;
+    hours?: number;
+    stage?: string;
+    deliverable?: string;
+    rd_tag?: RdTag;
+    description?: string;
+  }
+) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { data: entry } = await admin
+    .from("rd_time_entries")
+    .select("org_id")
+    .eq("id", entryId)
+    .single();
+
+  if (!entry || entry.org_id !== profile.org_id) {
+    throw new Error("Entry not found");
+  }
+
+  const { error } = await admin
+    .from("rd_time_entries")
+    .update({ ...updates, updated_at: new Date().toISOString() } as never)
+    .eq("id", entryId);
+
+  if (error) throw new Error(`Failed to update entry: ${error.message}`);
+  revalidatePath("/settings/rd-tracking");
+}
+
 export async function deleteTimeEntry(entryId: string) {
   await getProfile();
   const admin = createAdminClient();
@@ -150,6 +183,29 @@ export async function updateExperiment(
     .eq("id", id);
 
   if (error) throw new Error(`Failed to update experiment: ${error.message}`);
+  revalidatePath("/settings/rd-tracking");
+}
+
+export async function deleteExperiment(experimentId: string) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { data: experiment } = await admin
+    .from("rd_experiments")
+    .select("org_id")
+    .eq("id", experimentId)
+    .single();
+
+  if (!experiment || experiment.org_id !== profile.org_id) {
+    throw new Error("Experiment not found");
+  }
+
+  const { error } = await admin
+    .from("rd_experiments")
+    .delete()
+    .eq("id", experimentId);
+
+  if (error) throw new Error(`Failed to delete experiment: ${error.message}`);
   revalidatePath("/settings/rd-tracking");
 }
 

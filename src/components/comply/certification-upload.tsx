@@ -7,8 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, FileCheck, Loader2 } from "lucide-react";
-import { registerCertification } from "@/app/(dashboard)/comply/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Upload, FileCheck, Loader2, Pencil, Trash2 } from "lucide-react";
+import {
+  registerCertification,
+  updateCertification,
+  deleteCertification,
+} from "@/app/(dashboard)/comply/actions";
 import { createClient } from "@/lib/supabase/client";
 
 const CERT_TYPE_OPTIONS = [
@@ -54,18 +66,21 @@ const ACCEPTED_TYPES = [
   "image/tiff",
 ];
 
+interface ExistingCert {
+  id: string;
+  cert_type: string;
+  file_name: string;
+  status: string;
+  issuer_name: string | null;
+  issue_date: string | null;
+  notes?: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
 interface CertificationUploadProps {
   projectId: string;
-  existingCerts?: {
-    id: string;
-    cert_type: string;
-    file_name: string;
-    status: string;
-    issuer_name: string | null;
-    issue_date: string | null;
-    error_message: string | null;
-    created_at: string;
-  }[];
+  existingCerts?: ExistingCert[];
 }
 
 function certTypeLabel(certType: string): string {
@@ -85,6 +100,17 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
   const [issuerName, setIssuerName] = useState("");
   const [issueDate, setIssueDate] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Edit state
+  const [editingCert, setEditingCert] = useState<ExistingCert | null>(null);
+  const [editCertType, setEditCertType] = useState("");
+  const [editIssuer, setEditIssuer] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Delete state
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleFile = useCallback(async (file: File) => {
     if (!ACCEPTED_TYPES.includes(file.type)) {
@@ -184,6 +210,40 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
     },
     [handleFile]
   );
+
+  function openEdit(cert: ExistingCert) {
+    setEditingCert(cert);
+    setEditCertType(cert.cert_type);
+    setEditIssuer(cert.issuer_name ?? "");
+    setEditDate(cert.issue_date ?? "");
+    setEditNotes(cert.notes ?? "");
+  }
+
+  async function handleEditSave() {
+    if (!editingCert) return;
+    setEditSaving(true);
+    const result = await updateCertification(editingCert.id, {
+      certType: editCertType,
+      issuerName: editIssuer,
+      issueDate: editDate,
+      notes: editNotes,
+    });
+    setEditSaving(false);
+    if (!result.error) {
+      setEditingCert(null);
+      router.refresh();
+    }
+  }
+
+  async function handleDelete(certId: string) {
+    if (!confirm("Delete this certification? This cannot be undone.")) return;
+    setDeletingId(certId);
+    const result = await deleteCertification(certId);
+    setDeletingId(null);
+    if (!result.error) {
+      router.refresh();
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -306,23 +366,106 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
                     </p>
                   </div>
                 </div>
-                <Badge
-                  variant={
-                    cert.status === "ready"
-                      ? "default"
-                      : cert.status === "error"
-                      ? "destructive"
-                      : "secondary"
-                  }
-                  className="text-xs capitalize shrink-0"
-                >
-                  {cert.status}
-                </Badge>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => openEdit(cert)}
+                    title="Edit certification"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(cert.id)}
+                    disabled={deletingId === cert.id}
+                    title="Delete certification"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Badge
+                    variant={
+                      cert.status === "ready"
+                        ? "default"
+                        : cert.status === "error"
+                        ? "destructive"
+                        : "secondary"
+                    }
+                    className="text-xs capitalize"
+                  >
+                    {cert.status}
+                  </Badge>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {/* Edit dialog */}
+      <Dialog open={!!editingCert} onOpenChange={(open) => !open && setEditingCert(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Certification</DialogTitle>
+            <DialogDescription>
+              Update certification details for {editingCert?.file_name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Certification Type</Label>
+              <select
+                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                value={editCertType}
+                onChange={(e) => setEditCertType(e.target.value)}
+              >
+                {CERT_TYPE_OPTIONS.map((group) => (
+                  <optgroup key={group.group} label={group.group}>
+                    {group.options.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Issuer Name</Label>
+              <Input
+                value={editIssuer}
+                onChange={(e) => setEditIssuer(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Issue Date</Label>
+              <Input
+                type="date"
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Input
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingCert(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditSave} disabled={editSaving}>
+              {editSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
