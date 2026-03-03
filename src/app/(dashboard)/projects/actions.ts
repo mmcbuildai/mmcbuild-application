@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { deriveSiteIntel } from "@/lib/site-intel";
 import { getStaticMapUrl } from "@/lib/mapbox";
+import { inngest } from "@/lib/inngest/client";
 
 async function getProfile() {
   const supabase = await createClient();
@@ -259,4 +260,559 @@ export async function rederiveSiteIntel(projectId: string) {
   if (error) throw new Error(`Re-derive failed: ${error.message}`);
 
   revalidatePath(`/projects/${projectId}`);
+}
+
+// ============================================================
+// Plans
+// ============================================================
+
+export async function registerPlan(
+  projectId: string,
+  fileName: string,
+  filePath: string,
+  fileSizeBytes: number
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found" };
+  }
+
+  const { data: plan, error: insertError } = await supabase
+    .from("plans" as never)
+    .insert({
+      project_id: projectId,
+      org_id: profile.org_id,
+      file_name: fileName,
+      file_path: filePath,
+      file_size_bytes: fileSizeBytes,
+      status: "uploading",
+      created_by: profile.id,
+    } as never)
+    .select("id")
+    .single();
+
+  if (insertError) {
+    return { error: `Failed to create plan record: ${insertError.message}` };
+  }
+
+  try {
+    await inngest.send({
+      name: "plan/uploaded",
+      data: {
+        projectId,
+        fileUrl: filePath,
+        fileName,
+        uploadedBy: profile.id,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
+
+  return { success: true, planId: (plan as { id: string }).id };
+}
+
+export async function getProjectPlans(projectId: string) {
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from("plans")
+    .select("id, file_name, file_size_bytes, page_count, status, created_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  return data ?? [];
+}
+
+export async function deletePlan(planId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id, role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found" };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: plan } = await admin
+    .from("plans")
+    .select("id, org_id, file_path")
+    .eq("id", planId)
+    .single();
+
+  if (!plan || plan.org_id !== profile.org_id) {
+    return { error: "Plan not found" };
+  }
+
+  await admin
+    .from("document_embeddings")
+    .delete()
+    .eq("source_type", "plan")
+    .eq("source_id", planId);
+
+  await admin.from("plans").delete().eq("id", planId);
+
+  await admin.storage.from("plan-uploads").remove([plan.file_path]);
+
+  return { success: true };
+}
+
+// ============================================================
+// Questionnaire
+// ============================================================
+
+export async function saveQuestionnaire(
+  projectId: string,
+  responses: Record<string, unknown>
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found" };
+  }
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("questionnaire_responses")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
+    .limit(1)
+    .single();
+
+  if (existing) {
+    const { error } = await admin
+      .from("questionnaire_responses")
+      .update({
+        responses,
+        completed: true,
+      } as never)
+      .eq("id", existing.id);
+
+    if (error) {
+      return { error: `Failed to update questionnaire: ${error.message}` };
+    }
+
+    return { success: true, questionnaireId: existing.id };
+  }
+
+  const { data: qr, error } = await admin
+    .from("questionnaire_responses")
+    .insert({
+      project_id: projectId,
+      org_id: profile.org_id,
+      responses,
+      completed: true,
+      created_by: profile.id,
+    } as never)
+    .select("id")
+    .single();
+
+  if (error) {
+    return { error: `Failed to save questionnaire: ${error.message}` };
+  }
+
+  return { success: true, questionnaireId: (qr as { id: string }).id };
+}
+
+export async function getProjectQuestionnaire(projectId: string) {
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from("questionnaire_responses")
+    .select("id, responses, completed, created_at, updated_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  return data;
+}
+
+// ============================================================
+// Certifications
+// ============================================================
+
+export async function registerCertification(
+  projectId: string,
+  fileName: string,
+  filePath: string,
+  fileSizeBytes: number,
+  certType: string,
+  metadata?: {
+    issuerName?: string;
+    issueDate?: string;
+    notes?: string;
+    state?: string;
+  }
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found" };
+  }
+
+  const admin = createAdminClient();
+  const { data: cert, error: insertError } = await admin
+    .from("project_certifications")
+    .insert({
+      project_id: projectId,
+      org_id: profile.org_id,
+      cert_type: certType,
+      file_name: fileName,
+      file_path: filePath,
+      file_size_bytes: fileSizeBytes,
+      status: "uploading",
+      state: metadata?.state ?? null,
+      issuer_name: metadata?.issuerName ?? null,
+      issue_date: metadata?.issueDate ?? null,
+      notes: metadata?.notes ?? null,
+      created_by: profile.id,
+    } as never)
+    .select("id")
+    .single();
+
+  if (insertError) {
+    return { error: `Failed to create certification record: ${insertError.message}` };
+  }
+
+  try {
+    await inngest.send({
+      name: "certification/uploaded",
+      data: {
+        projectId,
+        certificationId: (cert as { id: string }).id,
+        fileName,
+        filePath,
+        certType,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
+
+  return { success: true, certificationId: (cert as { id: string }).id };
+}
+
+export async function updateCertification(
+  certId: string,
+  updates: {
+    certType?: string;
+    issuerName?: string;
+    issueDate?: string;
+    notes?: string;
+  }
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" };
+
+  const admin = createAdminClient();
+
+  const { data: cert } = await admin
+    .from("project_certifications")
+    .select("org_id")
+    .eq("id", certId)
+    .single();
+
+  if (!cert || cert.org_id !== profile.org_id) {
+    return { error: "Certification not found" };
+  }
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  if (updates.certType !== undefined) updateData.cert_type = updates.certType;
+  if (updates.issuerName !== undefined) updateData.issuer_name = updates.issuerName || null;
+  if (updates.issueDate !== undefined) updateData.issue_date = updates.issueDate || null;
+  if (updates.notes !== undefined) updateData.notes = updates.notes || null;
+
+  const { error } = await admin
+    .from("project_certifications")
+    .update(updateData as never)
+    .eq("id", certId);
+
+  if (error) return { error: `Failed to update certification: ${error.message}` };
+
+  return { success: true };
+}
+
+export async function deleteCertification(certId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" };
+
+  const admin = createAdminClient();
+
+  const { data: cert } = await admin
+    .from("project_certifications")
+    .select("id, org_id, file_path")
+    .eq("id", certId)
+    .single();
+
+  if (!cert || cert.org_id !== profile.org_id) {
+    return { error: "Certification not found" };
+  }
+
+  await admin
+    .from("document_embeddings")
+    .delete()
+    .eq("source_type", "certification")
+    .eq("source_id", certId);
+
+  await admin.storage.from("engineering-certs").remove([cert.file_path]);
+
+  const { error } = await admin
+    .from("project_certifications")
+    .delete()
+    .eq("id", certId);
+
+  if (error) return { error: `Failed to delete certification: ${error.message}` };
+
+  return { success: true };
+}
+
+export async function getProjectCertifications(projectId: string) {
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from("project_certifications")
+    .select("id, cert_type, file_name, file_size_bytes, status, issuer_name, issue_date, notes, error_message, created_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  return data ?? [];
+}
+
+// ============================================================
+// Project Contributors
+// ============================================================
+
+export async function addProjectContributor(
+  projectId: string,
+  data: {
+    contact_name: string;
+    discipline: string;
+    company_name?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    notes?: string;
+  }
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" };
+
+  const admin = createAdminClient();
+  const { data: contributor, error } = await admin
+    .from("project_contributors" as never)
+    .insert({
+      project_id: projectId,
+      org_id: profile.org_id,
+      discipline: data.discipline,
+      contact_name: data.contact_name,
+      company_name: data.company_name ?? null,
+      contact_email: data.contact_email ?? null,
+      contact_phone: data.contact_phone ?? null,
+      notes: data.notes ?? null,
+      created_by: profile.id,
+    } as never)
+    .select("id")
+    .single();
+
+  if (error) return { error: `Failed to add contributor: ${error.message}` };
+
+  return { success: true, contributorId: (contributor as { id: string }).id };
+}
+
+export async function updateProjectContributor(
+  contributorId: string,
+  data: {
+    contact_name?: string;
+    discipline?: string;
+    company_name?: string;
+    contact_email?: string;
+    contact_phone?: string;
+    notes?: string;
+  }
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" };
+
+  const admin = createAdminClient();
+
+  const { data: existing } = await admin
+    .from("project_contributors" as never)
+    .select("org_id")
+    .eq("id", contributorId)
+    .single();
+
+  if (!existing || (existing as { org_id: string }).org_id !== profile.org_id) {
+    return { error: "Contributor not found" };
+  }
+
+  const { error } = await admin
+    .from("project_contributors" as never)
+    .update({ ...data, updated_at: new Date().toISOString() } as never)
+    .eq("id", contributorId);
+
+  if (error) return { error: `Failed to update contributor: ${error.message}` };
+
+  return { success: true };
+}
+
+export async function removeProjectContributor(contributorId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" };
+
+  const admin = createAdminClient();
+
+  const { data: existing } = await admin
+    .from("project_contributors" as never)
+    .select("org_id")
+    .eq("id", contributorId)
+    .single();
+
+  if (!existing || (existing as { org_id: string }).org_id !== profile.org_id) {
+    return { error: "Contributor not found" };
+  }
+
+  const { error } = await admin
+    .from("project_contributors" as never)
+    .delete()
+    .eq("id", contributorId);
+
+  if (error) return { error: `Failed to remove contributor: ${error.message}` };
+
+  return { success: true };
+}
+
+export async function getProjectContributors(projectId: string) {
+  const admin = createAdminClient();
+
+  const { data } = await admin
+    .from("project_contributors" as never)
+    .select("id, discipline, company_name, contact_name, contact_email, contact_phone, notes, created_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true });
+
+  return (data ?? []) as {
+    id: string;
+    discipline: string;
+    company_name: string | null;
+    contact_name: string;
+    contact_email: string | null;
+    contact_phone: string | null;
+    notes: string | null;
+    created_at: string;
+  }[];
 }

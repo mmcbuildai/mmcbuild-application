@@ -7,16 +7,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
-  Upload,
-  ClipboardList,
   Play,
   FileText,
-  FileCheck,
   ArrowRight,
-  CheckCircle,
-  Users,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,12 +20,15 @@ import { revalidatePath } from "next/cache";
 import {
   getProjectPlans,
   getProjectQuestionnaire,
-  getProjectChecks,
   getProjectCertifications,
   getProjectContributors,
+} from "@/app/(dashboard)/projects/actions";
+import {
+  getProjectChecks,
   deleteComplianceCheck,
 } from "../actions";
 import { RunCheckButton } from "@/components/comply/run-check-button";
+import { ReadinessIndicators } from "@/components/projects/readiness-indicators";
 
 export default async function ProjectComplyPage({
   params,
@@ -41,7 +38,6 @@ export default async function ProjectComplyPage({
   const { projectId } = await params;
   const supabase = await createClient();
 
-  // Verify project exists
   const { data: project } = await supabase
     .from("projects")
     .select("id, name, address")
@@ -52,7 +48,6 @@ export default async function ProjectComplyPage({
     redirect("/comply");
   }
 
-  // Get current user's role
   const { data: { user } } = await supabase.auth.getUser();
   const { data: profile } = user
     ? await supabase.from("profiles").select("role").eq("user_id", user.id).single()
@@ -88,174 +83,34 @@ export default async function ProjectComplyPage({
         </p>
       </div>
 
-      {/* Step cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        {/* Step 1: Upload */}
+      {/* Readiness + Run Check */}
+      <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              <CardTitle className="text-base">1. Upload Plan</CardTitle>
-            </div>
-            <CardDescription>Upload your building plan PDF</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {plans.length > 0 ? (
-              <div className="space-y-2">
-                {plans.map(
-                  (plan: {
-                    id: string;
-                    file_name: string;
-                    status: string;
-                    page_count: number | null;
-                  }) => (
-                    <div
-                      key={plan.id}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="truncate">{plan.file_name}</span>
-                      <Badge
-                        variant={
-                          plan.status === "ready" ? "default" : "secondary"
-                        }
-                        className="text-xs capitalize"
-                      >
-                        {plan.status}
-                      </Badge>
-                    </div>
-                  )
-                )}
-                <Link href={`/comply/${projectId}/upload`}>
-                  <Button variant="outline" size="sm" className="mt-2 w-full">
-                    Upload Another
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <Link href={`/comply/${projectId}/upload`}>
-                <Button variant="outline" size="sm" className="w-full">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload PDF
-                </Button>
-              </Link>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Step 2: Questionnaire */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5" />
-              <CardTitle className="text-base">2. Questionnaire</CardTitle>
-            </div>
+            <CardTitle className="text-base">Project Readiness</CardTitle>
             <CardDescription>
-              Provide project details for analysis
+              Set up your project data to run a compliance check
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {hasQuestionnaire ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle className="h-4 w-4" />
-                  Completed
-                </div>
-                <Link href={`/comply/${projectId}/questionnaire`}>
-                  <Button variant="outline" size="sm" className="w-full">
-                    Edit Responses
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <Link href={`/comply/${projectId}/questionnaire`}>
-                <Button variant="outline" size="sm" className="w-full">
-                  <ClipboardList className="mr-2 h-4 w-4" />
-                  Start Questionnaire
-                </Button>
-              </Link>
-            )}
+            <ReadinessIndicators
+              projectId={projectId}
+              hasPlans={!!readyPlan}
+              hasQuestionnaire={!!hasQuestionnaire}
+              contributorCount={contributors.length}
+              certificationCount={certifications.length}
+            />
           </CardContent>
         </Card>
 
-        {/* Step 3: Certifications */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <FileCheck className="h-5 w-5" />
-              <CardTitle className="text-base">3. Certifications</CardTitle>
-            </div>
-            <CardDescription>
-              Upload engineering certs (optional)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {certifications.length > 0 ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle className="h-4 w-4" />
-                  {certifications.length} uploaded
-                </div>
-                <Link href={`/comply/${projectId}/certifications`}>
-                  <Button variant="outline" size="sm" className="w-full">
-                    Manage Certs
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <Link href={`/comply/${projectId}/certifications`}>
-                <Button variant="outline" size="sm" className="w-full">
-                  <FileCheck className="mr-2 h-4 w-4" />
-                  Upload Certs
-                </Button>
-              </Link>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Step 4: Project Team */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              <CardTitle className="text-base">4. Project Team</CardTitle>
-            </div>
-            <CardDescription>
-              Assign contributors (optional)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {contributors.length > 0 ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle className="h-4 w-4" />
-                  {contributors.length} contributor{contributors.length !== 1 ? "s" : ""}
-                </div>
-                <Link href={`/comply/${projectId}/team`}>
-                  <Button variant="outline" size="sm" className="w-full">
-                    Manage Team
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <Link href={`/comply/${projectId}/team`}>
-                <Button variant="outline" size="sm" className="w-full">
-                  <Users className="mr-2 h-4 w-4" />
-                  Add Team
-                </Button>
-              </Link>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Step 5: Run Check */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <Play className="h-5 w-5" />
-              <CardTitle className="text-base">5. Run Check</CardTitle>
+              <CardTitle className="text-base">Run Compliance Check</CardTitle>
             </div>
             <CardDescription>
-              Generate AI compliance report
+              Generate an AI-powered NCC compliance report
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -275,7 +130,7 @@ export default async function ProjectComplyPage({
         </Card>
       </div>
 
-      {/* Ecosystem Pipeline */}
+      {/* MMC Pipeline */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">MMC Pipeline</CardTitle>

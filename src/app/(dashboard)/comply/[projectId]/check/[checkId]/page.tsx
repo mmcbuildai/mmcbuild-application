@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getComplianceReport, getProjectContributors } from "../../../actions";
+import { getComplianceReport } from "../../../actions";
+import { getProjectContributors } from "@/app/(dashboard)/projects/actions";
 import { ComplianceReport } from "@/components/comply/compliance-report";
 import { CheckProgress } from "@/components/comply/check-progress";
 import { WorkflowTabs } from "@/components/comply/workflow-tabs";
