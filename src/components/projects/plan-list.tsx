@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,35 +17,33 @@ interface Plan {
 
 export function PlanList({ plans }: { plans: Plan[] }) {
   const router = useRouter();
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [retrying, setRetrying] = useState<string | null>(null);
+  const [deletePending, startDeleteTransition] = useTransition();
+  const [retryPending, startRetryTransition] = useTransition();
 
-  async function handleDelete(planId: string) {
+  function handleDelete(planId: string) {
     if (!confirm("Delete this plan and its embeddings? This cannot be undone.")) {
       return;
     }
 
-    setDeleting(planId);
-    const result = await deletePlan(planId);
-    setDeleting(null);
-
-    if (result.error) {
-      alert(result.error);
-    } else {
-      router.refresh();
-    }
+    startDeleteTransition(async () => {
+      const result = await deletePlan(planId);
+      if (result.error) {
+        alert(result.error);
+      } else {
+        router.refresh();
+      }
+    });
   }
 
-  async function handleRetry(planId: string) {
-    setRetrying(planId);
-    const result = await retryPlanProcessing(planId);
-    setRetrying(null);
-
-    if (result.error) {
-      alert(result.error);
-    } else {
-      router.refresh();
-    }
+  function handleRetry(planId: string) {
+    startRetryTransition(async () => {
+      const result = await retryPlanProcessing(planId);
+      if (result.error) {
+        alert(result.error);
+      } else {
+        router.refresh();
+      }
+    });
   }
 
   if (plans.length === 0) return null;
@@ -90,10 +88,10 @@ export function PlanList({ plans }: { plans: Plan[] }) {
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-primary"
                     onClick={() => handleRetry(plan.id)}
-                    disabled={retrying === plan.id}
+                    disabled={retryPending}
                     title="Retry processing"
                   >
-                    {retrying === plan.id ? (
+                    {retryPending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <RotateCw className="h-4 w-4" />
@@ -105,9 +103,9 @@ export function PlanList({ plans }: { plans: Plan[] }) {
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-destructive"
                   onClick={() => handleDelete(plan.id)}
-                  disabled={deleting === plan.id}
+                  disabled={deletePending}
                 >
-                  {deleting === plan.id ? (
+                  {deletePending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Trash2 className="h-4 w-4" />
