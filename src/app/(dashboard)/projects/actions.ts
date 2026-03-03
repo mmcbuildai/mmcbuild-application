@@ -368,11 +368,14 @@ export async function registerPlan(
     return { error: `Failed to create plan record: ${insertError.message}` };
   }
 
+  const planId = (plan as { id: string }).id;
+
   try {
     await inngest.send({
       name: "plan/uploaded",
       data: {
         projectId,
+        planId,
         fileUrl: filePath,
         fileName,
         uploadedBy: profile.id,
@@ -382,7 +385,51 @@ export async function registerPlan(
     console.error("Failed to send Inngest event:", e);
   }
 
-  return { success: true, planId: (plan as { id: string }).id };
+  return { success: true, planId };
+}
+
+export async function retryPlanProcessing(planId: string) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { data: plan } = await admin
+    .from("plans")
+    .select("id, project_id, org_id, file_name, file_path, status, created_by")
+    .eq("id", planId)
+    .single();
+
+  if (!plan || plan.org_id !== profile.org_id) {
+    return { error: "Plan not found" };
+  }
+
+  if (plan.status !== "uploading" && plan.status !== "error") {
+    return { error: "Plan is not in a retriable state" };
+  }
+
+  // Reset status to uploading
+  await admin
+    .from("plans")
+    .update({ status: "uploading" } as never)
+    .eq("id", planId);
+
+  // Re-send Inngest event
+  try {
+    await inngest.send({
+      name: "plan/uploaded",
+      data: {
+        projectId: plan.project_id,
+        planId: plan.id,
+        fileUrl: plan.file_path,
+        fileName: plan.file_name,
+        uploadedBy: plan.created_by,
+      },
+    });
+  } catch (e) {
+    return { error: "Failed to trigger reprocessing" };
+  }
+
+  revalidatePath(`/projects/${plan.project_id}`);
+  return { success: true };
 }
 
 export async function getProjectPlans(projectId: string) {
