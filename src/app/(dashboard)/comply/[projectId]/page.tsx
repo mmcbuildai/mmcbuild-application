@@ -22,15 +22,16 @@ import {
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+
 import {
   getProjectPlans,
   getProjectQuestionnaire,
   getProjectChecks,
   getProjectCertifications,
   getProjectContributors,
-  requestComplianceCheck,
   deleteComplianceCheck,
 } from "../actions";
+import { RunCheckButton } from "@/components/comply/run-check-button";
 
 export default async function ProjectComplyPage({
   params,
@@ -259,26 +260,11 @@ export default async function ProjectComplyPage({
           </CardHeader>
           <CardContent>
             {canRunCheck ? (
-              <form
-                action={async () => {
-                  "use server";
-                  const result = await requestComplianceCheck(
-                    projectId,
-                    readyPlan.id,
-                    questionnaire?.id ?? null
-                  );
-                  if (result.checkId) {
-                    redirect(
-                      `/comply/${projectId}/check/${result.checkId}`
-                    );
-                  }
-                }}
-              >
-                <Button size="sm" className="w-full" type="submit">
-                  <Play className="mr-2 h-4 w-4" />
-                  Run Compliance Check
-                </Button>
-              </form>
+              <RunCheckButton
+                projectId={projectId}
+                planId={readyPlan.id}
+                questionnaireId={questionnaire?.id ?? null}
+              />
             ) : (
               <div className="text-sm text-muted-foreground">
                 {!readyPlan && <p>Upload and process a plan first.</p>}
