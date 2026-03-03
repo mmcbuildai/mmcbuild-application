@@ -68,7 +68,7 @@ export async function requestCostEstimation(
 export async function getCostReport(estimateId: string) {
   const { data: estimate, error: estError } = await db()
     .from("cost_estimates")
-    .select("id, project_id, org_id, plan_id, status, summary, total_traditional, total_mmc, total_savings_pct, region, started_at, completed_at, created_at")
+    .select("id, project_id, org_id, plan_id, status, summary, total_traditional, total_mmc, total_savings_pct, region, traditional_duration_weeks, mmc_duration_weeks, started_at, completed_at, created_at")
     .eq("id", estimateId)
     .single();
 
@@ -93,4 +93,54 @@ export async function getProjectCostEstimates(projectId: string) {
     .order("created_at", { ascending: false });
 
   return data ?? [];
+}
+
+export async function getHoldingCostVariables(estimateId: string) {
+  const { data } = await db()
+    .from("holding_cost_variables")
+    .select("*")
+    .eq("estimate_id", estimateId)
+    .single();
+
+  return data as {
+    id: string;
+    estimate_id: string;
+    weekly_finance_cost: number;
+    weekly_site_costs: number;
+    weekly_insurance: number;
+    weekly_opportunity_cost: number;
+    weekly_council_fees: number;
+    custom_items: { label: string; amount: number }[];
+    updated_at: string;
+    created_at: string;
+  } | null;
+}
+
+export async function saveHoldingCostVariables(
+  estimateId: string,
+  vars: {
+    weekly_finance_cost: number;
+    weekly_site_costs: number;
+    weekly_insurance: number;
+    weekly_opportunity_cost: number;
+    weekly_council_fees: number;
+    custom_items: { label: string; amount: number }[];
+  }
+) {
+  const { error } = await db()
+    .from("holding_cost_variables")
+    .upsert(
+      {
+        estimate_id: estimateId,
+        ...vars,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "estimate_id" }
+    );
+
+  if (error) {
+    return { error: (error as { message: string }).message };
+  }
+
+  return { success: true };
 }

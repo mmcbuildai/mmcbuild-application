@@ -139,3 +139,27 @@ Write a concise executive summary (2-4 paragraphs) that:
 5. Includes a brief note that all estimates are advisory and require professional quantity surveyor review
 
 Return ONLY the summary text, no JSON wrapping.`;
+
+export const COST_DURATION_PROMPT = (
+  projectContext: string,
+  categorySummary: string
+) => `Estimate the construction duration for this Australian residential project.
+
+${projectContext}
+
+Cost breakdown:
+${categorySummary}
+
+Return JSON:
+{
+  "traditional_duration_weeks": <number>,
+  "mmc_duration_weeks": <number>,
+  "reasoning": "brief explanation"
+}
+
+Guidelines:
+- Typical single-storey: 20-30 weeks traditional, 12-18 weeks MMC
+- Two-storey: 30-45 weeks traditional, 18-28 weeks MMC
+- Consider project size, complexity, and number of wet areas
+- MMC acceleration comes from prefabrication, parallel workflows, reduced weather delays
+`;

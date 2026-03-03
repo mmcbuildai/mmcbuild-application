@@ -295,7 +295,47 @@ export const runCostEstimation = inngest.createFunction(
       return result.text;
     });
 
-    // 11. Update completed
+    // 11. Estimate construction duration
+    const durations = await step.run("estimate-duration", async () => {
+      const { COST_DURATION_PROMPT } = await import("@/lib/ai/prompts/cost-estimation-system");
+
+      const catSummary = [...resultMap.entries()]
+        .map(([cat, result]) => {
+          const trad = result.line_items.reduce((s, li) => s + (li.traditional_total ?? 0), 0);
+          return `${getCostCategoryLabel(cat)}: $${Math.round(trad).toLocaleString()} (${result.line_items.length} items)`;
+        })
+        .join("\n");
+
+      try {
+        const result = await callModel("cost_primary", {
+          system: "You are an expert Australian construction scheduler estimating project durations.",
+          messages: [{ role: "user", content: COST_DURATION_PROMPT(projectContext, catSummary) }],
+          maxTokens: 1024,
+          orgId: estimate.org_id,
+          checkId: estimate.id,
+        });
+
+        const { extractJson } = await import("@/lib/ai/extract-json");
+        const parsed = extractJson<{
+          traditional_duration_weeks: number;
+          mmc_duration_weeks: number;
+          reasoning: string;
+        }>(result.text);
+
+        return {
+          traditional_duration_weeks: parsed.traditional_duration_weeks,
+          mmc_duration_weeks: parsed.mmc_duration_weeks,
+        };
+      } catch (err) {
+        console.warn("[CostEstimation] Duration estimation failed, using defaults:", err);
+        return {
+          traditional_duration_weeks: 26,
+          mmc_duration_weeks: 16,
+        };
+      }
+    });
+
+    // 12. Update completed
     await step.run("update-completed", async () => {
       await db()
         .from("cost_estimates")
@@ -305,6 +345,8 @@ export const runCostEstimation = inngest.createFunction(
           total_traditional: Math.round(finalTraditional),
           total_mmc: Math.round(finalMmc),
           total_savings_pct: savingsPct,
+          traditional_duration_weeks: durations.traditional_duration_weeks,
+          mmc_duration_weeks: durations.mmc_duration_weeks,
           completed_at: new Date().toISOString(),
         })
         .eq("id", estimate.id);

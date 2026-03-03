@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCostReport } from "@/app/(dashboard)/quote/actions";
+import { getCostReport, getHoldingCostVariables } from "@/app/(dashboard)/quote/actions";
 import { CostReport } from "@/components/quote/cost-report";
 import { EstimationProgress } from "@/components/quote/estimation-progress";
 
@@ -27,6 +27,8 @@ export default async function CostReportPage({
     total_savings_pct: number | null;
     region: string | null;
     completed_at: string | null;
+    traditional_duration_weeks: number | null;
+    mmc_duration_weeks: number | null;
   };
 
   const lineItems = (result.lineItems ?? []) as unknown as {
@@ -48,6 +50,10 @@ export default async function CostReportPage({
     rate_source_detail: string | null;
   }[];
 
+  const holdingCostVariables = estimate.status === "completed"
+    ? await getHoldingCostVariables(reportId)
+    : null;
+
   return (
     <div className="max-w-4xl space-y-6">
       <div>
@@ -61,7 +67,11 @@ export default async function CostReportPage({
       </div>
 
       {estimate.status === "completed" ? (
-        <CostReport estimate={estimate} lineItems={lineItems} />
+        <CostReport
+          estimate={estimate}
+          lineItems={lineItems}
+          holdingCostVariables={holdingCostVariables}
+        />
       ) : (
         <EstimationProgress
           estimateId={reportId}

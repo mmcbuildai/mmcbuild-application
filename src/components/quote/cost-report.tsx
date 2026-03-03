@@ -1,5 +1,6 @@
 import { LineItemCard } from "./line-item-card";
 import { CostComparisonChart } from "./cost-comparison-chart";
+import { HoldingCostCalculator } from "./holding-cost-calculator";
 import { getCostCategoryLabel } from "@/lib/ai/types";
 
 interface LineItem {
@@ -21,6 +22,15 @@ interface LineItem {
   rate_source_detail: string | null;
 }
 
+interface HoldingCostVars {
+  weekly_finance_cost: number;
+  weekly_site_costs: number;
+  weekly_insurance: number;
+  weekly_opportunity_cost: number;
+  weekly_council_fees: number;
+  custom_items: { label: string; amount: number }[];
+}
+
 interface CostReportProps {
   estimate: {
     id: string;
@@ -30,11 +40,14 @@ interface CostReportProps {
     total_savings_pct: number | null;
     region: string | null;
     completed_at: string | null;
+    traditional_duration_weeks?: number | null;
+    mmc_duration_weeks?: number | null;
   };
   lineItems: LineItem[];
+  holdingCostVariables?: HoldingCostVars | null;
 }
 
-export function CostReport({ estimate, lineItems }: CostReportProps) {
+export function CostReport({ estimate, lineItems, holdingCostVariables }: CostReportProps) {
   const categories = [...new Set(lineItems.map((li) => li.cost_category))];
 
   const totalTraditional = estimate.total_traditional ?? 0;
@@ -122,6 +135,16 @@ export function CostReport({ estimate, lineItems }: CostReportProps) {
           </div>
         </div>
       )}
+
+      {/* Time & Holding Cost Calculator */}
+      <HoldingCostCalculator
+        estimateId={estimate.id}
+        traditionalCost={totalTraditional}
+        mmcCost={totalMmc}
+        traditionalWeeks={estimate.traditional_duration_weeks ?? null}
+        mmcWeeks={estimate.mmc_duration_weeks ?? null}
+        initialVariables={holdingCostVariables ?? null}
+      />
 
       {/* Disclaimer */}
       <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
