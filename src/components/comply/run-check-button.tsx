@@ -31,7 +31,7 @@ export function RunCheckButton({
       );
 
       if ("error" in result) {
-        setError(result.error);
+        setError(result.error ?? "Unknown error");
         return;
       }
 
