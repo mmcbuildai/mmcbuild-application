@@ -21,9 +21,11 @@ export const generateTrainingContent = inngest.createFunction(
     const {
       courseId,
       courseTitle,
+      courseDescription,
       courseCategory,
       courseDifficulty,
-      lessonTitles,
+      courseDuration,
+      lessonTitles: providedTitles,
       orgId,
     } = event.data;
 
@@ -44,7 +46,72 @@ export const generateTrainingContent = inngest.createFunction(
       return true;
     });
 
-    // Generate each lesson
+    // Step 1: Plan lesson structure (if no titles provided)
+    const lessonTitles: string[] = await step.run("plan-lessons", async () => {
+      if (providedTitles && providedTitles.length > 0) {
+        return providedTitles as string[];
+      }
+
+      // AI generates the full lesson plan from course metadata
+      const result = await callModel("training_content", {
+        system: `You are an expert Australian construction educator and curriculum designer specialising in modern methods of construction (MMC).
+
+Your task is to design a comprehensive lesson plan for a training course. Consider the course title, description, target difficulty level, category, and estimated duration to determine the right number and scope of lessons.
+
+Guidelines:
+- For short courses (15-30 min): 3-5 lessons
+- For medium courses (30-90 min): 5-8 lessons
+- For long courses (90+ min): 8-12 lessons
+- Each lesson should be focused on a single topic
+- Lessons should flow logically from foundational to advanced concepts
+- Include practical/applied lessons, not just theory
+- Use Australian English
+
+Return ONLY a JSON array of lesson title strings, e.g.:
+["Lesson 1 Title", "Lesson 2 Title", ...]
+
+No other text.`,
+        messages: [
+          {
+            role: "user",
+            content: `Design the lesson plan for this course:
+
+Title: "${courseTitle}"
+Description: "${courseDescription}"
+Category: ${categoryLabel}
+Difficulty: ${difficultyLabel}
+Estimated Duration: ${courseDuration ?? 60} minutes
+
+Generate a structured sequence of lesson titles that comprehensively covers this topic for Australian construction professionals.`,
+          },
+        ],
+        maxTokens: 2048,
+        orgId,
+      });
+
+      try {
+        const text = result.text;
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) throw new Error("No JSON array found");
+        const titles = JSON.parse(jsonMatch[0]) as string[];
+        if (!Array.isArray(titles) || titles.length === 0) {
+          throw new Error("Empty or invalid titles array");
+        }
+        return titles;
+      } catch (e) {
+        console.error("[TrainGen] Failed to parse lesson plan:", e);
+        // Fallback: generate generic structure
+        return [
+          `Introduction to ${courseTitle}`,
+          `Key Concepts and Principles`,
+          `Australian Standards and Compliance`,
+          `Practical Applications`,
+          `Case Studies and Best Practices`,
+        ];
+      }
+    });
+
+    // Step 2: Generate each lesson's content + quiz
     for (let i = 0; i < lessonTitles.length; i++) {
       const lessonTitle = lessonTitles[i];
 
@@ -55,8 +122,8 @@ export const generateTrainingContent = inngest.createFunction(
 Always use Australian English spelling and terminology. Reference Australian standards (NCC, AS/NZS) where relevant.
 
 Output format: Return a JSON object with exactly these keys:
-- "content": A detailed markdown lesson (1500-2500 words) with clear headings, bullet points, practical examples, and Australian context
-- "quiz_questions": An array of exactly 5 multiple-choice questions, each with: "question" (string), "options" (array of 4 strings), "correct_index" (0-3), "explanation" (string)
+- "content": A detailed markdown lesson (1500-2500 words) with clear headings (##, ###), bullet points, practical examples, and Australian context. Include real-world scenarios and actionable knowledge.
+- "quiz_questions": An array of exactly 5 multiple-choice questions, each with: "question" (string), "options" (array of 4 strings), "correct_index" (0-3), "explanation" (string explaining why the correct answer is right)
 - "estimated_reading_minutes": number (estimated reading time)
 
 Return ONLY the JSON object, no other text.`,
@@ -65,13 +132,17 @@ Return ONLY the JSON object, no other text.`,
               role: "user",
               content: `Generate a training lesson for:
 Course: "${courseTitle}"
+${courseDescription ? `Course Description: "${courseDescription}"` : ""}
 Category: ${categoryLabel}
 Difficulty: ${difficultyLabel}
 Lesson ${i + 1} of ${lessonTitles.length}: "${lessonTitle}"
 
-${i > 0 ? `Previous lessons in this course: ${lessonTitles.slice(0, i).join(", ")}` : "This is the first lesson in the course."}
+Full lesson plan: ${lessonTitles.map((t, idx) => `${idx + 1}. ${t}`).join(", ")}
 
-Create comprehensive, practical content appropriate for Australian construction professionals at the ${difficultyLabel.toLowerCase()} level.`,
+${i > 0 ? `Previous lessons covered: ${lessonTitles.slice(0, i).join(", ")}` : "This is the first lesson in the course."}
+${i < lessonTitles.length - 1 ? `Next lessons will cover: ${lessonTitles.slice(i + 1).join(", ")}` : "This is the final lesson in the course — include a summary/wrap-up."}
+
+Create comprehensive, practical content appropriate for Australian construction professionals at the ${difficultyLabel.toLowerCase()} level. Avoid repeating content from previous lessons.`,
             },
           ],
           maxTokens: 4096,
@@ -91,7 +162,6 @@ Create comprehensive, practical content appropriate for Australian construction 
         };
 
         try {
-          // Try to extract JSON from the response
           const text = result.text;
           const jsonMatch = text.match(/\{[\s\S]*\}/);
           if (!jsonMatch) throw new Error("No JSON found in response");
@@ -105,7 +175,7 @@ Create comprehensive, practical content appropriate for Australian construction 
           };
         }
 
-        // Upsert lesson
+        // Insert lesson
         const { error } = await db()
           .from("lessons")
           .insert({
@@ -126,7 +196,8 @@ Create comprehensive, practical content appropriate for Australian construction 
 
     return {
       courseId,
-      lessonsGenerated: lessonTitles.length,
+      lessonsPlanned: lessonTitles.length,
+      lessonTitles,
     };
   }
 );

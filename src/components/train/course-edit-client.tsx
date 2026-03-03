@@ -149,7 +149,11 @@ export function CourseEditClient({ course, lessons }: CourseEditClientProps) {
         </TabsContent>
 
         <TabsContent value="ai-generate" className="mt-4">
-          <AIGenerateForm courseId={course.id} />
+          <AIGenerateForm
+            courseId={course.id}
+            courseTitle={course.title}
+            courseDescription={course.description}
+          />
         </TabsContent>
       </Tabs>
     </div>

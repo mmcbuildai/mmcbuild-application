@@ -775,7 +775,7 @@ export async function getCertificate(certId: string) {
 
 export async function generateCourseContent(
   courseId: string,
-  lessonTitles: string[]
+  lessonTitles?: string[]
 ) {
   const profile = await getAuthProfile();
   if (!profile) return { error: "Not authenticated" };
@@ -784,21 +784,25 @@ export async function generateCourseContent(
   // Verify course exists and belongs to org
   const { data: course } = await db()
     .from("courses")
-    .select("id, title, category, difficulty")
+    .select("id, title, description, category, difficulty, estimated_duration_minutes")
     .eq("id", courseId)
     .eq("created_by_org_id", profile.org_id)
     .single();
 
   if (!course) return { error: "Course not found" };
 
+  const c = course as Course;
+
   await inngest.send({
     name: "train/content.generate",
     data: {
       courseId,
-      courseTitle: (course as Course).title,
-      courseCategory: (course as Course).category,
-      courseDifficulty: (course as Course).difficulty,
-      lessonTitles,
+      courseTitle: c.title,
+      courseDescription: c.description ?? "",
+      courseCategory: c.category,
+      courseDifficulty: c.difficulty,
+      courseDuration: c.estimated_duration_minutes,
+      lessonTitles: lessonTitles ?? [],
       orgId: profile.org_id,
     },
   });
