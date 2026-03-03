@@ -349,8 +349,9 @@ export async function registerPlan(
     return { error: "Profile not found" };
   }
 
-  const { data: plan, error: insertError } = await supabase
-    .from("plans" as never)
+  const admin = createAdminClient();
+  const { data: plan, error: insertError } = await admin
+    .from("plans")
     .insert({
       project_id: projectId,
       org_id: profile.org_id,
