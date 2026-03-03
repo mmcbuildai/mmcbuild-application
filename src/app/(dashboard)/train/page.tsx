@@ -1,11 +1,11 @@
+import Link from "next/link";
 import { ModuleHero } from "@/components/shared/module-hero";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { GraduationCap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CourseSearch } from "@/components/train/course-search";
+import { CourseCard } from "@/components/train/course-card";
+import { searchCourses } from "./actions";
+import { createClient } from "@/lib/supabase/server";
+import { GraduationCap, LayoutDashboard, Settings } from "lucide-react";
 
 const sampleCourses = [
   { name: "MMC Fundamentals", status: "Completed", progress: 100 },
@@ -61,7 +61,35 @@ function TrainPreviewCard() {
   );
 }
 
-export default function TrainPage() {
+export default async function TrainPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ query?: string; category?: string; difficulty?: string; page?: string }>;
+}) {
+  const params = await searchParams;
+
+  // Check if user is admin for showing admin button
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let isAdmin = false;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+    isAdmin = profile?.role === "owner" || profile?.role === "admin";
+  }
+
+  const { courses, total } = await searchCourses({
+    query: params.query,
+    category: params.category,
+    difficulty: params.difficulty,
+    page: params.page ? Number(params.page) : 1,
+  });
+
   return (
     <div>
       <ModuleHero
@@ -76,16 +104,54 @@ export default function TrainPage() {
         previewCard={<TrainPreviewCard />}
       />
 
-      <Card className="flex flex-col items-center justify-center py-12">
-        <GraduationCap className="mb-4 h-12 w-12 text-muted-foreground" />
-        <CardHeader className="text-center">
-          <CardTitle>Training Modules</CardTitle>
-          <CardDescription>
-            Self-paced courses on modern methods of construction with
-            completion certificates. Coming in Stage 6.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold">Course Catalog</h2>
+          <div className="flex gap-2">
+            <Link href="/train/dashboard">
+              <Button variant="outline" size="sm">
+                <LayoutDashboard className="mr-1 h-3.5 w-3.5" />
+                My Learning
+              </Button>
+            </Link>
+            {isAdmin && (
+              <Link href="/train/admin">
+                <Button variant="outline" size="sm">
+                  <Settings className="mr-1 h-3.5 w-3.5" />
+                  Admin
+                </Button>
+              </Link>
+            )}
+          </div>
+        </div>
+
+        <CourseSearch />
+
+        {courses.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {courses.map((course) => (
+                <CourseCard key={course.id} course={course} />
+              ))}
+            </div>
+            {total > 12 && (
+              <p className="text-sm text-muted-foreground text-center mt-6">
+                Showing {courses.length} of {total} courses
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <GraduationCap className="mb-4 h-12 w-12 text-muted-foreground" />
+            <p className="text-lg font-medium text-muted-foreground">No courses found</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {params.query || params.category || params.difficulty
+                ? "Try adjusting your search filters."
+                : "Courses will appear here once published by an admin."}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

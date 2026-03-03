@@ -22,7 +22,8 @@ export type AIFunction =
   | "rd_classification"
   | "embedding"
   | "reranking"
-  | "reconciliation";
+  | "reconciliation"
+  | "training_content";
 
 export type QualityTier = "standard" | "high" | "premium";
 

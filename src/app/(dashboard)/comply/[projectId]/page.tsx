@@ -181,7 +181,7 @@ export default async function ProjectComplyPage({
               { label: "Build", active: false, desc: "Design optimisation", href: "/build" },
               { label: "Quote", active: false, desc: "Cost estimation", href: "/quote" },
               { label: "Directory", active: false, desc: "Find trades", href: "/direct" },
-              { label: "Train", active: false, desc: "Upskill your team", href: "" },
+              { label: "Train", active: false, desc: "Upskill your team", href: "/train" },
             ].map((step, i) => (
               <div key={step.label} className="flex items-center gap-2">
                 {i > 0 && (
