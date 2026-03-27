@@ -2,6 +2,7 @@ import { LineItemCard } from "./line-item-card";
 import { CostComparisonChart } from "./cost-comparison-chart";
 import { HoldingCostCalculator } from "./holding-cost-calculator";
 import { getCostCategoryLabel } from "@/lib/ai/types";
+import { ReportExportButton } from "@/components/shared/report-export-button";
 
 interface LineItem {
   id: string;
@@ -65,6 +66,14 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
 
   return (
     <div className="space-y-6">
+      {/* Export button */}
+      <div className="flex justify-end">
+        <ReportExportButton
+          url={`/api/quote/report/${estimate.id}`}
+          fallbackFilename={`mmc-quote-report-${estimate.id.slice(0, 8)}.pdf`}
+        />
+      </div>
+
       {/* Headline totals */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <TotalCard label="Traditional Cost" value={`$${totalTraditional.toLocaleString()}`} />

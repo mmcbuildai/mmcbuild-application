@@ -1,5 +1,6 @@
 import { SuggestionCard } from "./suggestion-card";
 import { getTechnologyLabel } from "@/lib/ai/types";
+import { ReportExportButton } from "@/components/shared/report-export-button";
 
 interface Suggestion {
   id: string;
@@ -53,6 +54,14 @@ export function DesignReport({ check, suggestions }: DesignReportProps) {
 
   return (
     <div className="space-y-6">
+      {/* Export button */}
+      <div className="flex justify-end">
+        <ReportExportButton
+          url={`/api/build/report/${check.id}`}
+          fallbackFilename={`mmc-build-report-${check.id.slice(0, 8)}.pdf`}
+        />
+      </div>
+
       {/* Aggregate stats */}
       <div className="grid grid-cols-3 gap-4">
         <StatCard label="Avg. Time Savings" value={`${avgTimeSavings}%`} />
