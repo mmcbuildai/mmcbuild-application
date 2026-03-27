@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { saveQuestionnaire } from "@/app/(dashboard)/projects/actions";
+import { toast } from "sonner";
 
 interface SiteIntelPrefill {
   climate_zone?: number | null;
@@ -233,7 +234,8 @@ export function QuestionnaireForm({
     if (result.error) {
       setError(result.error);
     } else {
-      router.refresh();
+      toast.success("Project created! Head to MMC Comply to run your first assessment.");
+      router.push("/dashboard");
     }
   };
 
