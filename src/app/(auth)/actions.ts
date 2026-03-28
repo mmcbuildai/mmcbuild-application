@@ -3,12 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export async function signUp(formData: FormData) {
   const supabase = await createClient();
-  const headersList = await headers();
-  const origin = headersList.get("origin") ?? "";
 
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
@@ -19,7 +18,7 @@ export async function signUp(formData: FormData) {
     email,
     password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback`,
+      emailRedirectTo: `${appUrl}/auth/callback`,
       data: {
         full_name: fullName,
         org_name: orgName,
@@ -78,15 +77,13 @@ export async function signIn(formData: FormData) {
 
 export async function signInWithMagicLink(formData: FormData) {
   const supabase = await createClient();
-  const headersList = await headers();
-  const origin = headersList.get("origin") ?? "";
 
   const email = formData.get("email") as string;
 
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${origin}/auth/callback`,
+      emailRedirectTo: `${appUrl}/auth/callback`,
     },
   });
 
@@ -99,13 +96,11 @@ export async function signInWithMagicLink(formData: FormData) {
 
 export async function forgotPassword(formData: FormData) {
   const supabase = await createClient();
-  const headersList = await headers();
-  const origin = headersList.get("origin") ?? "";
 
   const email = formData.get("email") as string;
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${origin}/auth/callback?redirect=/settings`,
+    redirectTo: `${appUrl}/auth/callback?redirect=/settings`,
   });
 
   if (error) {
