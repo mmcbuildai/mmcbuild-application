@@ -10,6 +10,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { FolderOpen } from "lucide-react";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
+import { TestingGuide } from "@/components/dashboard/testing-guide";
+
+const showTestingGuide = process.env.NEXT_PUBLIC_TESTING_MODE === "true";
 
 export default async function ProjectsPage() {
   const supabase = await createClient();
@@ -21,6 +24,8 @@ export default async function ProjectsPage() {
 
   return (
     <div className="space-y-6">
+      {showTestingGuide && <TestingGuide />}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Projects</h1>

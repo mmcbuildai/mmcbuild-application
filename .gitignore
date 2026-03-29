@@ -56,3 +56,4 @@ pnpm-debug.log*
 .vercel
 
 CLAUDE.local.md
+.env*.local
