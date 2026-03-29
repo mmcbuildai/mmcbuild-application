@@ -84,7 +84,7 @@ export function CreateProjectDialog() {
           <DialogTitle>Create Project</DialogTitle>
         </DialogHeader>
         <form action={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1">
+          <div className="space-y-4 shrink-0">
             <div className="space-y-2">
               <Label htmlFor="name">Project Name</Label>
               <Input
@@ -101,7 +101,9 @@ export function CreateProjectDialog() {
                 placeholder="Start typing an Australian address..."
               />
             </div>
+          </div>
 
+          <div className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1 mt-4">
             {/* Property Analysis Section */}
             {property.loading && (
               <div className="flex items-center gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
