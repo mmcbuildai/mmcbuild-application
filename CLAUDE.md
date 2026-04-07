@@ -40,7 +40,7 @@ AI-powered compliance and construction intelligence platform for Australian resi
 
 ## Current Status
 - MMC Comply — LIVE (NCC compliance AI + RAG pipeline)
-- MMC Build — PARTIAL (core live — material/system selection panel pending)
+- MMC Build — LIVE (design optimisation, 3D viewer, system selection panel)
 - MMC Quote — LIVE (agentic cost estimation, supplier knowledge base)
 - MMC Direct — LIVE (trade/consultant directory)
 - MMC Train — LIVE (self-paced modules + progress tracking)
