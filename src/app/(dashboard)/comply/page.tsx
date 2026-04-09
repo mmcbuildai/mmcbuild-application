@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,10 @@ export default async function ComplyPage() {
     .from("projects")
     .select("id, name, address, status, created_at")
     .order("created_at", { ascending: false });
+
+  if (!projects || projects.length === 0) {
+    redirect("/projects?prompt=create");
+  }
 
   return (
     <div>

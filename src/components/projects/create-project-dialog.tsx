@@ -20,8 +20,8 @@ import { AddressAutocomplete } from "@/components/common/address-autocomplete";
 import { usePropertyOnboarding, PropertyAssessment } from "@/lib/property-services";
 import type { GeocodedAddress } from "@/lib/mapbox-types";
 
-export function CreateProjectDialog() {
-  const [open, setOpen] = useState(false);
+export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
+  const [open, setOpen] = useState(defaultOpen);
   const [loading, setLoading] = useState(false);
   const geocodedRef = useRef<GeocodedAddress | null>(null);
   const router = useRouter();

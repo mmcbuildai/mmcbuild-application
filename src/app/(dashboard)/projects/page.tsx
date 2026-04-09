@@ -14,7 +14,13 @@ import { TestingGuide } from "@/components/dashboard/testing-guide";
 
 const showTestingGuide = process.env.NEXT_PUBLIC_TESTING_MODE === "true";
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ prompt?: string }>;
+}) {
+  const params = await searchParams;
+  const autoCreate = params.prompt === "create";
   const supabase = await createClient();
 
   const { data: projects } = await supabase
@@ -33,7 +39,7 @@ export default async function ProjectsPage() {
             Manage your construction projects
           </p>
         </div>
-        <CreateProjectDialog />
+        <CreateProjectDialog defaultOpen={autoCreate} />
       </div>
 
       {projects && projects.length > 0 ? (
@@ -66,7 +72,7 @@ export default async function ProjectsPage() {
           <p className="mb-4 text-sm text-muted-foreground">
             Create your first project to get started with MMC Build.
           </p>
-          <CreateProjectDialog />
+          <CreateProjectDialog defaultOpen={autoCreate} />
         </Card>
       )}
     </div>

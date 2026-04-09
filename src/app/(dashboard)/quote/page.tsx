@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,15 @@ function QuotePreviewCard() {
 
 export default async function QuotePage() {
   const supabase = await createClient();
+
+  const { data: hasProjects } = await supabase
+    .from("projects")
+    .select("id")
+    .limit(1);
+
+  if (!hasProjects || hasProjects.length === 0) {
+    redirect("/projects?prompt=create");
+  }
 
   const { data: projects } = await supabase
     .from("projects")
