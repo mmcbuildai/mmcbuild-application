@@ -1,4 +1,4 @@
-import { Settings, BookOpen, Clock, ArrowRight, Users } from "lucide-react";
+import { Settings, BookOpen, Clock, ArrowRight, Users, UserCog } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -9,6 +9,13 @@ import {
 import Link from "next/link";
 
 const settingsCards = [
+  {
+    title: "Your Profile",
+    description: "View and change your role to update which modules you can access.",
+    icon: UserCog,
+    href: "/settings/profile",
+    disabled: false,
+  },
   {
     title: "Organisation Settings",
     description: "Manage your team, roles, and organisation details.",
