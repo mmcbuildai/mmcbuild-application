@@ -44,6 +44,9 @@ venv/
 # ─── Test & Coverage ───
 coverage/
 .vitest/
+test-results/
+playwright-report/
+blob-report/
 
 # ─── Logs ───
 *.log
