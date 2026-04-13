@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ShieldCheck,
   Hammer,
@@ -502,16 +502,67 @@ const MODULES: Record<ModuleKey, {
 const MODULE_ORDER: ModuleKey[] = ["comply", "build", "quote", "direct", "train"];
 
 /* ── Main demo page ── */
+const STEP_DURATION = 4000; // 4 seconds per step
+
 export default function DemoPage() {
   const [activeModule, setActiveModule] = useState<ModuleKey>("comply");
   const [activeStep, setActiveStep] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const mod = MODULES[activeModule];
   const step = mod.steps[activeStep];
+  const isLastStep = activeStep === mod.steps.length - 1;
+  const isLastModule = MODULE_ORDER.indexOf(activeModule) === MODULE_ORDER.length - 1;
+
+  const clearTimers = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (progressRef.current) { clearInterval(progressRef.current); progressRef.current = null; }
+  }, []);
+
+  // Auto-advance steps
+  useEffect(() => {
+    clearTimers();
+    setProgress(0);
+
+    if (!isPlaying || isLastStep) return;
+
+    // Progress bar animation (updates every 50ms for smooth bar)
+    const startTime = Date.now();
+    progressRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      setProgress(Math.min((elapsed / STEP_DURATION) * 100, 100));
+    }, 50);
+
+    // Step advance
+    timerRef.current = setInterval(() => {
+      setActiveStep((prev) => prev + 1);
+    }, STEP_DURATION);
+
+    return clearTimers;
+  }, [activeStep, activeModule, isPlaying, isLastStep, clearTimers]);
 
   function handleModuleChange(key: ModuleKey) {
+    clearTimers();
     setActiveModule(key);
     setActiveStep(0);
+    setIsPlaying(true);
+    setProgress(0);
+  }
+
+  function handleNextModule() {
+    const idx = MODULE_ORDER.indexOf(activeModule);
+    if (idx < MODULE_ORDER.length - 1) {
+      handleModuleChange(MODULE_ORDER[idx + 1]);
+    }
+  }
+
+  function handleReplay() {
+    setActiveStep(0);
+    setIsPlaying(true);
+    setProgress(0);
   }
 
   return (
@@ -601,23 +652,54 @@ export default function DemoPage() {
             </div>
           </div>
 
-          {/* Step tabs */}
+          {/* Step progress bar */}
+          <div className="px-8 pt-4 flex gap-1.5">
+            {mod.steps.map((_, i) => (
+              <div key={i} className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    i < activeStep
+                      ? "bg-white w-full"
+                      : i === activeStep && !isLastStep
+                        ? "bg-white/70"
+                        : i === activeStep && isLastStep
+                          ? "bg-white w-full"
+                          : "w-0"
+                  }`}
+                  style={
+                    i === activeStep && !isLastStep
+                      ? { width: `${progress}%`, transition: "width 50ms linear" }
+                      : undefined
+                  }
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Step tabs (visual, non-interactive during autoplay) */}
           <div className="border-b border-white/10 px-8 flex gap-1 overflow-x-auto">
             {mod.steps.map((s, i) => (
-              <button
+              <div
                 key={i}
-                onClick={() => setActiveStep(i)}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-                  activeStep === i
-                    ? "border-white text-white"
-                    : "border-transparent text-white/40 hover:text-white/60"
+                  i < activeStep
+                    ? "border-transparent text-white/60"
+                    : activeStep === i
+                      ? "border-white text-white"
+                      : "border-transparent text-white/25"
                 }`}
               >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs">
-                  {i + 1}
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                  i < activeStep
+                    ? "bg-white/20"
+                    : i === activeStep
+                      ? "bg-white/15"
+                      : "bg-white/5"
+                }`}>
+                  {i < activeStep ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
                 </span>
                 {s.title}
-              </button>
+              </div>
             ))}
           </div>
 
@@ -639,41 +721,34 @@ export default function DemoPage() {
                   {step.description}
                 </p>
 
-                {/* Step navigation */}
-                <div className="flex gap-3 mt-6">
-                  {activeStep > 0 && (
+                {/* Actions — only show when autoplay pauses at last step */}
+                {isLastStep && (
+                  <div className="flex gap-3 mt-6">
                     <button
-                      onClick={() => setActiveStep(activeStep - 1)}
-                      className="rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white/70 hover:text-white hover:border-white/40 transition-colors"
+                      onClick={handleReplay}
+                      className="rounded-lg border border-white/20 px-4 py-2.5 text-sm font-medium text-white/70 hover:text-white hover:border-white/40 transition-colors"
                     >
-                      Previous
+                      Replay
                     </button>
-                  )}
-                  {activeStep < mod.steps.length - 1 ? (
-                    <button
-                      onClick={() => setActiveStep(activeStep + 1)}
-                      className={`rounded-lg bg-gradient-to-r ${mod.gradient} px-5 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity flex items-center gap-2`}
-                    >
-                      Next Step
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const idx = MODULE_ORDER.indexOf(activeModule);
-                        if (idx < MODULE_ORDER.length - 1) {
-                          handleModuleChange(MODULE_ORDER[idx + 1]);
-                        }
-                      }}
-                      className={`rounded-lg bg-gradient-to-r ${mod.gradient} px-5 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity flex items-center gap-2`}
-                    >
-                      {MODULE_ORDER.indexOf(activeModule) < MODULE_ORDER.length - 1
-                        ? `Next: ${MODULES[MODULE_ORDER[MODULE_ORDER.indexOf(activeModule) + 1]].name}`
-                        : "Start Free Trial"}
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
+                    {!isLastModule ? (
+                      <button
+                        onClick={handleNextModule}
+                        className={`rounded-lg bg-gradient-to-r ${mod.gradient} px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity flex items-center gap-2`}
+                      >
+                        Next Module: {MODULES[MODULE_ORDER[MODULE_ORDER.indexOf(activeModule) + 1]].name}
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      <a
+                        href="/signup"
+                        className={`rounded-lg bg-gradient-to-r ${mod.gradient} px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity flex items-center gap-2`}
+                      >
+                        Start Free Trial
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Mock UI preview */}
@@ -681,21 +756,6 @@ export default function DemoPage() {
                 {step.mockUI}
               </div>
             </div>
-          </div>
-
-          {/* Step progress dots */}
-          <div className="flex justify-center gap-2 pb-6">
-            {mod.steps.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveStep(i)}
-                className={`h-2 rounded-full transition-all ${
-                  activeStep === i
-                    ? "w-8 bg-white"
-                    : "w-2 bg-white/20 hover:bg-white/40"
-                }`}
-              />
-            ))}
           </div>
         </div>
       </section>
