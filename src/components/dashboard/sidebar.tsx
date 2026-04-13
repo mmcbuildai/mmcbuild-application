@@ -18,6 +18,7 @@ import {
   FolderOpen,
   BookOpen,
   ArrowUpRight,
+  FlaskConical,
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ const moduleNav: {
 const topNav = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Projects", href: "/projects", icon: FolderOpen },
+  { name: "Beta Testing", href: "/beta", icon: FlaskConical },
 ];
 
 const bottomNav = [

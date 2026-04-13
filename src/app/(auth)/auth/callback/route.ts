@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const redirect = searchParams.get("redirect") ?? "/projects";
+  const redirect = searchParams.get("redirect") ?? "/dashboard";
 
   if (code) {
     const supabase = await createClient();
@@ -47,6 +47,7 @@ export async function GET(request: Request) {
             role: inv.role as "owner" | "admin" | "project_manager" | "architect" | "builder" | "trade" | "viewer",
             full_name: fullName,
             email: userEmail,
+            persona: "builder",
           });
 
           // Mark invitation as accepted
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
               role: "owner",
               full_name: fullName,
               email: userEmail,
+              persona: "builder",
             });
           }
         }

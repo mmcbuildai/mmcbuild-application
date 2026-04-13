@@ -13,12 +13,17 @@ export async function signUp(formData: FormData) {
   const password = formData.get("password") as string;
   const fullName = formData.get("full_name") as string;
   const orgName = formData.get("org_name") as string;
+  const redirectTo = (formData.get("redirect") as string) || "/dashboard";
+
+  const callbackUrl = redirectTo !== "/dashboard"
+    ? `${appUrl}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`
+    : `${appUrl}/auth/callback`;
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      emailRedirectTo: `${appUrl}/auth/callback`,
+      emailRedirectTo: callbackUrl,
       data: {
         full_name: fullName,
         org_name: orgName,
@@ -47,10 +52,11 @@ export async function signUp(formData: FormData) {
         role: "owner",
         full_name: fullName || email.split("@")[0],
         email,
+        persona: "builder",
       });
     }
 
-    redirect("/projects");
+    redirect(redirectTo);
   }
 
   // Email confirmation enabled — show check-email message
@@ -72,7 +78,7 @@ export async function signIn(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
   }
 
-  redirect("/projects");
+  redirect("/dashboard");
 }
 
 export async function signInWithMagicLink(formData: FormData) {

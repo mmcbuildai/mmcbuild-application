@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   PERSONA_LABELS,
+  PERSONA_DESCRIPTIONS,
   type UserPersona,
 } from "@/lib/persona-access";
 import {
@@ -15,22 +16,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { UserCog } from "lucide-react";
+import { UserCog, Check } from "lucide-react";
+
+const ALL_PERSONAS: UserPersona[] = [
+  "builder",
+  "developer",
+  "architect_bd",
+  "design_and_build",
+  "consultant",
+  "trade",
+];
 
 export default function ProfileSettingsPage() {
   const [persona, setPersona] = useState<UserPersona | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -49,7 +49,7 @@ export default function ProfileSettingsPage() {
     });
   }, []);
 
-  function handleChangeRole() {
+  function handleChangeRole(newPersona: UserPersona) {
     startTransition(async () => {
       const supabase = createClient();
       const {
@@ -60,10 +60,12 @@ export default function ProfileSettingsPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabase as any)
         .from("profiles")
-        .update({ persona: null })
+        .update({ persona: newPersona })
         .eq("user_id", user.id);
 
-      router.push("/onboarding");
+      setPersona(newPersona);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
       router.refresh();
     });
   }
@@ -89,37 +91,34 @@ export default function ProfileSettingsPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div>
-              <p className="font-medium">
-                {persona ? PERSONA_LABELS[persona] : "Not set"}
-              </p>
-              <p className="text-sm text-muted-foreground">Current role</p>
-            </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" disabled={isPending}>
-                  {isPending ? "Redirecting..." : "Change role"}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Change your role?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Changing your role will update which modules you can access.
-                    You&apos;ll be redirected to re-select your role.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleChangeRole}>
-                    Continue
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+        <CardContent className="space-y-3">
+          {ALL_PERSONAS.map((p) => (
+            <button
+              key={p}
+              onClick={() => handleChangeRole(p)}
+              disabled={isPending}
+              className={`flex w-full items-center justify-between rounded-lg border p-4 text-left transition-colors ${
+                persona === p
+                  ? "border-teal-500 bg-teal-50"
+                  : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              <div>
+                <p className="font-medium">{PERSONA_LABELS[p]}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {PERSONA_DESCRIPTIONS[p]}
+                </p>
+              </div>
+              {persona === p && (
+                <Check className="h-5 w-5 text-teal-600 shrink-0" />
+              )}
+            </button>
+          ))}
+          {saved && (
+            <p className="text-sm text-green-600 font-medium">
+              Role updated successfully
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

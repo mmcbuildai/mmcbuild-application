@@ -19,10 +19,12 @@ import {
 function SignupForm() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
+  const isBeta = searchParams.get("beta") === "true";
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(formData: FormData) {
     setIsLoading(true);
+    if (isBeta) formData.set("redirect", "/beta");
     try {
       await signUp(formData);
     } finally {
@@ -37,7 +39,9 @@ function SignupForm() {
           Create your MMC Build account
         </CardTitle>
         <CardDescription>
-          Start with a 14-day free trial. All modules unlocked. No credit card required.
+          {isBeta
+            ? "Sign up to join the MMC Build beta testing program."
+            : "Start with a 14-day free trial. All modules unlocked. No credit card required."}
         </CardDescription>
       </CardHeader>
       <CardContent>

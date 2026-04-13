@@ -26,10 +26,8 @@ export default async function DashboardLayout({
     .eq("user_id", user.id)
     .single();
 
-  // Redirect to onboarding if persona not set
-  if (profile && !profile.persona) {
-    redirect("/onboarding");
-  }
+  // Default persona to "builder" if not set (onboarding step removed)
+  const persona = profile?.persona ?? "builder";
 
   let orgName = "Organisation";
   let tier: string | null = "trial";
@@ -57,7 +55,7 @@ export default async function DashboardLayout({
   return (
     <>
       <DashboardShell
-        persona={(profile?.persona as UserPersona) ?? null}
+        persona={persona as UserPersona}
         tier={tier}
         runCount={runCount}
         fullName={profile?.full_name ?? null}

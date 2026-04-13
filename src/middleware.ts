@@ -11,6 +11,7 @@ const PROTECTED_ROUTES = [
   "/train",
   "/billing",
   "/settings",
+  "/beta",
 ];
 
 const AUTH_ROUTES = ["/login", "/signup"];
