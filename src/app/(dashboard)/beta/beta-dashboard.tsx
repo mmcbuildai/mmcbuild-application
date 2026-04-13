@@ -462,7 +462,7 @@ export function BetaDashboard({
             {
               step: 2,
               title: "Try the Module",
-              desc: "Open the module and work through the test prompts",
+              desc: "Open the module from the side navbar and work through the test prompts",
             },
             {
               step: 3,
