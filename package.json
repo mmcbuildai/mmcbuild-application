@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@caistech/platform-trust-middleware": "^0.2.0",
     "@hookform/resolvers": "^5.2.2",
     "@huggingface/inference": "^4.13.14",
     "@react-three/drei": "^10.7.7",

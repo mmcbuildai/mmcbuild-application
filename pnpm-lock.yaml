@@ -11,6 +11,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.78.0
         version: 0.78.0(zod@4.3.6)
+      '@caistech/platform-trust-middleware':
+        specifier: ^0.2.0
+        version: 0.2.0(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.71.2(react@19.2.3))
@@ -311,6 +314,12 @@ packages:
 
   '@bufbuild/protobuf@2.11.0':
     resolution: {integrity: sha512-sBXGT13cpmPR5BMgHE6UEEfEaShh5Ror6rfN3yEK5si7QVrtZg8LEPQb0VVhiLRUslD2yLnXtnRzG035J/mZXQ==}
+
+  '@caistech/platform-trust-middleware@0.2.0':
+    resolution: {integrity: sha512-V1ZUeJAaeSw//WX9iBBuCZWkqh/qBUXd2Ts7/CLpQyRJdPvJvV9IzXaut3pQxFTTwyZ6r/8iN85FDcbp94hqSg==, tarball: https://npm.pkg.github.com/download/@caistech/platform-trust-middleware/0.2.0/8ee27c8c604946009edea5cf52b814cd85019a3f}
+    peerDependencies:
+      next: '>=14.0.0'
+      typescript: '>=5.0.0'
 
   '@dimforge/rapier3d-compat@0.12.0':
     resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
@@ -6072,6 +6081,15 @@ snapshots:
       '@babel/helper-validator-identifier': 7.28.5
 
   '@bufbuild/protobuf@2.11.0': {}
+
+  '@caistech/platform-trust-middleware@0.2.0(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)':
+    dependencies:
+      '@supabase/supabase-js': 2.98.0
+      next: 16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
