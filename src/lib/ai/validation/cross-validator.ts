@@ -6,7 +6,7 @@
 import { callModel, type AIFunction } from "@/lib/ai/models";
 import { extractJson } from "@/lib/ai/extract-json";
 import { COMPLIANCE_SYSTEM_PROMPT } from "@/lib/ai/prompts/compliance-system";
-import { SECTION_ANALYSIS_TEMPLATE } from "@/lib/ai/prompts/compliance-section";
+import { buildSectionAnalysisBlocks } from "@/lib/ai/prompts/compliance-section";
 import { SECONDARY_ANALYSIS_PREAMBLE } from "@/lib/ai/prompts/validation-secondary";
 import { reconcileFindings } from "./reconciler";
 import type { ComplianceSectionResult, NccCategory, ComplianceFinding } from "@/lib/ai/types";
@@ -98,15 +98,21 @@ export async function crossValidate(
   nccContext: string,
   options?: { orgId?: string; checkId?: string }
 ): Promise<ValidationResult> {
-  // Run secondary analysis with a different model
-  const secondaryPrompt =
-    SECONDARY_ANALYSIS_PREAMBLE +
-    "\n\n" +
-    SECTION_ANALYSIS_TEMPLATE(category, planContent, projectContext, nccContext);
+  // Run secondary analysis with a different model. The cacheable prefix
+  // (project context + plan extracts) is shared with the primary call, so
+  // validator runs within the same 5-minute TTL pay 10% of input cost on it.
+  const { cachedPrefix, query } = buildSectionAnalysisBlocks(
+    category,
+    planContent,
+    projectContext,
+    nccContext
+  );
+  const secondaryPrompt = SECONDARY_ANALYSIS_PREAMBLE + "\n\n" + query;
 
   const secondaryResult = await callModel("compliance_validator" as AIFunction, {
     system: COMPLIANCE_SYSTEM_PROMPT,
     messages: [{ role: "user", content: secondaryPrompt }],
+    cacheUserPrefix: cachedPrefix,
     maxTokens: 4096,
     orgId: options?.orgId,
     checkId: options?.checkId,

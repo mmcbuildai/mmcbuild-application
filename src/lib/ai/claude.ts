@@ -1,6 +1,6 @@
 import { callModel } from "./models";
 import { COMPLIANCE_SYSTEM_PROMPT } from "./prompts/compliance-system";
-import { SECTION_ANALYSIS_TEMPLATE } from "./prompts/compliance-section";
+import { buildSectionAnalysisBlocks } from "./prompts/compliance-section";
 import { extractJson } from "./extract-json";
 import { runAgentAnalysis, type CrossCategoryDependency } from "./agent/compliance-agent";
 import type { ComplianceSectionResult, NccCategory } from "./types";
@@ -12,7 +12,7 @@ export async function analyseCompliance(
   nccContext: string,
   options?: { orgId?: string; checkId?: string; fewShotExamples?: string }
 ): Promise<ComplianceSectionResult> {
-  const userPrompt = SECTION_ANALYSIS_TEMPLATE(
+  const { cachedPrefix, query } = buildSectionAnalysisBlocks(
     category,
     planContent,
     projectContext,
@@ -22,7 +22,8 @@ export async function analyseCompliance(
 
   const result = await callModel("compliance_primary", {
     system: COMPLIANCE_SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userPrompt }],
+    messages: [{ role: "user", content: query }],
+    cacheUserPrefix: cachedPrefix,
     maxTokens: 4096,
     orgId: options?.orgId,
     checkId: options?.checkId,

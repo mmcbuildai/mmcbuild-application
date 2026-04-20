@@ -23,6 +23,13 @@ export interface ModelCallOptions {
   system?: string;
   maxTokens?: number;
   tools?: ToolDefinition[];
+  /**
+   * Anthropic prompt caching: a stable prefix to prepend to the final user
+   * message as a cached content block. Subsequent calls with the same prefix
+   * within the 5-minute TTL pay 10% of the normal input cost for this portion.
+   * Ignored by non-Anthropic providers.
+   */
+  cacheUserPrefix?: string;
   // For embeddings
   input?: string | string[];
   dimensions?: number;
@@ -45,6 +52,10 @@ export interface ModelCallResult {
   usage: {
     inputTokens: number;
     outputTokens: number;
+    /** Tokens written to the prompt cache on this call (billed at 125% of base input). */
+    cacheCreationTokens?: number;
+    /** Tokens read from the prompt cache on this call (billed at 10% of base input). */
+    cacheReadTokens?: number;
   };
   // For embeddings
   embeddings?: number[][];

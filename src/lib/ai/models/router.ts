@@ -67,6 +67,14 @@ export async function callModel(
       const result = await callProvider(model, options);
       const latencyMs = Date.now() - startTime;
 
+      if (result.usage.cacheCreationTokens || result.usage.cacheReadTokens) {
+        console.log(
+          `[Router] ${fn} (${model.id}) cache tokens: ` +
+            `write=${result.usage.cacheCreationTokens ?? 0} ` +
+            `read=${result.usage.cacheReadTokens ?? 0}`
+        );
+      }
+
       // Track usage (non-blocking)
       trackUsage({
         orgId: options.orgId,

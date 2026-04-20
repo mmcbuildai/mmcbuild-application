@@ -162,6 +162,75 @@ export function getSectionPrompt(category: NccCategory): string {
   return SECTION_PROMPTS[category];
 }
 
+/**
+ * Split the compliance analysis call into (cacheable prefix, per-category query).
+ *
+ * The prefix — project context + plan extracts — is identical across every
+ * category call within a single compliance run. Anthropic prompt caching
+ * lets us pay full input cost once per run for this chunk (~50k tokens) and
+ * 10% of input cost on the remaining 9+ category calls.
+ *
+ * The query portion varies per category (section prompt + NCC context + schema).
+ */
+export function buildSectionAnalysisBlocks(
+  category: NccCategory,
+  planContent: string,
+  projectContext: string,
+  nccContext: string,
+  fewShotExamples?: string
+): { cachedPrefix: string; query: string } {
+  const cachedPrefix = `${projectContext}
+
+RELEVANT PLAN EXTRACTS:
+${planContent || "No specific plan text available for this section."}`;
+
+  const query = `${SECTION_PROMPTS[category]}
+
+RELEVANT NCC REFERENCE MATERIAL:
+${nccContext || "No specific NCC reference material available. Use your knowledge of the NCC."}
+${fewShotExamples ?? ""}
+
+For each finding, assign a "responsible_discipline" from this list:
+- "architect" — design/drawing amendments, spatial layout, window/door sizing, natural light, ventilation openings
+- "structural_engineer" — footings, framing, bracing, wind loads, earthquake design
+- "hydraulic_engineer" — wet area services, stormwater, plumbing, waterproofing
+- "energy_consultant" — thermal performance, insulation, glazing U-values, NatHERS
+- "fire_engineer" — FRL specifications, smoke hazard management, fire separation
+- "building_surveyor" — classification decisions, performance solutions
+- "geotechnical_engineer" — soil classification, foundation conditions
+- "acoustic_engineer" — sound insulation between dwellings
+- "builder" — site-specific construction items, termite barriers, weatherproofing details
+- "other" — anything not clearly assigned
+
+Also provide "remediation_action": a specific, directive task instruction that can be forwarded directly to the responsible party.
+Example: "Add R2.5 wall batts to external framing per NCC H6D4 Table 13.2.5a for Climate Zone 6."
+NOT: "Consider improving wall insulation."
+
+Respond with a JSON object matching this schema:
+{
+  "category": "${category}",
+  "findings": [
+    {
+      "ncc_section": "string — NCC clause number (e.g. '3.7.1.1' or 'H1P1')",
+      "category": "${category}",
+      "title": "string — short title for the finding",
+      "description": "string — detailed description of the compliance issue or confirmation",
+      "recommendation": "string — specific recommendation or next steps",
+      "severity": "compliant | advisory | non_compliant | critical",
+      "confidence": 0.0-1.0,
+      "ncc_citation": "string — full NCC citation text",
+      "page_references": [1, 2],
+      "responsible_discipline": "string — one of: architect, structural_engineer, hydraulic_engineer, energy_consultant, fire_engineer, building_surveyor, geotechnical_engineer, acoustic_engineer, landscape_architect, builder, other",
+      "remediation_action": "string — specific directive instruction for the responsible party"
+    }
+  ]
+}
+
+Return ONLY valid JSON, no other text.`;
+
+  return { cachedPrefix, query };
+}
+
 export const SECTION_ANALYSIS_TEMPLATE = (
   category: NccCategory,
   planContent: string,
