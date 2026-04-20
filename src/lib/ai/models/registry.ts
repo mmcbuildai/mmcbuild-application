@@ -35,8 +35,8 @@ export interface ModelDefinition {
   capabilities: ModelCapability[];
   contextWindow: number;
   maxOutput: number;
-  costPer1kInput: number; // USD
-  costPer1kOutput: number;
+  costPer1MInput: number; // USD per 1,000,000 input tokens
+  costPer1MOutput: number; // USD per 1,000,000 output tokens
   qualityTier: QualityTier;
   supportsToolUse: boolean;
   isAvailable: boolean; // feature flag
@@ -53,8 +53,8 @@ export const MODEL_REGISTRY: Record<string, ModelDefinition> = {
     capabilities: ["chat", "tool_use", "json_mode"],
     contextWindow: 200000,
     maxOutput: 8192,
-    costPer1kInput: 3,
-    costPer1kOutput: 15,
+    costPer1MInput: 3,
+    costPer1MOutput: 15,
     qualityTier: "premium",
     supportsToolUse: true,
     isAvailable: true,
@@ -66,8 +66,8 @@ export const MODEL_REGISTRY: Record<string, ModelDefinition> = {
     capabilities: ["chat", "tool_use", "json_mode", "classification"],
     contextWindow: 200000,
     maxOutput: 8192,
-    costPer1kInput: 1,
-    costPer1kOutput: 5,
+    costPer1MInput: 1,
+    costPer1MOutput: 5,
     qualityTier: "standard",
     supportsToolUse: true,
     isAvailable: true,
@@ -79,8 +79,8 @@ export const MODEL_REGISTRY: Record<string, ModelDefinition> = {
     capabilities: ["chat", "tool_use", "json_mode"],
     contextWindow: 128000,
     maxOutput: 4096,
-    costPer1kInput: 2.5,
-    costPer1kOutput: 10,
+    costPer1MInput: 2.5,
+    costPer1MOutput: 10,
     qualityTier: "high",
     supportsToolUse: true,
     isAvailable: true,
@@ -92,8 +92,8 @@ export const MODEL_REGISTRY: Record<string, ModelDefinition> = {
     capabilities: ["chat", "json_mode", "classification"],
     contextWindow: 128000,
     maxOutput: 4096,
-    costPer1kInput: 0.15,
-    costPer1kOutput: 0.6,
+    costPer1MInput: 0.15,
+    costPer1MOutput: 0.6,
     qualityTier: "standard",
     supportsToolUse: false,
     isAvailable: true,
@@ -105,8 +105,8 @@ export const MODEL_REGISTRY: Record<string, ModelDefinition> = {
     capabilities: ["embedding"],
     contextWindow: 8191,
     maxOutput: 0,
-    costPer1kInput: 0.02,
-    costPer1kOutput: 0,
+    costPer1MInput: 0.02,
+    costPer1MOutput: 0,
     qualityTier: "standard",
     supportsToolUse: false,
     isAvailable: true,
@@ -118,8 +118,8 @@ export const MODEL_REGISTRY: Record<string, ModelDefinition> = {
     capabilities: ["reranking"],
     contextWindow: 8192,
     maxOutput: 0,
-    costPer1kInput: 0,
-    costPer1kOutput: 0,
+    costPer1MInput: 0,
+    costPer1MOutput: 0,
     qualityTier: "standard",
     supportsToolUse: false,
     isAvailable: true,

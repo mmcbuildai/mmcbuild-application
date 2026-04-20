@@ -125,7 +125,7 @@ function estimateCost(
   outputTokens: number
 ): number {
   return (
-    (inputTokens / 1000) * model.costPer1kInput +
-    (outputTokens / 1000) * model.costPer1kOutput
+    (inputTokens / 1_000_000) * model.costPer1MInput +
+    (outputTokens / 1_000_000) * model.costPer1MOutput
   );
 }
