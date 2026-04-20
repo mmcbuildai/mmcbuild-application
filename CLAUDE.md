@@ -1,3 +1,25 @@
+<!-- SESSION CONTEXT - Injected by Easy Claude Code -->
+## Prior Session Context
+
+> User returning after a few days. Summarize what was done before proceeding.
+
+### Last Session Summary
+I don't have a Jira integration or any configured credentials to access Jira. I can't connect to external project management tools directly.
+
+To check your Jira tasks, you'll need to access Jira directly. If you'd like, I can help you set up a Jira integration or work through tasks once you share them here.
+
+### Recent Conversation (last 2 turns)
+**User (1d ago):** Check jira to list all actions required of me
+
+**Claude (1d ago):** I don't have a Jira integration or any configured credentials to access Jira. I can't connect to external project management tools directly.
+
+To check your Jira tasks, you'll need to access Jira directly. If you'd like, I can help you set up a Jira integration or work through tasks once you share them here.
+
+### Instructions
+- Continue from the context above. Do not ask the user to re-explain.
+- When you make significant decisions, emit: <!-- MEMORY type=decision importance=8 | description -->
+- When you create files, emit: <!-- MEMORY type=file_created importance=6 | path/to/file.ts - description -->
+<!-- END SESSION CONTEXT -->
 # MMC Build — Project Instructions
 
 ## What is this?
