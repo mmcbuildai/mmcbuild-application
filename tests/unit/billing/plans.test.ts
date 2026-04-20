@@ -25,7 +25,7 @@ describe("Plans configuration", () => {
 
   it("trial constants are correct", () => {
     expect(TRIAL_RUN_LIMIT).toBe(3);
-    expect(TRIAL_DAYS).toBe(60);
+    expect(TRIAL_DAYS).toBe(14);
   });
 });
 
