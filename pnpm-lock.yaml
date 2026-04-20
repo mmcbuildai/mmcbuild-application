@@ -12,14 +12,14 @@ importers:
         specifier: ^0.78.0
         version: 0.78.0(zod@4.3.6)
       '@caistech/mapbox':
-        specifier: ^0.1.1
-        version: 0.1.1(typescript@5.9.3)
+        specifier: ^0.1.2
+        version: 0.1.2(typescript@5.9.3)
       '@caistech/platform-trust-middleware':
-        specifier: ^0.3.0
-        version: 0.3.0(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)
+        specifier: ^0.3.1
+        version: 0.3.1(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)
       '@caistech/property-services-sdk':
-        specifier: ^0.2.0
-        version: 0.2.0(react@19.2.3)(typescript@5.9.3)
+        specifier: ^0.2.1
+        version: 0.2.1(react@19.2.3)(typescript@5.9.3)
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.71.2(react@19.2.3))
@@ -140,7 +140,7 @@ importers:
         version: 0.183.1
       '@vitejs/plugin-react':
         specifier: ^6.0.1
-        version: 6.0.1(vite@8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))
+        version: 6.0.1(vite@8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))
       docx:
         specifier: ^9.6.1
         version: 9.6.1
@@ -164,7 +164,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(msw@2.12.10(@types/node@20.19.35)(typescript@5.9.3))(vite@8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(msw@2.12.10(@types/node@20.19.35)(typescript@5.9.3))(vite@8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))
 
 packages:
 
@@ -321,19 +321,19 @@ packages:
   '@bufbuild/protobuf@2.11.0':
     resolution: {integrity: sha512-sBXGT13cpmPR5BMgHE6UEEfEaShh5Ror6rfN3yEK5si7QVrtZg8LEPQb0VVhiLRUslD2yLnXtnRzG035J/mZXQ==}
 
-  '@caistech/mapbox@0.1.1':
-    resolution: {integrity: sha512-kXTDqo2K1p5+gl1KDj9GFw4Xp1R68rLf7l6XLBKGKB5B6fBmR9QfwWVDh+80vm+kryG0/7dM0TrZQkrLN//xzw==, tarball: https://npm.pkg.github.com/download/@caistech/mapbox/0.1.1/5bf88740daafba953bc4a684a94cf23e31c85272}
+  '@caistech/mapbox@0.1.2':
+    resolution: {integrity: sha512-ws9blSUNHzfJqrsqsDUWIg3ZB/ACHR9NsQYd8ZPp801M7RqRQbB2Revo4rHsIK2dethS/KfXx/nFGOpjnkjG+Q==, tarball: https://npm.pkg.github.com/download/@caistech/mapbox/0.1.2/0a2a6e5afbde456dce6833b4cdab0b1e1c1ef22f}
     peerDependencies:
       typescript: '>=5.0.0'
 
-  '@caistech/platform-trust-middleware@0.3.0':
-    resolution: {integrity: sha512-PUUucPUgnKBenhED/8ZjuH2Hm0bsjbybqBm+qCynCjh2eK2vP9VBQlYurlRbLjuRl2XhcdnJmxV8az41tkj9OA==, tarball: https://npm.pkg.github.com/download/@caistech/platform-trust-middleware/0.3.0/8b31d8e40f945f95418127eb07715a1def4f4047}
+  '@caistech/platform-trust-middleware@0.3.1':
+    resolution: {integrity: sha512-HLdjkjxF8N0BsV8PvuF4uimhtBGcluu86jmtJFgc+hOuTDFqTKKVyhwvQ2V10frIhgToA36gIknRgvFhXn5V2A==, tarball: https://npm.pkg.github.com/download/@caistech/platform-trust-middleware/0.3.1/eadaeb0c7ecea2706db6eeceb41eca1aa6ccb349}
     peerDependencies:
       next: '>=14.0.0'
       typescript: '>=5.0.0'
 
-  '@caistech/property-services-sdk@0.2.0':
-    resolution: {integrity: sha512-CFZDm2abCVsVvoNK72wYA2RnHIOAUdXtjNTdIM13GflXIQ6sudlCV4yQI/KsCgaWx4MSUhWc+f8NVadKdliv9w==, tarball: https://npm.pkg.github.com/download/@caistech/property-services-sdk/0.2.0/ad44c4c54f60fbf5d19fce27f00d522cf938753e}
+  '@caistech/property-services-sdk@0.2.1':
+    resolution: {integrity: sha512-hOb+Y1ILRZtUsZ9vsf7mur7cZFeSrA1ggJGmIYdZ9WtJlog+Ad0PtFQnRSakMxrvaKGBmtUyc+wJKQ/yKCLWQA==, tarball: https://npm.pkg.github.com/download/@caistech/property-services-sdk/0.2.1/0d30857d48f87c61d25cde6ea5a89d0f2a62e21d}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       typescript: '>=5.0.0'
@@ -756,8 +756,11 @@ packages:
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
 
-  '@napi-rs/wasm-runtime@1.1.1':
-    resolution: {integrity: sha512-p64ah1M1ld8xjWv3qbvFwHiFVWrq1yFvV4f7w+mzaqiR4IlSgkqhcRdHwsGgomwzBH51sRY4NEowLxnaBjcW/A==}
+  '@napi-rs/wasm-runtime@1.1.4':
+    resolution: {integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==}
+    peerDependencies:
+      '@emnapi/core': ^1.7.1
+      '@emnapi/runtime': ^1.7.1
 
   '@next/env@16.1.6':
     resolution: {integrity: sha512-N1ySLuZjnAtN3kFnwhAwPvZah8RJxKasD7x1f8shFqhncnWZn4JMfg37diLNuoHsLAlrDfM3g4mawVdtAG8XLQ==}
@@ -4805,12 +4808,12 @@ packages:
     resolution: {integrity: sha512-PS08Iboia9mts/2ygV3eLpY5ghnUcfLV/EXTOW1E2qYxJKGGBUtNjN76FYHnMs36RmARn41bC0AZmn+rR0OVpQ==}
     engines: {node: ^10 || ^12 || >=14}
 
-  postcss@8.5.6:
-    resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
+  postcss@8.5.10:
+    resolution: {integrity: sha512-pMMHxBOZKFU6HgAZ4eyGnwXF/EvPGGqUr0MnZ5+99485wwW41kW91A4LOGxSHhgugZmSChL5AlElNdwlNgcnLQ==}
     engines: {node: ^10 || ^12 || >=14}
 
-  postcss@8.5.8:
-    resolution: {integrity: sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg==}
+  postcss@8.5.6:
+    resolution: {integrity: sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==}
     engines: {node: ^10 || ^12 || >=14}
 
   postgres-array@2.0.0:
@@ -5409,6 +5412,10 @@ packages:
 
   tinyglobby@0.2.15:
     resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
+    engines: {node: '>=12.0.0'}
+
+  tinyglobby@0.2.16:
+    resolution: {integrity: sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg==}
     engines: {node: '>=12.0.0'}
 
   tinyrainbow@3.1.0:
@@ -6099,11 +6106,11 @@ snapshots:
 
   '@bufbuild/protobuf@2.11.0': {}
 
-  '@caistech/mapbox@0.1.1(typescript@5.9.3)':
+  '@caistech/mapbox@0.1.2(typescript@5.9.3)':
     dependencies:
       typescript: 5.9.3
 
-  '@caistech/platform-trust-middleware@0.3.0(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)':
+  '@caistech/platform-trust-middleware@0.3.1(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)':
     dependencies:
       '@supabase/supabase-js': 2.98.0
       next: 16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -6112,7 +6119,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@caistech/property-services-sdk@0.2.0(react@19.2.3)(typescript@5.9.3)':
+  '@caistech/property-services-sdk@0.2.1(react@19.2.3)(typescript@5.9.3)':
     dependencies:
       react: 19.2.3
       typescript: 5.9.3
@@ -6510,7 +6517,7 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@napi-rs/wasm-runtime@1.1.1':
+  '@napi-rs/wasm-runtime@1.1.4(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)':
     dependencies:
       '@emnapi/core': 1.8.1
       '@emnapi/runtime': 1.8.1
@@ -8142,9 +8149,12 @@ snapshots:
   '@rolldown/binding-openharmony-arm64@1.0.0-rc.12':
     optional: true
 
-  '@rolldown/binding-wasm32-wasi@1.0.0-rc.12':
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.12(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)':
     dependencies:
-      '@napi-rs/wasm-runtime': 1.1.1
+      '@napi-rs/wasm-runtime': 1.1.4(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
     optional: true
 
   '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.12':
@@ -8611,10 +8621,10 @@ snapshots:
       '@use-gesture/core': 10.3.1
       react: 19.2.3
 
-  '@vitejs/plugin-react@6.0.1(vite@8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))':
+  '@vitejs/plugin-react@6.0.1(vite@8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))':
     dependencies:
       '@rolldown/pluginutils': 1.0.0-rc.7
-      vite: 8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2)
+      vite: 8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2)
 
   '@vitest/expect@4.1.2':
     dependencies:
@@ -8625,14 +8635,14 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.2(msw@2.12.10(@types/node@20.19.35)(typescript@5.9.3))(vite@8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))':
+  '@vitest/mocker@4.1.2(msw@2.12.10(@types/node@20.19.35)(typescript@5.9.3))(vite@8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))':
     dependencies:
       '@vitest/spy': 4.1.2
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
       msw: 2.12.10(@types/node@20.19.35)(typescript@5.9.3)
-      vite: 8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2)
+      vite: 8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2)
 
   '@vitest/pretty-format@4.1.2':
     dependencies:
@@ -9606,6 +9616,10 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
       picomatch: 4.0.3
+
+  fdir@6.5.0(picomatch@4.0.4):
+    optionalDependencies:
+      picomatch: 4.0.4
 
   fetch-blob@3.2.0:
     dependencies:
@@ -11017,13 +11031,13 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  postcss@8.5.6:
+  postcss@8.5.10:
     dependencies:
       nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  postcss@8.5.8:
+  postcss@8.5.6:
     dependencies:
       nanoid: 3.3.11
       picocolors: 1.1.1
@@ -11370,7 +11384,7 @@ snapshots:
     dependencies:
       glob: 10.5.0
 
-  rolldown@1.0.0-rc.12:
+  rolldown@1.0.0-rc.12(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1):
     dependencies:
       '@oxc-project/types': 0.122.0
       '@rolldown/pluginutils': 1.0.0-rc.12
@@ -11387,9 +11401,12 @@ snapshots:
       '@rolldown/binding-linux-x64-gnu': 1.0.0-rc.12
       '@rolldown/binding-linux-x64-musl': 1.0.0-rc.12
       '@rolldown/binding-openharmony-arm64': 1.0.0-rc.12
-      '@rolldown/binding-wasm32-wasi': 1.0.0-rc.12
+      '@rolldown/binding-wasm32-wasi': 1.0.0-rc.12(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
       '@rolldown/binding-win32-arm64-msvc': 1.0.0-rc.12
       '@rolldown/binding-win32-x64-msvc': 1.0.0-rc.12
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
 
   router@2.2.0:
     dependencies:
@@ -11840,6 +11857,11 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.3)
       picomatch: 4.0.3
 
+  tinyglobby@0.2.16:
+    dependencies:
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+
   tinyrainbow@3.1.0: {}
 
   tldts-core@7.0.23: {}
@@ -12106,23 +12128,26 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite@8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2):
+  vite@8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
-      postcss: 8.5.8
-      rolldown: 1.0.0-rc.12
-      tinyglobby: 0.2.15
+      postcss: 8.5.10
+      rolldown: 1.0.0-rc.12(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)
+      tinyglobby: 0.2.16
     optionalDependencies:
       '@types/node': 20.19.35
       fsevents: 2.3.3
       jiti: 2.6.1
       yaml: 2.8.2
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
 
-  vitest@4.1.2(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(msw@2.12.10(@types/node@20.19.35)(typescript@5.9.3))(vite@8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2)):
+  vitest@4.1.2(@opentelemetry/api@1.9.0)(@types/node@20.19.35)(msw@2.12.10(@types/node@20.19.35)(typescript@5.9.3))(vite@8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2)):
     dependencies:
       '@vitest/expect': 4.1.2
-      '@vitest/mocker': 4.1.2(msw@2.12.10(@types/node@20.19.35)(typescript@5.9.3))(vite@8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))
+      '@vitest/mocker': 4.1.2(msw@2.12.10(@types/node@20.19.35)(typescript@5.9.3))(vite@8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2))
       '@vitest/pretty-format': 4.1.2
       '@vitest/runner': 4.1.2
       '@vitest/snapshot': 4.1.2
@@ -12139,7 +12164,7 @@ snapshots:
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.1.0
-      vite: 8.0.3(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2)
+      vite: 8.0.3(@emnapi/core@1.8.1)(@emnapi/runtime@1.8.1)(@types/node@20.19.35)(jiti@2.6.1)(yaml@2.8.2)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
