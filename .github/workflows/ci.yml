@@ -21,7 +21,10 @@ jobs:
       # Prefers a repo/org secret GITHUB_PACKAGES_TOKEN with read:packages.
       # Falls back to the built-in GITHUB_TOKEN (works only if all packages
       # live in the same org; otherwise set GITHUB_PACKAGES_TOKEN secret).
-      GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+      # .npmrc reads ${GITHUB_PACKAGES_TOKEN} from env; GitHub forbids secret
+      # names starting with GITHUB_, so the secret is stored as GH_PACKAGES_TOKEN
+      # and aliased here.
+      GITHUB_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
 
     steps:
       - name: Checkout
@@ -63,7 +66,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+      # .npmrc reads ${GITHUB_PACKAGES_TOKEN} from env; GitHub forbids secret
+      # names starting with GITHUB_, so the secret is stored as GH_PACKAGES_TOKEN
+      # and aliased here.
+      GITHUB_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
