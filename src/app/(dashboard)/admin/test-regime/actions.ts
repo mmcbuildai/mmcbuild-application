@@ -4,11 +4,11 @@ import { db } from "@/lib/supabase/db";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-// All 26 test cases from test-regime-v1.0
+// Test catalog for the v1.0 regime. Persona-based flows were removed in
+// favour of behavioural beta observation, so the original onboarding /
+// access-control suite has been collapsed.
 const TEST_CASES = [
-  { tcId: "TC-ONB-001", title: "New user registration and persona selection", section: "Onboarding" },
-  { tcId: "TC-ONB-002", title: "Persona reset via settings", section: "Onboarding" },
-  { tcId: "TC-ONB-003", title: "First login redirect to onboarding if persona not set", section: "Onboarding" },
+  { tcId: "TC-ONB-001", title: "Authenticated user lands on dashboard with all modules visible", section: "Onboarding" },
   { tcId: "TC-COMPLY-001", title: "Upload valid PDF plan — analysis runs — report generated", section: "MMC Comply" },
   { tcId: "TC-COMPLY-002", title: "Upload invalid file type — error message shown", section: "MMC Comply" },
   { tcId: "TC-COMPLY-003", title: "Run limit enforcement at 10 runs (Trial tier)", section: "MMC Comply" },
@@ -20,8 +20,8 @@ const TEST_CASES = [
   { tcId: "TC-BUILD-004", title: "Cross-module plan sharing", section: "MMC Build" },
   { tcId: "TC-QUOTE-001", title: "Quote generated from selected materials", section: "MMC Quote" },
   { tcId: "TC-QUOTE-002", title: "Quote export as PDF", section: "MMC Quote" },
-  { tcId: "TC-QUOTE-003", title: "Quote export as Word document", section: "MMC Quote" },
-  { tcId: "TC-QUOTE-004", title: "Manufacturer pricing reflected in output", section: "MMC Quote" },
+  { tcId: "TC-QUOTE-003", title: "Quote PDF export contains full cost comparison", section: "MMC Quote" },
+  { tcId: "TC-QUOTE-004", title: "Custom cost rate overrides reflected in quote output", section: "MMC Quote" },
   { tcId: "TC-DIRECT-001", title: "Directory search by state and category returns results", section: "MMC Direct" },
   { tcId: "TC-DIRECT-002", title: "Filter by certification status works correctly", section: "MMC Direct" },
   { tcId: "TC-DIRECT-003", title: "Company profile displays all required fields", section: "MMC Direct" },
@@ -31,10 +31,8 @@ const TEST_CASES = [
   { tcId: "TC-BILL-001", title: "Trial user sees run limit progress bar", section: "Billing" },
   { tcId: "TC-BILL-002", title: "Upgrade prompt shown when run limit reached", section: "Billing" },
   { tcId: "TC-BILL-003", title: "Stripe test mode payment completes successfully", section: "Billing" },
-  { tcId: "TC-ACCESS-001", title: "Builder persona sees correct modules in sidebar", section: "Access Control" },
-  { tcId: "TC-ACCESS-002", title: "Consultant persona sees Comply only", section: "Access Control" },
-  { tcId: "TC-ACCESS-003", title: "Admin user has access to all modules", section: "Access Control" },
-  { tcId: "TC-ACCESS-004", title: "Trade persona sees Coming Soon state", section: "Access Control" },
+  { tcId: "TC-ACCESS-001", title: "All authenticated users see all five modules", section: "Access Control" },
+  { tcId: "TC-ACCESS-002", title: "Unauthenticated user is redirected to /login", section: "Access Control" },
 ];
 
 async function requireAdmin() {

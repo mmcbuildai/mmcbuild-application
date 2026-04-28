@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Sidebar, type SidebarProps } from "./sidebar";
+import { Sidebar } from "./sidebar";
 import { DashboardHeader } from "./header";
-import type { UserPersona } from "@/lib/persona-access";
 
 export type DashboardShellProps = {
   children: React.ReactNode;
-  persona: UserPersona | null;
   tier: string | null;
   runCount: number;
   fullName: string | null;
@@ -17,7 +15,6 @@ export type DashboardShellProps = {
 
 export function DashboardShell({
   children,
-  persona,
   tier,
   runCount,
   fullName,
@@ -46,7 +43,6 @@ export function DashboardShell({
       >
         <Sidebar
           isOpen={sidebarOpen}
-          persona={persona}
           tier={tier}
           runCount={runCount}
         />

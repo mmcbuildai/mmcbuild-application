@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { ChatWidget } from "@/components/shared/chat-widget";
-import type { UserPersona } from "@/lib/persona-access";
 
 export default async function DashboardLayout({
   children,
@@ -17,17 +16,14 @@ export default async function DashboardLayout({
 
   if (!user) redirect("/login");
 
-  // Use db() for columns not yet in generated types (persona, subscription_tier)
+  // Use db() for columns not yet in generated types (subscription_tier)
   const admin = db();
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("full_name, role, org_id, persona")
+    .select("full_name, role, org_id")
     .eq("user_id", user.id)
     .single();
-
-  // Default persona to "builder" if not set (onboarding step removed)
-  const persona = profile?.persona ?? "builder";
 
   let orgName = "Organisation";
   let tier: string | null = "trial";
@@ -55,7 +51,6 @@ export default async function DashboardLayout({
   return (
     <>
       <DashboardShell
-        persona={persona as UserPersona}
         tier={tier}
         runCount={runCount}
         fullName={profile?.full_name ?? null}

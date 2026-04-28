@@ -1,5 +1,7 @@
 import type { ModuleId } from "@/lib/stripe/plans";
 
+// Persona labels are retained for potential analytics tagging during beta.
+// They no longer drive access — every authenticated user sees every module.
 export type UserPersona =
   | "builder"
   | "developer"
@@ -31,50 +33,13 @@ export const PERSONA_DESCRIPTIONS: Record<UserPersona, string> = {
   admin: "Platform administrator",
 };
 
-// Which modules each persona can access
-// Tier controls run limits, NOT module visibility
-const MODULE_ACCESS: Record<UserPersona, ModuleId[]> = {
-  builder: ["comply", "build", "quote", "direct", "train"],
-  developer: ["comply", "build", "quote", "direct"],
-  architect_bd: ["comply", "build", "direct"],
-  design_and_build: ["build", "quote"],
-  consultant: ["comply"],
-  trade: [], // no modules defined yet — show all as locked "Coming Soon"
-  admin: ["comply", "build", "quote", "direct", "train"],
-};
-
-// Modules that consume analysis runs (subject to trial limits)
+// Modules that consume analysis runs (subject to trial limits).
+// Tier — not persona — controls run limits.
 export const RUN_LIMITED_MODULES: ModuleId[] = ["comply", "build", "quote"];
 
 export const TRIAL_RUN_LIMIT = 10;
 
-export function canAccessModule(
-  persona: UserPersona | null | undefined,
-  moduleId: ModuleId
-): boolean {
-  if (!persona) return false;
-  if (persona === "admin") return true;
-  return MODULE_ACCESS[persona]?.includes(moduleId) ?? false;
-}
-
-export function getAccessibleModules(
-  persona: UserPersona | null | undefined
-): ModuleId[] {
-  if (!persona) return [];
-  if (persona === "admin")
-    return ["comply", "build", "quote", "direct", "train"];
-  return MODULE_ACCESS[persona] ?? [];
-}
-
-export function isTradePersona(
-  persona: UserPersona | null | undefined
-): boolean {
-  return persona === "trade";
-}
-
-export function isRunLimited(
-  tier: string | null | undefined
-): boolean {
+export function isRunLimited(tier: string | null | undefined): boolean {
   return !tier || tier === "trial";
 }
 

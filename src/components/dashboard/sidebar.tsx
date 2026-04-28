@@ -12,7 +12,6 @@ import {
   CreditCard,
   Settings,
   LogOut,
-  Lock,
   Tag,
   LayoutDashboard,
   FolderOpen,
@@ -22,28 +21,19 @@ import {
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
-import {
-  canAccessModule,
-  isTradePersona,
-  isRunLimited,
-  TRIAL_RUN_LIMIT,
-  type UserPersona,
-} from "@/lib/persona-access";
-import type { ModuleId } from "@/lib/stripe/plans";
+import { isRunLimited, TRIAL_RUN_LIMIT } from "@/lib/persona-access";
 
-// Module nav items with Karen's teal palette
 const moduleNav: {
   name: string;
   href: string;
-  moduleId: ModuleId;
   icon: typeof FileCheck;
   color: string;
 }[] = [
-  { name: "MMC Comply", href: "/comply", moduleId: "comply", icon: FileCheck, color: "bg-teal-700" },
-  { name: "MMC Build", href: "/build", moduleId: "build", icon: Building2, color: "bg-teal-600" },
-  { name: "MMC Quote", href: "/quote", moduleId: "quote", icon: FileText, color: "bg-teal-500" },
-  { name: "MMC Direct", href: "/direct", moduleId: "direct", icon: Truck, color: "bg-cyan-700" },
-  { name: "MMC Train", href: "/train", moduleId: "train", icon: GraduationCap, color: "bg-sky-700" },
+  { name: "MMC Comply", href: "/comply", icon: FileCheck, color: "bg-teal-700" },
+  { name: "MMC Build", href: "/build", icon: Building2, color: "bg-teal-600" },
+  { name: "MMC Quote", href: "/quote", icon: FileText, color: "bg-teal-500" },
+  { name: "MMC Direct", href: "/direct", icon: Truck, color: "bg-cyan-700" },
+  { name: "MMC Train", href: "/train", icon: GraduationCap, color: "bg-sky-700" },
 ];
 
 const topNav = [
@@ -60,12 +50,11 @@ const bottomNav = [
 
 export type SidebarProps = {
   isOpen: boolean;
-  persona: UserPersona | null;
   tier: string | null;
   runCount: number;
 };
 
-export function Sidebar({ isOpen, persona, tier, runCount }: SidebarProps) {
+export function Sidebar({ isOpen, tier, runCount }: SidebarProps) {
   const pathname = usePathname();
 
   const runLimited = isRunLimited(tier);
@@ -114,36 +103,12 @@ export function Sidebar({ isOpen, persona, tier, runCount }: SidebarProps) {
       {/* Divider */}
       <div className="mx-3 my-3 border-t border-white/10" />
 
-      {/* Module nav with access gating */}
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
         <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
           Modules
         </p>
         {moduleNav.map((item) => {
-          const hasAccess = canAccessModule(persona, item.moduleId);
-          const isTrade = isTradePersona(persona);
           const isActive = pathname.startsWith(item.href);
-
-          // Trade persona: show all as locked "Coming Soon"
-          if (isTrade) {
-            return (
-              <div
-                key={item.name}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 cursor-not-allowed whitespace-nowrap"
-                title="Coming Soon"
-              >
-                <div className={cn("flex h-5 w-5 items-center justify-center rounded", "bg-slate-700")}>
-                  <Lock className="h-3 w-3 text-slate-500" />
-                </div>
-                <span>{item.name}</span>
-                <span className="ml-auto text-[10px] text-slate-600">Soon</span>
-              </div>
-            );
-          }
-
-          // No access: hide entirely
-          if (!hasAccess) return null;
-
           return (
             <Link
               key={item.name}

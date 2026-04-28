@@ -13,14 +13,13 @@ export function adminClient() {
 }
 
 // ---------------------------------------------------------------------------
-// Test user definitions — one per persona
+// Test user definitions
 // ---------------------------------------------------------------------------
 export interface TestUser {
   email: string;
   password: string;
   fullName: string;
   orgName: string;
-  persona: string | null; // null = no persona (for onboarding tests)
 }
 
 const suffix = process.env.TEST_EMAIL_SUFFIX || "@e2e-test.mmcbuild.local";
@@ -31,42 +30,12 @@ export const TEST_USERS: Record<string, TestUser> = {
     password: "Test1234!secure",
     fullName: "E2E Builder",
     orgName: "E2E Builder Org",
-    persona: "builder",
-  },
-  consultant: {
-    email: `e2e-consultant${suffix}`,
-    password: "Test1234!secure",
-    fullName: "E2E Consultant",
-    orgName: "E2E Consultant Org",
-    persona: "consultant",
   },
   admin: {
     email: `e2e-admin${suffix}`,
     password: "Test1234!secure",
     fullName: "E2E Admin",
     orgName: "E2E Admin Org",
-    persona: "admin",
-  },
-  trade: {
-    email: `e2e-trade${suffix}`,
-    password: "Test1234!secure",
-    fullName: "E2E Trade",
-    orgName: "E2E Trade Org",
-    persona: "trade",
-  },
-  nopersona: {
-    email: `e2e-nopersona${suffix}`,
-    password: "Test1234!secure",
-    fullName: "E2E NoPersona",
-    orgName: "E2E NoPersona Org",
-    persona: null, // deliberately unset
-  },
-  fresh: {
-    email: `e2e-fresh${suffix}`,
-    password: "Test1234!secure",
-    fullName: "E2E Fresh",
-    orgName: "E2E Fresh Org",
-    persona: null,
   },
 };
 
@@ -119,7 +88,7 @@ export async function seedTestUser(user: TestUser) {
   if (existingProfile) {
     await sb
       .from("profiles")
-      .update({ persona: user.persona, full_name: user.fullName })
+      .update({ full_name: user.fullName })
       .eq("id", existingProfile.id);
   } else {
     await sb.from("profiles").insert({
@@ -128,7 +97,6 @@ export async function seedTestUser(user: TestUser) {
       role: "owner",
       full_name: user.fullName,
       email: user.email,
-      persona: user.persona,
     });
   }
 
@@ -261,9 +229,7 @@ export async function cleanupTestUsers() {
 // ---------------------------------------------------------------------------
 type Fixtures = {
   builderPage: Page;
-  consultantPage: Page;
   adminPage: Page;
-  tradePage: Page;
 };
 
 export const test = base.extend<Fixtures>({
@@ -274,24 +240,10 @@ export const test = base.extend<Fixtures>({
     await use(page);
     await ctx.close();
   },
-  consultantPage: async ({ browser }, use) => {
-    const ctx = await browser.newContext();
-    const page = await ctx.newPage();
-    await loginViaUI(page, TEST_USERS.consultant);
-    await use(page);
-    await ctx.close();
-  },
   adminPage: async ({ browser }, use) => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     await loginViaUI(page, TEST_USERS.admin);
-    await use(page);
-    await ctx.close();
-  },
-  tradePage: async ({ browser }, use) => {
-    const ctx = await browser.newContext();
-    const page = await ctx.newPage();
-    await loginViaUI(page, TEST_USERS.trade);
     await use(page);
     await ctx.close();
   },
