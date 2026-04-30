@@ -193,6 +193,10 @@ export interface DesignSuggestion {
   estimated_waste_reduction: number;
   implementation_complexity: ImplementationComplexity;
   confidence: number;
+  /** Wall IDs from spatial_layout.walls[].id the suggestion applies to. Empty when no spatial layout was available. */
+  affected_wall_ids?: string[];
+  /** Room IDs from spatial_layout.rooms[].id the suggestion applies to. */
+  affected_room_ids?: string[];
 }
 
 export interface DesignOptimisationResult {

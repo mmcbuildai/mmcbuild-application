@@ -134,9 +134,20 @@ export const runDesignOptimisation = inngest.createFunction(
         ? `\n\nSELECTED CONSTRUCTION SYSTEMS:\nThe project owner has selected the following MMC systems of interest: ${selectedSystems.join(", ")}.\nPrioritise suggestions for these systems, but still include other opportunities if relevant.`
         : "";
 
+      // Pass a compact spatial layout into the prompt so the AI can map
+      // suggestions to specific walls / rooms by ID. Strip out anything we
+      // don't need for that mapping to keep token usage in check.
+      const spatialLayoutJson = spatialLayout
+        ? JSON.stringify({
+            walls: spatialLayout.walls.map((w) => ({ id: w.id, type: w.type, material: w.material })),
+            rooms: spatialLayout.rooms.map((r) => ({ id: r.id, name: r.name, type: r.type, area_m2: r.area_m2 })),
+            storeys: spatialLayout.storeys,
+          })
+        : null;
+
       const result = await callModel("design_primary", {
         system: OPTIMISATION_SYSTEM_PROMPT + systemsContext,
-        messages: [{ role: "user", content: OPTIMISATION_USER_PROMPT(planContent) }],
+        messages: [{ role: "user", content: OPTIMISATION_USER_PROMPT(planContent, spatialLayoutJson) }],
         maxTokens: 4096,
         orgId: check.org_id,
         checkId: check.id,
@@ -146,10 +157,20 @@ export const runDesignOptimisation = inngest.createFunction(
       return parsed.suggestions;
     });
 
-    // 5. Store suggestions
+    // 5. Store suggestions (with spatial mapping when present)
     await step.run("store-suggestions", async () => {
+      const validWallIds = new Set(spatialLayout?.walls.map((w) => w.id) ?? []);
+      const validRoomIds = new Set(spatialLayout?.rooms.map((r) => r.id) ?? []);
+
       for (let i = 0; i < suggestions.length; i++) {
         const s = suggestions[i];
+
+        // Filter the AI's wall/room IDs to ones that actually exist in the
+        // spatial layout. The AI occasionally fabricates IDs — discard those
+        // rather than write invalid references to the DB.
+        const wallIds = (s.affected_wall_ids ?? []).filter((id) => validWallIds.has(id));
+        const roomIds = (s.affected_room_ids ?? []).filter((id) => validRoomIds.has(id));
+
         await db().from("design_suggestions").insert({
           check_id: check.id,
           technology_category: s.technology_category,
@@ -162,6 +183,8 @@ export const runDesignOptimisation = inngest.createFunction(
           implementation_complexity: s.implementation_complexity,
           confidence: s.confidence,
           sort_order: i,
+          affected_wall_ids: wallIds.length ? wallIds : null,
+          affected_room_ids: roomIds.length ? roomIds : null,
         } as never);
       }
     });

@@ -35,10 +35,27 @@ IMPORTANT DISCLAIMERS:
 
 Always respond with valid JSON matching the requested schema. Do not include any text outside the JSON response.`;
 
-export const OPTIMISATION_USER_PROMPT = (planContent: string) => `Analyse the following building plan extracts and identify Modern Methods of Construction (MMC) opportunities.
+export const OPTIMISATION_USER_PROMPT = (
+  planContent: string,
+  spatialLayoutJson?: string | null
+) => {
+  const spatialBlock = spatialLayoutJson
+    ? `
+
+SPATIAL LAYOUT (extracted from the plan image):
+${spatialLayoutJson}
+
+Use the spatial layout to populate affected_wall_ids and affected_room_ids on each suggestion. The IDs MUST match the "id" fields in the walls[] and rooms[] arrays above. Examples:
+- A suggestion to switch external walls to SIPs should list every wall whose type is "external" in affected_wall_ids
+- A suggestion for a prefabricated bathroom pod should list bathroom/ensuite rooms in affected_room_ids
+- A suggestion for prefab roof trusses applies to all rooms (whole building) — list all room IDs
+If a suggestion does not map cleanly to specific walls or rooms, return empty arrays for those fields rather than fabricating IDs.`
+    : "";
+
+  return `Analyse the following building plan extracts and identify Modern Methods of Construction (MMC) opportunities.
 
 BUILDING PLAN CONTENT:
-${planContent}
+${planContent}${spatialBlock}
 
 Return a JSON object with this exact schema:
 {
@@ -52,7 +69,9 @@ Return a JSON object with this exact schema:
       "estimated_cost_savings": 0-100,
       "estimated_waste_reduction": 0-100,
       "implementation_complexity": "low | medium | high",
-      "confidence": 0.0-1.0
+      "confidence": 0.0-1.0,
+      "affected_wall_ids": ["w1", "w2", ...],
+      "affected_room_ids": ["r1", "r2", ...]
     }
   ]
 }
@@ -63,7 +82,9 @@ Guidelines:
 - Include at least 3 suggestions if the plan content is sufficient
 - Maximum 12 suggestions
 - Order suggestions by estimated impact (highest savings first)
-- Be specific about products and systems, not generic`;
+- Be specific about products and systems, not generic
+- For affected_wall_ids and affected_room_ids: only use IDs that appear in the SPATIAL LAYOUT block above. If no spatial layout was provided, return empty arrays for both.`;
+};
 
 export const OPTIMISATION_SUMMARY_PROMPT = (suggestions: string) => `You are writing an executive summary for a design optimisation report on an Australian residential building project.
 
