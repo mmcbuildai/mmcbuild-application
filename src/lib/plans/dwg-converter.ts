@@ -1,18 +1,17 @@
 /**
- * DWG → PDF conversion via CloudConvert.
+ * DWG conversion via CloudConvert.
  *
  * AutoCAD DWG is a proprietary binary format with no native Node parser.
- * CloudConvert runs the conversion server-side and we feed the resulting PDF
- * into the existing plan ingestion pipeline (text + chunks + embeddings).
+ * CloudConvert runs the conversion server-side. We default to DXF output
+ * because DXF preserves layer structure, entities, and text annotations
+ * needed for downstream layer extraction (3D vectoring, auto-fill across
+ * comply / build / estimate). PDF output is also supported when an embedded
+ * vector/raster representation is enough.
  *
  * Environment:
  *   CLOUDCONVERT_API_KEY — server-side only, never expose to client.
  *
  * Pricing (approx): ~$0.005-$0.02 per DWG depending on size / complexity.
- *
- * NOTE: This produces a PDF, which captures geometry but loses CAD layer
- * names / structured dimensional data. A future enhancement would convert to
- * DXF and parse layer entities directly for true 3D vectoring source data.
  */
 
 const CLOUDCONVERT_BASE = "https://api.cloudconvert.com/v2";
@@ -21,7 +20,7 @@ const MAX_POLL_ATTEMPTS = 80; // ~4 minutes
 const MAX_DWG_BYTES = 50 * 1024 * 1024; // 50 MB matches plan-uploads cap
 
 export type DwgConvertResult =
-  | { pdfBuffer: Buffer }
+  | { buffer: Buffer; format: "pdf" | "dxf" }
   | { error: string };
 
 interface CCTaskResultForm {
@@ -42,9 +41,10 @@ interface CCJobResponse {
   data: { id: string; status: string; tasks: CCTask[] };
 }
 
-export async function convertDwgToPdf(
+export async function convertDwg(
   dwgBuffer: Buffer,
   fileName: string,
+  outputFormat: "pdf" | "dxf" = "dxf",
 ): Promise<DwgConvertResult> {
   const apiKey = process.env.CLOUDCONVERT_API_KEY;
   if (!apiKey) {
@@ -68,7 +68,7 @@ export async function convertDwgToPdf(
           operation: "convert",
           input: "import-file",
           input_format: "dwg",
-          output_format: "pdf",
+          output_format: outputFormat,
         },
         "export-file": {
           operation: "export/url",
@@ -133,11 +133,11 @@ export async function convertDwgToPdf(
 
       const fileResp = await fetch(fileUrl);
       if (!fileResp.ok) {
-        return { error: `Converted PDF download failed: ${fileResp.status}` };
+        return { error: `Converted file download failed: ${fileResp.status}` };
       }
 
       const arrayBuffer = await fileResp.arrayBuffer();
-      return { pdfBuffer: Buffer.from(arrayBuffer) };
+      return { buffer: Buffer.from(arrayBuffer), format: outputFormat };
     }
 
     if (status.data.status === "error") {

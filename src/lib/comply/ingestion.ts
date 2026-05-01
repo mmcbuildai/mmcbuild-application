@@ -114,3 +114,66 @@ function guessImageMime(fileName: string | undefined): string {
   if (ext === "webp") return "image/webp";
   return "image/jpeg";
 }
+
+/**
+ * Variant of ingestPlan for text content that was extracted upstream
+ * (e.g. searchable text built from a parsed DXF). Skips PDF parsing and
+ * vision; runs the same chunk → embed → store pipeline.
+ */
+export async function ingestPlanFromText(input: {
+  orgId: string;
+  planId: string;
+  text: string;
+  pageCount?: number;
+}): Promise<IngestPlanResult> {
+  const admin = createAdminClient();
+  const pageCount = input.pageCount ?? 1;
+
+  await admin
+    .from("plans")
+    .update({ page_count: pageCount } as never)
+    .eq("id", input.planId);
+
+  const chunks = chunkText(input.text, {
+    sourceType: "plan",
+    sourceId: input.planId,
+  });
+
+  if (chunks.length === 0) {
+    return { pageCount, chunkCount: 0 };
+  }
+
+  const embeddings = await generateEmbeddings(chunks.map((c) => c.content));
+
+  await admin
+    .from("document_embeddings")
+    .delete()
+    .eq("source_type", "plan")
+    .eq("source_id", input.planId);
+
+  const rows = chunks.map((chunk, i) => ({
+    org_id: input.orgId,
+    source_type: "plan" as const,
+    source_id: input.planId,
+    chunk_index: chunk.chunk_index,
+    content: chunk.content,
+    metadata: chunk.metadata,
+    embedding: JSON.stringify(embeddings[i].embedding),
+  }));
+
+  for (let i = 0; i < rows.length; i += 50) {
+    const batch = rows.slice(i, i + 50);
+    const { error } = await admin
+      .from("document_embeddings")
+      .insert(batch as never);
+    if (error) {
+      throw new Error(`Failed to insert embeddings batch ${i}: ${error.message}`);
+    }
+  }
+
+  console.log(
+    `[Ingestion] Plan ${input.planId} (text): ${chunks.length} chunks embedded`,
+  );
+
+  return { pageCount, chunkCount: chunks.length };
+}

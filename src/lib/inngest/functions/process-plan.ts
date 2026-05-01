@@ -1,6 +1,6 @@
 import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ingestPlan } from "@/lib/comply/ingestion";
+import { ingestPlan, ingestPlanFromText } from "@/lib/comply/ingestion";
 
 export const processPlan = inngest.createFunction(
   {
@@ -97,10 +97,12 @@ export const processPlan = inngest.createFunction(
     // 3. Download, parse, chunk, and embed in a single step
     //    (avoids passing large file buffers between steps — Inngest has a 4MB step output limit)
     //
-    //    DWG files are converted to PDF via CloudConvert here so they flow
-    //    through the same text/embedding pipeline as native PDFs. If
-    //    conversion fails or CloudConvert is not configured, the file falls
-    //    back to manual_review status (file stored, no auto extraction).
+    //    DWG files are converted to DXF via CloudConvert here. DXF preserves
+    //    layer structure, block references, and text annotations. We parse
+    //    those into a structured payload (stored in plans.extracted_layers)
+    //    AND derive a searchable text representation that goes through the
+    //    same chunk + embed pipeline as native PDFs. If conversion fails the
+    //    plan falls back to manual_review status with the file still stored.
     const result = await step.run("download-and-ingest", async () => {
       const admin = createAdminClient();
       const { data, error } = await admin.storage
@@ -112,23 +114,47 @@ export const processPlan = inngest.createFunction(
       }
 
       const arrayBuffer = await data.arrayBuffer();
-      let buffer: Buffer = Buffer.from(arrayBuffer);
-      let kind: "pdf" | "image" | "dwg" = plan.file_kind ?? "pdf";
+      const sourceBuffer: Buffer = Buffer.from(arrayBuffer);
+      const kind: "pdf" | "image" | "dwg" = plan.file_kind ?? "pdf";
 
       if (kind === "dwg") {
-        const { convertDwgToPdf } = await import("@/lib/plans/dwg-converter");
-        const conv = await convertDwgToPdf(buffer, plan.file_name);
+        const { convertDwg } = await import("@/lib/plans/dwg-converter");
+        const conv = await convertDwg(sourceBuffer, plan.file_name, "dxf");
         if ("error" in conv) {
           console.warn(
             `[processPlan] DWG conversion failed for ${plan.id}: ${conv.error}. Falling back to manual_review.`,
           );
           return { pageCount: 0, chunkCount: 0, manualReview: true };
         }
-        buffer = conv.pdfBuffer;
-        kind = "pdf";
+
+        const { extractLayersFromDxf, dxfToSearchableText } = await import(
+          "@/lib/plans/dxf-extractor"
+        );
+        const extracted = extractLayersFromDxf(conv.buffer);
+
+        if (extracted) {
+          await admin
+            .from("plans")
+            .update({ extracted_layers: extracted } as never)
+            .eq("id", plan.id);
+
+          const searchableText = dxfToSearchableText(extracted);
+          // Drive the embedding pipeline through ingestPlan with kind=pdf and
+          // a text-only payload synthesised from the DXF. parsePdf isn't run
+          // for this path; ingestPlan only chunks/embeds the text we provide.
+          return await ingestPlanFromText({
+            orgId: plan.org_id,
+            planId: plan.id,
+            text: searchableText,
+            pageCount: 1,
+          });
+        }
+
+        // DXF parse failed — keep the file but flag it.
+        return { pageCount: 0, chunkCount: 0, manualReview: true };
       }
 
-      return await ingestPlan(plan.org_id, plan.id, buffer, kind, plan.file_name);
+      return await ingestPlan(plan.org_id, plan.id, sourceBuffer, kind, plan.file_name);
     });
 
     // 4. Update status: DWG/manual-review files are stored only; everything

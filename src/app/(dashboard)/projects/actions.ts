@@ -581,13 +581,32 @@ export async function retryPlanProcessing(planId: string) {
 export async function getProjectPlans(projectId: string) {
   const admin = createAdminClient();
 
+  // Select * because file_kind and extracted_layers are added by recent
+  // migrations and may not be reflected in generated types yet.
   const { data } = await admin
     .from("plans")
-    .select("id, file_name, file_size_bytes, page_count, status, created_at")
+    .select("*")
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
 
-  return data ?? [];
+  return (data ?? []) as unknown as Array<{
+    id: string;
+    file_name: string;
+    file_size_bytes: number;
+    page_count: number | null;
+    status: string;
+    created_at: string;
+    file_kind?: string | null;
+    extracted_layers?: {
+      layers?: Array<{ name: string; entityCount: number }>;
+      derived?: {
+        likelyDoorCount: number | null;
+        likelyWindowCount: number | null;
+        likelyRoomCount: number | null;
+      };
+      totalEntities?: number;
+    } | null;
+  }>;
 }
 
 export async function deletePlan(planId: string) {
