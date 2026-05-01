@@ -111,7 +111,7 @@ export function WizardNav({
             ) : (
               <Rocket className="mr-1 h-4 w-4" />
             )}
-            Activate Project
+            Save and Activate
           </Button>
         ) : (
           <Button onClick={handleNext} disabled={pending} size="sm">

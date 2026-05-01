@@ -22,6 +22,15 @@ interface QuestionnaireFormProps {
   siteIntel?: SiteIntelPrefill | null;
 }
 
+const BUILDING_TYPOLOGIES = [
+  "Single residential",
+  "Duplex",
+  "Townhouse",
+  "Apartment",
+  "Hotel",
+  "Mixed use",
+  "Commercial",
+];
 const BUILDING_CLASSES = ["Class 1a", "Class 1b", "Class 10a", "Class 10b"];
 const CONSTRUCTION_TYPES = ["Type A", "Type B", "Type C"];
 const IMPORTANCE_LEVELS = ["1", "2", "3", "4"];
@@ -47,6 +56,22 @@ const HOT_WATER_SYSTEMS = ["Electric storage", "Electric heat pump", "Gas storag
 const VENTILATION_METHODS = ["Openable windows", "Openable windows + ceiling fans", "Mechanical ventilation", "Mixed mode"];
 const HEATING_TYPES = ["Ducted gas", "Ducted reverse cycle", "Split system", "Hydronic", "Wood heater (open flue)", "Wood heater (closed flue)", "Electric panel"];
 
+// Typologies that warrant the Access & Livable Housing step
+const RESIDENTIAL_TYPOLOGIES = new Set([
+  "Single residential",
+  "Duplex",
+  "Townhouse",
+  "Apartment",
+  "Mixed use",
+]);
+// Typologies that can have a party wall (multi-dwelling residential)
+const PARTY_WALL_TYPOLOGIES = new Set([
+  "Duplex",
+  "Townhouse",
+  "Apartment",
+  "Mixed use",
+]);
+
 const STEPS = [
   "Building Classification",
   "Structure & Footings (H1)",
@@ -64,12 +89,14 @@ function SelectField({
   onChange,
   options,
   autoTag,
+  placeholder = "Select if known",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: readonly string[] | readonly number[];
   autoTag?: boolean;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -86,6 +113,7 @@ function SelectField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
+        <option value="">{placeholder}</option>
         {options.map((o) => (
           <option key={String(o)} value={String(o)}>
             {String(o)}
@@ -93,6 +121,55 @@ function SelectField({
         ))}
       </select>
     </div>
+  );
+}
+
+function LockedAutoField({
+  label,
+  value,
+  autoValue,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  autoValue: string | null;
+  options: readonly string[] | readonly number[];
+  onChange: (v: string) => void;
+}) {
+  const isAutoMatch = autoValue !== null && value === autoValue;
+  const [overriding, setOverriding] = useState(false);
+
+  if (isAutoMatch && !overriding) {
+    return (
+      <div>
+        <Label>{label}</Label>
+        <div className="mt-1 flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-medium">{value}</span>
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              From address lookup
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOverriding(true)}
+            className="shrink-0 text-xs text-primary hover:underline"
+          >
+            Override
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <SelectField
+      label={label}
+      value={value}
+      onChange={onChange}
+      options={options}
+    />
   );
 }
 
@@ -104,6 +181,7 @@ function TextField({
   type = "text",
   min,
   max,
+  helper,
 }: {
   label: string;
   value: string;
@@ -112,6 +190,7 @@ function TextField({
   type?: string;
   min?: number;
   max?: number;
+  helper?: string;
 }) {
   return (
     <div>
@@ -124,6 +203,9 @@ function TextField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
+      {helper && (
+        <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
+      )}
     </div>
   );
 }
@@ -132,21 +214,28 @@ function CheckboxField({
   label,
   checked,
   onChange,
+  helper,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  helper?: string;
 }) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer">
-      <input
-        type="checkbox"
-        className="h-4 w-4 rounded border-gray-300"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span className="text-sm">{label}</span>
-    </label>
+    <div>
+      <label className="flex cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-gray-300"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className="text-sm">{label}</span>
+      </label>
+      {helper && (
+        <p className="ml-6 mt-0.5 text-xs text-muted-foreground">{helper}</p>
+      )}
+    </div>
   );
 }
 
@@ -172,41 +261,42 @@ export function QuestionnaireForm({
     !existingResponses && siteIntel?.wind_region ? siteIntel.wind_region : null;
 
   const [responses, setResponses] = useState<Record<string, string>>({
-    building_class: defaults.building_class ?? "Class 1a",
-    construction_type: defaults.construction_type ?? "Type C",
-    importance_level: defaults.importance_level ?? "2",
-    storeys: defaults.storeys ?? "1",
+    building_typology: defaults.building_typology ?? "",
+    building_class: defaults.building_class ?? "",
+    construction_type: defaults.construction_type ?? "",
+    importance_level: defaults.importance_level ?? "",
+    storeys: defaults.storeys ?? "",
     floor_area: defaults.floor_area ?? "",
-    soil_classification: defaults.soil_classification ?? "M",
-    footing_type: defaults.footing_type ?? "Raft slab",
-    framing_material: defaults.framing_material ?? "Timber",
-    wind_classification: defaults.wind_classification ?? autoWind ?? "N2",
-    terrain_category: defaults.terrain_category ?? "TC2.5",
-    roof_material: defaults.roof_material ?? "Metal (Colorbond)",
-    wall_cladding: defaults.wall_cladding ?? "Brick veneer",
-    dpc_type: defaults.dpc_type ?? "Polyethylene membrane",
+    soil_classification: defaults.soil_classification ?? "",
+    footing_type: defaults.footing_type ?? "",
+    framing_material: defaults.framing_material ?? "",
+    wind_classification: defaults.wind_classification ?? autoWind ?? "",
+    terrain_category: defaults.terrain_category ?? "",
+    roof_material: defaults.roof_material ?? "",
+    wall_cladding: defaults.wall_cladding ?? "",
+    dpc_type: defaults.dpc_type ?? "",
     sarking: defaults.sarking ?? "false",
     subfloor_ventilation: defaults.subfloor_ventilation ?? "false",
     distance_to_boundary: defaults.distance_to_boundary ?? "",
     attached_dwelling: defaults.attached_dwelling ?? "false",
-    garage_location: defaults.garage_location ?? "Attached",
-    smoke_alarm_type: defaults.smoke_alarm_type ?? "Photoelectric (hardwired interconnected)",
+    garage_location: defaults.garage_location ?? "",
+    smoke_alarm_type: defaults.smoke_alarm_type ?? "",
     party_wall_frl: defaults.party_wall_frl ?? "",
-    wet_area_count: defaults.wet_area_count ?? "2",
-    ceiling_height_habitable: defaults.ceiling_height_habitable ?? "2.4",
-    ceiling_height_non_habitable: defaults.ceiling_height_non_habitable ?? "2.1",
-    exhaust_fans: defaults.exhaust_fans ?? "true",
-    natural_ventilation_method: defaults.natural_ventilation_method ?? "Openable windows",
-    energy_pathway: defaults.energy_pathway ?? "DTS (Deemed-to-Satisfy)",
+    wet_area_count: defaults.wet_area_count ?? "",
+    ceiling_height_habitable: defaults.ceiling_height_habitable ?? "",
+    ceiling_height_non_habitable: defaults.ceiling_height_non_habitable ?? "",
+    exhaust_fans: defaults.exhaust_fans ?? "false",
+    natural_ventilation_method: defaults.natural_ventilation_method ?? "",
+    energy_pathway: defaults.energy_pathway ?? "",
     insulation_ceiling_r: defaults.insulation_ceiling_r ?? "",
     insulation_wall_r: defaults.insulation_wall_r ?? "",
     insulation_floor_r: defaults.insulation_floor_r ?? "",
-    glazing_type: defaults.glazing_type ?? "Single clear",
-    hot_water_system: defaults.hot_water_system ?? "Electric heat pump",
+    glazing_type: defaults.glazing_type ?? "",
+    hot_water_system: defaults.hot_water_system ?? "",
     has_solar_pv: defaults.has_solar_pv ?? "false",
     nathers_rating: defaults.nathers_rating ?? "",
-    climate_zone: defaults.climate_zone ?? autoClimate ?? "6",
-    bal_rating: defaults.bal_rating ?? autoBal ?? "N/A",
+    climate_zone: defaults.climate_zone ?? autoClimate ?? "",
+    bal_rating: defaults.bal_rating ?? autoBal ?? "",
     site_conditions: defaults.site_conditions ?? "",
     has_swimming_pool: defaults.has_swimming_pool ?? "false",
     has_heating_appliance: defaults.has_heating_appliance ?? "false",
@@ -216,14 +306,27 @@ export function QuestionnaireForm({
     max_fall_height: defaults.max_fall_height ?? "",
     has_step_free_entry: defaults.has_step_free_entry ?? "false",
     accessible_bathroom: defaults.accessible_bathroom ?? "false",
-    min_door_width: defaults.min_door_width ?? "820",
-    min_corridor_width: defaults.min_corridor_width ?? "1000",
+    min_door_width: defaults.min_door_width ?? "",
+    min_corridor_width: defaults.min_corridor_width ?? "",
     services: defaults.services ?? "",
     special_requirements: defaults.special_requirements ?? "",
   });
 
   const update = (key: string, value: string) =>
     setResponses((prev) => ({ ...prev, [key]: value }));
+
+  const typology = responses.building_typology;
+  const showAccessibilityStep = !typology || RESIDENTIAL_TYPOLOGIES.has(typology);
+  const canHavePartyWall = !typology || PARTY_WALL_TYPOLOGIES.has(typology);
+
+  // Step 7 (Access & Livable Housing) is hidden for hotel/commercial typologies.
+  // We collapse the visible step list so navigation skips it cleanly.
+  const visibleSteps = STEPS.map((label, i) => ({ label, originalIndex: i })).filter(
+    (s) => s.originalIndex !== 7 || showAccessibilityStep,
+  );
+  const currentVisibleIdx = visibleSteps.findIndex((s) => s.originalIndex === step);
+  const safeVisibleIdx = currentVisibleIdx === -1 ? 0 : currentVisibleIdx;
+  const isLastVisible = safeVisibleIdx === visibleSteps.length - 1;
 
   const handleSave = async () => {
     setSaving(true);
@@ -239,23 +342,39 @@ export function QuestionnaireForm({
     }
   };
 
+  function goToStep(originalIndex: number) {
+    setStep(originalIndex);
+  }
+
+  function handleNext() {
+    if (isLastVisible) return;
+    const next = visibleSteps[safeVisibleIdx + 1];
+    if (next) goToStep(next.originalIndex);
+  }
+
+  function handlePrev() {
+    if (safeVisibleIdx === 0) return;
+    const prev = visibleSteps[safeVisibleIdx - 1];
+    if (prev) goToStep(prev.originalIndex);
+  }
+
   return (
     <div className="space-y-6">
       {/* Step indicators */}
       <div className="flex gap-1 overflow-x-auto">
-        {STEPS.map((label, i) => (
+        {visibleSteps.map((s, i) => (
           <button
-            key={label}
-            className={`flex-1 min-w-[80px] rounded-md px-2 py-2 text-xs font-medium transition-colors ${
-              i === step
+            key={s.label}
+            className={`min-w-[80px] flex-1 rounded-md px-2 py-2 text-xs font-medium transition-colors ${
+              i === safeVisibleIdx
                 ? "bg-primary text-primary-foreground"
-                : i < step
+                : i < safeVisibleIdx
                 ? "bg-primary/20 text-primary"
                 : "bg-muted text-muted-foreground"
             }`}
-            onClick={() => setStep(i)}
+            onClick={() => goToStep(s.originalIndex)}
           >
-            {label}
+            {s.label}
           </button>
         ))}
       </div>
@@ -267,97 +386,370 @@ export function QuestionnaireForm({
         <CardContent className="space-y-4">
           {step === 0 && (
             <>
-              <SelectField label="Building Classification" value={responses.building_class} onChange={(v) => update("building_class", v)} options={BUILDING_CLASSES} />
-              <SelectField label="Construction Type" value={responses.construction_type} onChange={(v) => update("construction_type", v)} options={CONSTRUCTION_TYPES} />
-              <SelectField label="Importance Level" value={responses.importance_level} onChange={(v) => update("importance_level", v)} options={IMPORTANCE_LEVELS} />
+              <SelectField
+                label="Building Typology"
+                value={responses.building_typology}
+                onChange={(v) => update("building_typology", v)}
+                options={BUILDING_TYPOLOGIES}
+                placeholder="Select if known"
+              />
+              <SelectField
+                label="Building Classification (NCC)"
+                value={responses.building_class}
+                onChange={(v) => update("building_class", v)}
+                options={BUILDING_CLASSES}
+              />
+              <SelectField
+                label="Construction Type"
+                value={responses.construction_type}
+                onChange={(v) => update("construction_type", v)}
+                options={CONSTRUCTION_TYPES}
+              />
+              <SelectField
+                label="Importance Level"
+                value={responses.importance_level}
+                onChange={(v) => update("importance_level", v)}
+                options={IMPORTANCE_LEVELS}
+              />
             </>
           )}
 
           {step === 1 && (
             <>
-              <TextField label="Number of Storeys" type="number" min={1} max={10} value={responses.storeys} onChange={(v) => update("storeys", v)} />
-              <TextField label="Total Floor Area (m²)" type="number" min={1} value={responses.floor_area} onChange={(v) => update("floor_area", v)} />
-              <SelectField label="Soil Classification (AS 2870)" value={responses.soil_classification} onChange={(v) => update("soil_classification", v)} options={SOIL_CLASSIFICATIONS} />
-              <SelectField label="Footing Type" value={responses.footing_type} onChange={(v) => update("footing_type", v)} options={FOOTING_TYPES} />
-              <SelectField label="Framing Material" value={responses.framing_material} onChange={(v) => update("framing_material", v)} options={FRAMING_MATERIALS} />
-              <SelectField label="Wind Classification (AS 4055)" value={responses.wind_classification} onChange={(v) => update("wind_classification", v)} options={WIND_CLASSIFICATIONS} autoTag={!!autoWind && responses.wind_classification === autoWind} />
-              <SelectField label="Terrain Category" value={responses.terrain_category} onChange={(v) => update("terrain_category", v)} options={TERRAIN_CATEGORIES} />
+              <TextField
+                label="Number of Storeys"
+                type="number"
+                min={1}
+                max={10}
+                value={responses.storeys}
+                onChange={(v) => update("storeys", v)}
+              />
+              <TextField
+                label="Total Floor Area (m²)"
+                type="number"
+                min={1}
+                value={responses.floor_area}
+                onChange={(v) => update("floor_area", v)}
+              />
+              <SelectField
+                label="Soil Classification (AS 2870)"
+                value={responses.soil_classification}
+                onChange={(v) => update("soil_classification", v)}
+                options={SOIL_CLASSIFICATIONS}
+                placeholder="To be confirmed"
+              />
+              <SelectField
+                label="Expected Footing Type"
+                value={responses.footing_type}
+                onChange={(v) => update("footing_type", v)}
+                options={FOOTING_TYPES}
+                placeholder="Select if known — MMC product selection may change this"
+              />
+              <SelectField
+                label="Framing Material"
+                value={responses.framing_material}
+                onChange={(v) => update("framing_material", v)}
+                options={FRAMING_MATERIALS}
+              />
+              <LockedAutoField
+                label="Wind Classification (AS 4055)"
+                value={responses.wind_classification}
+                autoValue={autoWind}
+                options={WIND_CLASSIFICATIONS}
+                onChange={(v) => update("wind_classification", v)}
+              />
+              <SelectField
+                label="Terrain Category"
+                value={responses.terrain_category}
+                onChange={(v) => update("terrain_category", v)}
+                options={TERRAIN_CATEGORIES}
+              />
             </>
           )}
 
           {step === 2 && (
             <>
-              <SelectField label="Roof Material" value={responses.roof_material} onChange={(v) => update("roof_material", v)} options={ROOF_MATERIALS} />
-              <SelectField label="Wall Cladding" value={responses.wall_cladding} onChange={(v) => update("wall_cladding", v)} options={WALL_CLADDINGS} />
-              <SelectField label="Damp-Proof Course (DPC)" value={responses.dpc_type} onChange={(v) => update("dpc_type", v)} options={DPC_TYPES} />
-              <CheckboxField label="Roof sarking installed" checked={responses.sarking === "true"} onChange={(v) => update("sarking", String(v))} />
-              <CheckboxField label="Sub-floor ventilation required" checked={responses.subfloor_ventilation === "true"} onChange={(v) => update("subfloor_ventilation", String(v))} />
+              <SelectField
+                label="Roof Material"
+                value={responses.roof_material}
+                onChange={(v) => update("roof_material", v)}
+                options={ROOF_MATERIALS}
+              />
+              <SelectField
+                label="Wall Cladding"
+                value={responses.wall_cladding}
+                onChange={(v) => update("wall_cladding", v)}
+                options={WALL_CLADDINGS}
+              />
+              <SelectField
+                label="Damp-Proof Course / Waterproofing Membrane"
+                value={responses.dpc_type}
+                onChange={(v) => update("dpc_type", v)}
+                options={DPC_TYPES}
+              />
+              <CheckboxField
+                label="Roof sarking installed (optional)"
+                checked={responses.sarking === "true"}
+                onChange={(v) => update("sarking", String(v))}
+              />
+              <CheckboxField
+                label="Sub-floor ventilation (optional)"
+                checked={responses.subfloor_ventilation === "true"}
+                onChange={(v) => update("subfloor_ventilation", String(v))}
+              />
             </>
           )}
 
           {step === 3 && (
             <>
-              <TextField label="Distance to Boundary (m)" type="number" min={0} placeholder="e.g., 1.5" value={responses.distance_to_boundary} onChange={(v) => update("distance_to_boundary", v)} />
-              <CheckboxField label="Attached dwelling (party wall)" checked={responses.attached_dwelling === "true"} onChange={(v) => update("attached_dwelling", String(v))} />
-              <SelectField label="Garage Location" value={responses.garage_location} onChange={(v) => update("garage_location", v)} options={GARAGE_LOCATIONS} />
-              <SelectField label="Smoke Alarm Type" value={responses.smoke_alarm_type} onChange={(v) => update("smoke_alarm_type", v)} options={SMOKE_ALARM_TYPES} />
-              {responses.attached_dwelling === "true" && (
-                <TextField label="Party Wall FRL (e.g., 60/60/60)" placeholder="e.g., 60/60/60" value={responses.party_wall_frl} onChange={(v) => update("party_wall_frl", v)} />
+              <TextField
+                label="Distance to Boundary (m)"
+                type="number"
+                min={0}
+                placeholder="e.g., 1.5"
+                value={responses.distance_to_boundary}
+                onChange={(v) => update("distance_to_boundary", v)}
+              />
+              {canHavePartyWall && (
+                <CheckboxField
+                  label="Attached dwelling (party wall)"
+                  checked={responses.attached_dwelling === "true"}
+                  onChange={(v) => update("attached_dwelling", String(v))}
+                />
+              )}
+              <SelectField
+                label="Garage Location"
+                value={responses.garage_location}
+                onChange={(v) => update("garage_location", v)}
+                options={GARAGE_LOCATIONS}
+              />
+              <SelectField
+                label="Smoke Alarm Type"
+                value={responses.smoke_alarm_type}
+                onChange={(v) => update("smoke_alarm_type", v)}
+                options={SMOKE_ALARM_TYPES}
+              />
+              {canHavePartyWall && responses.attached_dwelling === "true" && (
+                <TextField
+                  label="Party Wall FRL (e.g., 60/60/60)"
+                  placeholder="e.g., 60/60/60"
+                  value={responses.party_wall_frl}
+                  onChange={(v) => update("party_wall_frl", v)}
+                />
               )}
             </>
           )}
 
           {step === 4 && (
             <>
-              <TextField label="Number of Wet Areas" type="number" min={0} value={responses.wet_area_count} onChange={(v) => update("wet_area_count", v)} />
-              <TextField label="Ceiling Height — Habitable Rooms (m)" type="number" min={2.1} max={4} placeholder="2.4" value={responses.ceiling_height_habitable} onChange={(v) => update("ceiling_height_habitable", v)} />
-              <TextField label="Ceiling Height — Non-habitable Rooms (m)" type="number" min={2.1} max={4} placeholder="2.1" value={responses.ceiling_height_non_habitable} onChange={(v) => update("ceiling_height_non_habitable", v)} />
-              <CheckboxField label="Exhaust fans to all wet areas" checked={responses.exhaust_fans === "true"} onChange={(v) => update("exhaust_fans", String(v))} />
-              <SelectField label="Natural Ventilation Method" value={responses.natural_ventilation_method} onChange={(v) => update("natural_ventilation_method", v)} options={VENTILATION_METHODS} />
+              <TextField
+                label="Number of Wet Areas"
+                type="number"
+                min={0}
+                value={responses.wet_area_count}
+                onChange={(v) => update("wet_area_count", v)}
+              />
+              <TextField
+                label="Ceiling Height — Habitable Rooms (m)"
+                type="number"
+                min={2.1}
+                max={4}
+                placeholder="2.4"
+                value={responses.ceiling_height_habitable}
+                onChange={(v) => update("ceiling_height_habitable", v)}
+              />
+              <TextField
+                label="Ceiling Height — Non-habitable Rooms (m)"
+                type="number"
+                min={2.1}
+                max={4}
+                placeholder="2.1"
+                value={responses.ceiling_height_non_habitable}
+                onChange={(v) => update("ceiling_height_non_habitable", v)}
+              />
+              <CheckboxField
+                label="Exhaust fans to all wet areas"
+                checked={responses.exhaust_fans === "true"}
+                onChange={(v) => update("exhaust_fans", String(v))}
+              />
+              <SelectField
+                label="Natural Ventilation Method"
+                value={responses.natural_ventilation_method}
+                onChange={(v) => update("natural_ventilation_method", v)}
+                options={VENTILATION_METHODS}
+              />
             </>
           )}
 
           {step === 5 && (
             <>
-              <SelectField label="Energy Compliance Pathway" value={responses.energy_pathway} onChange={(v) => update("energy_pathway", v)} options={ENERGY_PATHWAYS} />
-              <TextField label="Ceiling Insulation R-value" type="number" min={0} placeholder="e.g., 6.0" value={responses.insulation_ceiling_r} onChange={(v) => update("insulation_ceiling_r", v)} />
-              <TextField label="Wall Insulation R-value" type="number" min={0} placeholder="e.g., 2.5" value={responses.insulation_wall_r} onChange={(v) => update("insulation_wall_r", v)} />
-              <TextField label="Floor Insulation R-value" type="number" min={0} placeholder="e.g., 1.0 (0 if slab on ground)" value={responses.insulation_floor_r} onChange={(v) => update("insulation_floor_r", v)} />
-              <SelectField label="Glazing Type" value={responses.glazing_type} onChange={(v) => update("glazing_type", v)} options={GLAZING_TYPES} />
-              <SelectField label="Hot Water System" value={responses.hot_water_system} onChange={(v) => update("hot_water_system", v)} options={HOT_WATER_SYSTEMS} />
-              <CheckboxField label="Solar PV installed" checked={responses.has_solar_pv === "true"} onChange={(v) => update("has_solar_pv", String(v))} />
+              <SelectField
+                label="Energy Compliance Pathway"
+                value={responses.energy_pathway}
+                onChange={(v) => update("energy_pathway", v)}
+                options={ENERGY_PATHWAYS}
+              />
+              <TextField
+                label="Ceiling Insulation R-value"
+                type="number"
+                min={0}
+                placeholder="e.g., 6.0"
+                value={responses.insulation_ceiling_r}
+                onChange={(v) => update("insulation_ceiling_r", v)}
+              />
+              <TextField
+                label="Wall Insulation R-value"
+                type="number"
+                min={0}
+                placeholder="e.g., 2.5"
+                value={responses.insulation_wall_r}
+                onChange={(v) => update("insulation_wall_r", v)}
+              />
+              <TextField
+                label="Floor Insulation R-value"
+                type="number"
+                min={0}
+                placeholder="e.g., 1.0 (0 if slab on ground)"
+                value={responses.insulation_floor_r}
+                onChange={(v) => update("insulation_floor_r", v)}
+              />
+              <SelectField
+                label="Glazing Type"
+                value={responses.glazing_type}
+                onChange={(v) => update("glazing_type", v)}
+                options={GLAZING_TYPES}
+              />
+              <SelectField
+                label="Hot Water System"
+                value={responses.hot_water_system}
+                onChange={(v) => update("hot_water_system", v)}
+                options={HOT_WATER_SYSTEMS}
+              />
+              <CheckboxField
+                label="Solar PV installed"
+                checked={responses.has_solar_pv === "true"}
+                onChange={(v) => update("has_solar_pv", String(v))}
+              />
               {responses.energy_pathway === "NatHERS" && (
-                <TextField label="NatHERS Star Rating" type="number" min={0} max={10} placeholder="e.g., 7.0" value={responses.nathers_rating} onChange={(v) => update("nathers_rating", v)} />
+                <TextField
+                  label="NatHERS Star Rating"
+                  type="number"
+                  min={0}
+                  max={10}
+                  placeholder="e.g., 7.0"
+                  value={responses.nathers_rating}
+                  onChange={(v) => update("nathers_rating", v)}
+                />
               )}
             </>
           )}
 
           {step === 6 && (
             <>
-              <SelectField label="Climate Zone" value={responses.climate_zone} onChange={(v) => update("climate_zone", v)} options={CLIMATE_ZONES} autoTag={!!autoClimate && responses.climate_zone === autoClimate} />
-              <SelectField label="Bushfire Attack Level (BAL)" value={responses.bal_rating} onChange={(v) => update("bal_rating", v)} options={BAL_RATINGS} autoTag={!!autoBal && responses.bal_rating === autoBal} />
-              <TextField label="Site Conditions" placeholder="e.g., flat site, no flood overlay, corner block" value={responses.site_conditions} onChange={(v) => update("site_conditions", v)} />
-              <CheckboxField label="Swimming pool on site" checked={responses.has_swimming_pool === "true"} onChange={(v) => update("has_swimming_pool", String(v))} />
-              <CheckboxField label="Heating appliance (wood heater, gas fire, etc.)" checked={responses.has_heating_appliance === "true"} onChange={(v) => update("has_heating_appliance", String(v))} />
+              <LockedAutoField
+                label="Climate Zone"
+                value={responses.climate_zone}
+                autoValue={autoClimate}
+                options={CLIMATE_ZONES}
+                onChange={(v) => update("climate_zone", v)}
+              />
+              <LockedAutoField
+                label="Bushfire Attack Level (BAL)"
+                value={responses.bal_rating}
+                autoValue={autoBal}
+                options={BAL_RATINGS}
+                onChange={(v) => update("bal_rating", v)}
+              />
+              <TextField
+                label="Site Conditions"
+                placeholder="e.g., flat site, no flood overlay, corner block"
+                value={responses.site_conditions}
+                onChange={(v) => update("site_conditions", v)}
+                helper="Used to flag flood overlay, slope, and setback constraints during compliance and 3D layout."
+              />
+              <CheckboxField
+                label="Swimming pool on site"
+                checked={responses.has_swimming_pool === "true"}
+                onChange={(v) => update("has_swimming_pool", String(v))}
+              />
+              <CheckboxField
+                label="Heating appliance (wood heater, gas fire, etc.)"
+                checked={responses.has_heating_appliance === "true"}
+                onChange={(v) => update("has_heating_appliance", String(v))}
+              />
               {responses.has_heating_appliance === "true" && (
-                <SelectField label="Heating Type" value={responses.heating_type} onChange={(v) => update("heating_type", v)} options={HEATING_TYPES} />
+                <SelectField
+                  label="Heating Type"
+                  value={responses.heating_type}
+                  onChange={(v) => update("heating_type", v)}
+                  options={HEATING_TYPES}
+                />
               )}
             </>
           )}
 
-          {step === 7 && (
+          {step === 7 && showAccessibilityStep && (
             <>
-              <CheckboxField label="Has stairs" checked={responses.has_stairs === "true"} onChange={(v) => update("has_stairs", String(v))} />
-              <CheckboxField label="Has balcony or deck" checked={responses.has_balcony_deck === "true"} onChange={(v) => update("has_balcony_deck", String(v))} />
+              <CheckboxField
+                label="Has stairs"
+                checked={responses.has_stairs === "true"}
+                onChange={(v) => update("has_stairs", String(v))}
+              />
+              <CheckboxField
+                label="Has balcony or deck"
+                checked={responses.has_balcony_deck === "true"}
+                onChange={(v) => update("has_balcony_deck", String(v))}
+              />
               {responses.has_balcony_deck === "true" && (
-                <TextField label="Maximum Fall Height (m)" type="number" min={0} placeholder="e.g., 1.0" value={responses.max_fall_height} onChange={(v) => update("max_fall_height", v)} />
+                <TextField
+                  label="Maximum Fall Height (m)"
+                  type="number"
+                  min={0}
+                  placeholder="e.g., 1.0"
+                  value={responses.max_fall_height}
+                  onChange={(v) => update("max_fall_height", v)}
+                />
               )}
-              <CheckboxField label="Step-free entry provided" checked={responses.has_step_free_entry === "true"} onChange={(v) => update("has_step_free_entry", String(v))} />
-              <CheckboxField label="Accessible bathroom (Livable Housing)" checked={responses.accessible_bathroom === "true"} onChange={(v) => update("accessible_bathroom", String(v))} />
-              <TextField label="Minimum Door Width (mm)" type="number" min={0} placeholder="820" value={responses.min_door_width} onChange={(v) => update("min_door_width", v)} />
-              <TextField label="Minimum Corridor Width (mm)" type="number" min={0} placeholder="1000" value={responses.min_corridor_width} onChange={(v) => update("min_corridor_width", v)} />
-              <TextField label="Services" placeholder="e.g., smoke alarms, ducted A/C, gas cooktop" value={responses.services} onChange={(v) => update("services", v)} />
-              <TextField label="Special Requirements" placeholder="e.g., accessibility provisions, heritage overlay" value={responses.special_requirements} onChange={(v) => update("special_requirements", v)} />
+              <CheckboxField
+                label="Step-free entry provided"
+                checked={responses.has_step_free_entry === "true"}
+                onChange={(v) => update("has_step_free_entry", String(v))}
+              />
+              <CheckboxField
+                label="Accessible bathroom (Livable Housing)"
+                checked={responses.accessible_bathroom === "true"}
+                onChange={(v) => update("accessible_bathroom", String(v))}
+              />
+              <TextField
+                label="Minimum Door Width (mm)"
+                type="number"
+                min={0}
+                placeholder="820"
+                value={responses.min_door_width}
+                onChange={(v) => update("min_door_width", v)}
+              />
+              <TextField
+                label="Minimum Corridor Width (mm)"
+                type="number"
+                min={0}
+                placeholder="1000"
+                value={responses.min_corridor_width}
+                onChange={(v) => update("min_corridor_width", v)}
+              />
+              <TextField
+                label="Services"
+                placeholder="e.g., smoke alarms, ducted A/C, gas cooktop"
+                value={responses.services}
+                onChange={(v) => update("services", v)}
+                helper="Used to plan service routing in the 3D model and trigger service-specific compliance checks."
+              />
+              <TextField
+                label="Special Requirements"
+                placeholder="e.g., accessibility provisions, heritage overlay"
+                value={responses.special_requirements}
+                onChange={(v) => update("special_requirements", v)}
+                helper="Heritage controls, accessibility upgrades, and other constraints that should shape optimisation outputs."
+              />
             </>
           )}
         </CardContent>
@@ -368,14 +760,14 @@ export function QuestionnaireForm({
       <div className="flex justify-between">
         <Button
           variant="outline"
-          disabled={step === 0}
-          onClick={() => setStep((s) => s - 1)}
+          disabled={safeVisibleIdx === 0}
+          onClick={handlePrev}
         >
           Previous
         </Button>
 
-        {step < STEPS.length - 1 ? (
-          <Button onClick={() => setStep((s) => s + 1)}>Next</Button>
+        {!isLastVisible ? (
+          <Button onClick={handleNext}>Next</Button>
         ) : (
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

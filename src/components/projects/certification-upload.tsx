@@ -426,9 +426,17 @@ export function CertificationUpload({ projectId, existingCerts = [] }: Certifica
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <FileCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{cert.file_name}</p>
-                    <p className="text-xs text-muted-foreground">
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="truncate text-sm font-medium"
+                      title={cert.file_name}
+                    >
+                      {cert.file_name}
+                    </p>
+                    <p
+                      className="truncate text-xs text-muted-foreground"
+                      title={`${certTypeLabel(cert.cert_type)}${cert.issuer_name ? ` — ${cert.issuer_name}` : ""}`}
+                    >
                       {certTypeLabel(cert.cert_type)}
                       {cert.issuer_name && ` — ${cert.issuer_name}`}
                     </p>
