@@ -24,7 +24,8 @@ export type AIFunction =
   | "reranking"
   | "reconciliation"
   | "training_content"
-  | "plan_vision";
+  | "plan_vision"
+  | "cert_metadata";
 
 export type QualityTier = "standard" | "high" | "premium";
 

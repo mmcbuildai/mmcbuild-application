@@ -223,7 +223,7 @@ function CheckboxField({
 }) {
   return (
     <div>
-      <label className="flex cursor-pointer items-center gap-2">
+      <label className="inline-flex w-fit cursor-pointer select-none items-center gap-2">
         <input
           type="checkbox"
           className="h-4 w-4 rounded border-gray-300"

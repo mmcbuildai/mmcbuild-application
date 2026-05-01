@@ -21,6 +21,7 @@ const ROUTING_TABLE: Record<AIFunction, string[]> = {
   reconciliation: ["claude-sonnet-4", "gpt-4o"],
   training_content: ["claude-sonnet-4", "gpt-4o", "claude-haiku-4.5"],
   plan_vision: ["claude-sonnet-4", "gpt-4o"],
+  cert_metadata: ["claude-haiku-4.5", "claude-sonnet-4", "gpt-4o-mini"],
 };
 
 /**
