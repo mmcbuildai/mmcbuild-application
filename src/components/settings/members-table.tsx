@@ -48,11 +48,14 @@ import {
 } from "@/lib/auth/roles";
 import type { UserRole } from "@/lib/supabase/types";
 
+type SeatType = "internal" | "external" | "viewer";
+
 interface Member {
   id: string;
   full_name: string;
   email: string;
   role: string;
+  seat_type: SeatType;
   created_at: string;
 }
 
@@ -60,9 +63,25 @@ interface Invitation {
   id: string;
   email: string;
   role: string;
+  seat_type: SeatType;
+  project_ids: string[] | null;
   status: string;
   expires_at: string;
   created_at: string;
+}
+
+interface SeatUsage {
+  used: number;
+  pendingInvites: number;
+  limit: number;
+  canAddInternal: boolean;
+  tier: string;
+}
+
+interface ProjectForInvite {
+  id: string;
+  name: string;
+  status: string;
 }
 
 interface MembersTableProps {
@@ -70,25 +89,72 @@ interface MembersTableProps {
   currentProfileId: string;
   currentRole: string;
   invitations?: Invitation[];
+  seatUsage?: SeatUsage;
+  projectsForInvite?: ProjectForInvite[];
 }
+
+const SEAT_TYPE_LABEL: Record<SeatType, string> = {
+  internal: "Internal",
+  external: "External",
+  viewer: "Viewer",
+};
+
+const SEAT_TYPE_HELPER: Record<SeatType, string> = {
+  internal: "Full org access. Counts against your seat cap.",
+  external:
+    "Project-scoped uploader and editor. No seat consumed. Choose which projects they can access.",
+  viewer:
+    "Project-scoped read-only access. No seat consumed. Choose which projects they can view.",
+};
 
 export function MembersTable({
   members,
   currentProfileId,
   currentRole,
   invitations = [],
+  seatUsage,
+  projectsForInvite = [],
 }: MembersTableProps) {
   const canManage = canManageMembers(currentRole);
+  const internalMembers = members.filter((m) => m.seat_type === "internal");
+  const projectScoped = members.filter((m) => m.seat_type !== "internal");
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Team Members</CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">{members.length} member{members.length !== 1 ? "s" : ""}</Badge>
-              {canManage && <InviteDialog currentRole={currentRole} />}
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <CardTitle className="text-base">Team Members</CardTitle>
+              {seatUsage && (
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Internal seats:{" "}
+                  <span className="font-medium text-foreground">
+                    {seatUsage.used}
+                    {seatUsage.pendingInvites > 0 &&
+                      ` (+${seatUsage.pendingInvites} pending)`}
+                  </span>
+                  {Number.isFinite(seatUsage.limit) ? (
+                    <> of {seatUsage.limit}</>
+                  ) : (
+                    <> (unlimited)</>
+                  )}{" "}
+                  on the {seatUsage.tier} plan. External and viewer
+                  collaborators don't consume seats.
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Badge variant="secondary">
+                {members.length} member{members.length !== 1 ? "s" : ""}
+              </Badge>
+              {canManage && (
+                <InviteDialog
+                  currentRole={currentRole}
+                  seatUsage={seatUsage}
+                  projectsForInvite={projectsForInvite}
+                />
+              )}
             </div>
           </div>
         </CardHeader>
@@ -99,12 +165,21 @@ export function MembersTable({
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Seat</TableHead>
                 <TableHead>Joined</TableHead>
                 {canManage && <TableHead className="w-[80px]" />}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((member) => (
+              {internalMembers.map((member) => (
+                <MemberRow
+                  key={member.id}
+                  member={member}
+                  isSelf={member.id === currentProfileId}
+                  canManage={canManage}
+                />
+              ))}
+              {projectScoped.map((member) => (
                 <MemberRow
                   key={member.id}
                   member={member}
@@ -131,6 +206,7 @@ export function MembersTable({
                 <TableRow>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Seat</TableHead>
                   <TableHead>Expires</TableHead>
                   <TableHead className="w-[120px]" />
                 </TableRow>
@@ -148,23 +224,38 @@ export function MembersTable({
   );
 }
 
-function InviteDialog({ currentRole }: { currentRole: string }) {
+function InviteDialog({
+  currentRole,
+  seatUsage,
+  projectsForInvite,
+}: {
+  currentRole: string;
+  seatUsage?: SeatUsage;
+  projectsForInvite: ProjectForInvite[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<string>("viewer");
+  const [seatType, setSeatType] = useState<SeatType>("internal");
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit() {
     setError(null);
     startTransition(async () => {
-      const result = await inviteUser(email, role);
+      const result = await inviteUser(email, role, {
+        seatType,
+        projectIds: seatType === "internal" ? [] : selectedProjectIds,
+      });
       if (result.error) {
         setError(result.error);
       } else {
         setEmail("");
         setRole("viewer");
+        setSeatType("internal");
+        setSelectedProjectIds([]);
         setOpen(false);
         router.refresh();
       }
@@ -178,6 +269,22 @@ function InviteDialog({ currentRole }: { currentRole: string }) {
     return actorLevel > (targetLevel[r] ?? 0);
   });
 
+  const internalCapReached =
+    seatUsage !== undefined && !seatUsage.canAddInternal;
+  const projectScoped = seatType === "external" || seatType === "viewer";
+
+  function toggleProject(id: string) {
+    setSelectedProjectIds((curr) =>
+      curr.includes(id) ? curr.filter((p) => p !== id) : [...curr, id],
+    );
+  }
+
+  const submitDisabled =
+    isPending ||
+    !email.trim() ||
+    (seatType === "internal" && internalCapReached) ||
+    (projectScoped && selectedProjectIds.length === 0);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -186,11 +293,12 @@ function InviteDialog({ currentRole }: { currentRole: string }) {
           Invite Member
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Invite Team Member</DialogTitle>
           <DialogDescription>
-            Send an email invitation to join your organisation.
+            Send a magic-link invitation. Internal seats consume your seat cap;
+            external collaborators and viewers don't.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -204,10 +312,44 @@ function InviteDialog({ currentRole }: { currentRole: string }) {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="invite-seat-type">Seat type</Label>
+            <Select
+              value={seatType}
+              onValueChange={(v) => setSeatType(v as SeatType)}
+            >
+              <SelectTrigger id="invite-seat-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="internal">
+                  Internal team — full org access
+                </SelectItem>
+                <SelectItem value="external">
+                  External collaborator — project-scoped uploader
+                </SelectItem>
+                <SelectItem value="viewer">
+                  Viewer — project-scoped read-only
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {SEAT_TYPE_HELPER[seatType]}
+            </p>
+            {seatType === "internal" && internalCapReached && (
+              <p className="text-xs text-destructive">
+                Seat limit reached ({seatUsage?.used ?? 0} +{" "}
+                {seatUsage?.pendingInvites ?? 0} pending of {seatUsage?.limit}).
+                Upgrade your plan or invite as external/viewer instead.
+              </p>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="invite-role">Role</Label>
             <Select value={role} onValueChange={setRole}>
-              <SelectTrigger>
+              <SelectTrigger id="invite-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -219,13 +361,50 @@ function InviteDialog({ currentRole }: { currentRole: string }) {
               </SelectContent>
             </Select>
           </div>
+
+          {projectScoped && (
+            <div className="space-y-2">
+              <Label>Project access</Label>
+              <p className="text-xs text-muted-foreground">
+                Choose which projects this person can access. They will not see
+                any other projects in your organisation.
+              </p>
+              {projectsForInvite.length === 0 ? (
+                <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  No projects yet. Create one before inviting external
+                  collaborators.
+                </p>
+              ) : (
+                <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border p-2">
+                  {projectsForInvite.map((p) => (
+                    <label
+                      key={p.id}
+                      className="flex w-fit cursor-pointer select-none items-center gap-2"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300"
+                        checked={selectedProjectIds.includes(p.id)}
+                        onChange={() => toggleProject(p.id)}
+                      />
+                      <span className="text-sm">{p.name}</span>
+                      <span className="text-xs capitalize text-muted-foreground">
+                        ({p.status})
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending || !email.trim()}>
+          <Button onClick={handleSubmit} disabled={submitDisabled}>
             {isPending ? "Sending..." : "Send Invitation"}
           </Button>
         </DialogFooter>
@@ -305,6 +484,14 @@ function MemberRow({
           </Badge>
         )}
       </TableCell>
+      <TableCell>
+        <Badge
+          variant={member.seat_type === "internal" ? "default" : "outline"}
+          className="text-xs"
+        >
+          {SEAT_TYPE_LABEL[member.seat_type]}
+        </Badge>
+      </TableCell>
       <TableCell className="text-sm text-muted-foreground">
         {new Date(member.created_at).toLocaleDateString("en-AU")}
       </TableCell>
@@ -356,6 +543,19 @@ function InvitationRow({ invitation }: { invitation: Invitation }) {
           className={`text-xs ${ROLE_COLORS[invitation.role as UserRole] ?? ""}`}
         >
           {ROLE_LABELS[invitation.role as UserRole] ?? invitation.role}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <Badge
+          variant={invitation.seat_type === "internal" ? "default" : "outline"}
+          className="text-xs"
+          title={
+            invitation.project_ids && invitation.project_ids.length > 0
+              ? `${invitation.project_ids.length} project(s)`
+              : undefined
+          }
+        >
+          {SEAT_TYPE_LABEL[invitation.seat_type] ?? invitation.seat_type}
         </Badge>
       </TableCell>
       <TableCell className="text-sm text-muted-foreground">

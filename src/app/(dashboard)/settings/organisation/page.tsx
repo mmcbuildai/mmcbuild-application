@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getOrganisation, getMembers, listInvitations } from "./actions";
+import {
+  getOrganisation,
+  getMembers,
+  listInvitations,
+  listOrgProjectsForInvite,
+} from "./actions";
 import { OrgDetailsForm } from "@/components/settings/org-details-form";
 import { MembersTable } from "@/components/settings/members-table";
 
@@ -11,9 +16,14 @@ export default async function OrganisationSettingsPage() {
     redirect("/settings");
   }
 
-  const [{ members, currentProfileId, currentRole }, invitations] = await Promise.all([
+  const [
+    { members, currentProfileId, currentRole, seatUsage },
+    invitations,
+    projectsForInvite,
+  ] = await Promise.all([
     getMembers(),
     listInvitations(),
+    listOrgProjectsForInvite(),
   ]);
 
   return (
@@ -42,6 +52,8 @@ export default async function OrganisationSettingsPage() {
         currentProfileId={currentProfileId}
         currentRole={currentRole}
         invitations={invitations}
+        seatUsage={seatUsage}
+        projectsForInvite={projectsForInvite}
       />
     </div>
   );

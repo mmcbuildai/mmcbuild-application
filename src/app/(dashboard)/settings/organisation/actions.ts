@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { canManageMembers, canAssignRole } from "@/lib/auth/roles";
+import {
+  getOrgSeatUsage,
+  type SeatType,
+} from "@/lib/auth/seats";
+import { getSubscriptionStatus } from "@/lib/stripe/subscription";
 
 async function getProfile() {
   const supabase = await createClient();
@@ -82,15 +87,40 @@ export async function getMembers() {
 
   const { data: members } = await admin
     .from("profiles")
-    .select("id, full_name, email, role, created_at")
+    .select("id, full_name, email, role, seat_type, created_at")
     .eq("org_id", profile.org_id)
     .order("created_at", { ascending: true });
 
+  const subscription = await getSubscriptionStatus(profile.org_id);
+  const seatUsage = await getOrgSeatUsage(profile.org_id, subscription.tier);
+
   return {
-    members: (members ?? []) as { id: string; full_name: string; email: string; role: string; created_at: string }[],
+    members: (members ?? []) as {
+      id: string;
+      full_name: string;
+      email: string;
+      role: string;
+      seat_type: "internal" | "external" | "viewer";
+      created_at: string;
+    }[],
     currentProfileId: profile.id,
     currentRole: profile.role,
+    seatUsage,
   };
+}
+
+export async function listOrgProjectsForInvite() {
+  const profile = await getProfile();
+  if (!canManageMembers(profile.role)) return [];
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("projects")
+    .select("id, name, status")
+    .eq("org_id", profile.org_id)
+    .order("name", { ascending: true });
+
+  return (data ?? []) as { id: string; name: string; status: string }[];
 }
 
 export async function updateMemberRole(memberId: string, role: string) {
@@ -180,8 +210,14 @@ export async function removeMember(memberId: string) {
 // Invitations
 // ============================================================
 
-export async function inviteUser(email: string, role: string) {
+export async function inviteUser(
+  email: string,
+  role: string,
+  options: { seatType?: SeatType; projectIds?: string[] } = {},
+) {
   const profile = await getProfile();
+  const seatType: SeatType = options.seatType ?? "internal";
+  const projectIds = options.projectIds ?? [];
 
   if (!canManageMembers(profile.role)) {
     return { error: "Only owners and admins can invite members" };
@@ -195,7 +231,41 @@ export async function inviteUser(email: string, role: string) {
     return { error: "You cannot invite someone with a role equal to or above your own" };
   }
 
+  // External and viewer invites must be scoped to at least one project.
+  // Internal invites must NOT carry a project list — they get full org access.
+  if (seatType === "internal" && projectIds.length > 0) {
+    return { error: "Internal team members already have access to all projects" };
+  }
+  if ((seatType === "external" || seatType === "viewer") && projectIds.length === 0) {
+    return { error: "External and viewer invites must specify at least one project" };
+  }
+
+  // Enforce seat cap for internal invites only.
+  if (seatType === "internal") {
+    const subscription = await getSubscriptionStatus(profile.org_id);
+    const usage = await getOrgSeatUsage(profile.org_id, subscription.tier);
+    if (!usage.canAddInternal) {
+      return {
+        error: `Seat limit reached (${usage.used + usage.pendingInvites} / ${usage.limit}). Upgrade your plan or invite external/viewer collaborators instead.`,
+      };
+    }
+  }
+
   const admin = createAdminClient();
+
+  // Verify the requested project_ids belong to this org
+  if (projectIds.length > 0) {
+    const { data: projectRows } = await admin
+      .from("projects")
+      .select("id")
+      .eq("org_id", profile.org_id)
+      .in("id", projectIds);
+    const validIds = new Set((projectRows ?? []).map((p) => p.id));
+    const invalid = projectIds.filter((id) => !validIds.has(id));
+    if (invalid.length > 0) {
+      return { error: "One or more projects do not belong to your organisation" };
+    }
+  }
 
   // Check no existing member with this email in the org
   const { data: existingMember } = await admin
@@ -229,6 +299,8 @@ export async function inviteUser(email: string, role: string) {
       org_id: profile.org_id,
       email: email.trim().toLowerCase(),
       role,
+      seat_type: seatType,
+      project_ids: projectIds,
       invited_by: profile.id,
     } as never);
 
@@ -236,7 +308,7 @@ export async function inviteUser(email: string, role: string) {
     return { error: `Failed to create invitation: ${insertError.message}` };
   }
 
-  // Send Supabase auth invite email
+  // Send Supabase auth invite email — magic link
   try {
     await admin.auth.admin.inviteUserByEmail(email.trim().toLowerCase());
   } catch {
@@ -257,7 +329,7 @@ export async function listInvitations() {
   const admin = createAdminClient();
   const { data } = await admin
     .from("org_invitations")
-    .select("id, email, role, status, expires_at, created_at")
+    .select("id, email, role, seat_type, project_ids, status, expires_at, created_at")
     .eq("org_id", profile.org_id)
     .eq("status", "pending")
     .order("created_at", { ascending: false });
@@ -266,6 +338,8 @@ export async function listInvitations() {
     id: string;
     email: string;
     role: string;
+    seat_type: "internal" | "external" | "viewer";
+    project_ids: string[] | null;
     status: string;
     expires_at: string;
     created_at: string;

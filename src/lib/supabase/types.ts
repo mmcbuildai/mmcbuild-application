@@ -1788,7 +1788,9 @@ export type Database = {
           id: string
           invited_by: string
           org_id: string
+          project_ids: string[] | null
           role: Database["public"]["Enums"]["user_role"]
+          seat_type: Database["public"]["Enums"]["seat_type"]
           status: Database["public"]["Enums"]["invitation_status"]
           token: string
         }
@@ -1800,7 +1802,9 @@ export type Database = {
           id?: string
           invited_by: string
           org_id: string
+          project_ids?: string[] | null
           role?: Database["public"]["Enums"]["user_role"]
+          seat_type?: Database["public"]["Enums"]["seat_type"]
           status?: Database["public"]["Enums"]["invitation_status"]
           token?: string
         }
@@ -1812,7 +1816,9 @@ export type Database = {
           id?: string
           invited_by?: string
           org_id?: string
+          project_ids?: string[] | null
           role?: Database["public"]["Enums"]["user_role"]
+          seat_type?: Database["public"]["Enums"]["seat_type"]
           status?: Database["public"]["Enums"]["invitation_status"]
           token?: string
         }
@@ -2167,6 +2173,7 @@ export type Database = {
           org_id: string
           persona: Database["public"]["Enums"]["user_persona"] | null
           role: Database["public"]["Enums"]["user_role"]
+          seat_type: Database["public"]["Enums"]["seat_type"]
           updated_at: string
           user_id: string
         }
@@ -2178,6 +2185,7 @@ export type Database = {
           org_id: string
           persona?: Database["public"]["Enums"]["user_persona"] | null
           role?: Database["public"]["Enums"]["user_role"]
+          seat_type?: Database["public"]["Enums"]["seat_type"]
           updated_at?: string
           user_id: string
         }
@@ -2189,6 +2197,7 @@ export type Database = {
           org_id?: string
           persona?: Database["public"]["Enums"]["user_persona"] | null
           role?: Database["public"]["Enums"]["user_role"]
+          seat_type?: Database["public"]["Enums"]["seat_type"]
           updated_at?: string
           user_id?: string
         }
@@ -2466,6 +2475,65 @@ export type Database = {
             foreignKeyName: "project_site_intel_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_user_access: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          id: string
+          org_id: string
+          profile_id: string
+          project_id: string
+          role: Database["public"]["Enums"]["seat_type"]
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          org_id: string
+          profile_id: string
+          project_id: string
+          role: Database["public"]["Enums"]["seat_type"]
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          org_id?: string
+          profile_id?: string
+          project_id?: string
+          role?: Database["public"]["Enums"]["seat_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_user_access_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_user_access_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_user_access_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_user_access_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
@@ -3379,6 +3447,7 @@ export type Database = {
         | "disputed"
       review_status: "pending" | "approved" | "rejected"
       risk_level: "low" | "medium" | "high" | "critical"
+      seat_type: "internal" | "external" | "viewer"
       trade_type:
         | "builder"
         | "architect"
@@ -3622,6 +3691,7 @@ export const Constants = {
       ],
       review_status: ["pending", "approved", "rejected"],
       risk_level: ["low", "medium", "high", "critical"],
+      seat_type: ["internal", "external", "viewer"],
       trade_type: [
         "builder",
         "architect",

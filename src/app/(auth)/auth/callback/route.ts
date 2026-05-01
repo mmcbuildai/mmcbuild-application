@@ -30,7 +30,7 @@ export async function GET(request: Request) {
         // Check for a pending org invitation
         const { data: invite } = await admin
           .from("org_invitations")
-          .select("id, org_id, role")
+          .select("id, org_id, role, seat_type, project_ids")
           .eq("email", userEmail)
           .eq("status", "pending")
           .order("created_at", { ascending: false })
@@ -38,17 +38,45 @@ export async function GET(request: Request) {
           .single();
 
         if (invite) {
-          const inv = invite as { id: string; org_id: string; role: string };
+          const inv = invite as {
+            id: string;
+            org_id: string;
+            role: string;
+            seat_type?: "internal" | "external" | "viewer" | null;
+            project_ids?: string[] | null;
+          };
+          const seatType = inv.seat_type ?? "internal";
 
-          // Create profile in the inviter's org with pre-assigned role
-          await admin.from("profiles").insert({
-            org_id: inv.org_id,
-            user_id: data.user.id,
-            role: inv.role as "owner" | "admin" | "project_manager" | "architect" | "builder" | "trade" | "viewer",
-            full_name: fullName,
-            email: userEmail,
-            persona: "builder",
-          });
+          // Create profile in the inviter's org with the assigned role + seat type
+          const { data: createdProfile } = await admin
+            .from("profiles")
+            .insert({
+              org_id: inv.org_id,
+              user_id: data.user.id,
+              role: inv.role as "owner" | "admin" | "project_manager" | "architect" | "builder" | "trade" | "viewer",
+              seat_type: seatType,
+              full_name: fullName,
+              email: userEmail,
+            })
+            .select("id")
+            .single();
+
+          // For external / viewer invites, grant project-scoped access rows
+          if (
+            createdProfile &&
+            (seatType === "external" || seatType === "viewer") &&
+            inv.project_ids &&
+            inv.project_ids.length > 0
+          ) {
+            const profileId = (createdProfile as { id: string }).id;
+            const accessRows = inv.project_ids.map((projectId) => ({
+              project_id: projectId,
+              profile_id: profileId,
+              org_id: inv.org_id,
+              role: seatType,
+            }));
+            await admin.from("project_user_access").insert(accessRows as never);
+          }
 
           // Mark invitation as accepted
           await admin
@@ -75,7 +103,6 @@ export async function GET(request: Request) {
               role: "owner",
               full_name: fullName,
               email: userEmail,
-              persona: "builder",
             });
           }
         }
