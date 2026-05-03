@@ -13,6 +13,7 @@ import { ShieldCheck, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ModuleHero } from "@/components/shared/module-hero";
 import { ComplyPreviewCard } from "@/components/comply/comply-preview-card";
+import { ExplainerVideo } from "@/components/shared/explainer-video";
 
 export default async function ComplyPage() {
   const supabase = await createClient();
@@ -39,6 +40,26 @@ export default async function ComplyPage() {
         description="AI-powered NCC compliance checking for Australian residential construction. Upload plans, answer a few questions, and get instant analysis."
         showDemoButton
         previewCard={<ComplyPreviewCard />}
+      />
+
+      <ExplainerVideo
+        module="comply"
+        title="What MMC means for your design's NCC compliance"
+        description="MMC stands for Modern Methods of Construction. Each MMC type — prefab, panelised, modular, hybrid — runs through its own NCC compliance pathway and certification trail. MMC Comply checks your drawing set against the right pathway before you submit, so a DA or CC doesn't get knocked back over the wrong evidence."
+        bullets={[
+          {
+            heading: "Pathway selection",
+            body: "Volumetric and panelised builds use different DTS and verification methods. Picking the right pathway during design means no certifier objections at lodgement.",
+          },
+          {
+            heading: "Certification trail",
+            body: "Factory-built elements need certificates from the factory and the site assembler. Comply maps the cert chain back to your specifications so you know what to call up on the drawings.",
+          },
+          {
+            heading: "Why it matters",
+            body: "Designers carry compliance risk through to documentation. Catching mismatches at design stage is cheap; redrawing after a CC reject is not.",
+          },
+        ]}
       />
 
       <div className="space-y-6">

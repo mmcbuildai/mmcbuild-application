@@ -11,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Wrench, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { ModuleHero } from "@/components/shared/module-hero";
+import { ExplainerVideo } from "@/components/shared/explainer-video";
 
 export default async function BuildPage() {
   const supabase = await createClient();
@@ -26,16 +26,40 @@ export default async function BuildPage() {
   }
 
   return (
-    <div>
-      <ModuleHero
+    <div className="space-y-6">
+      <div className="flex items-start gap-3 rounded-md border bg-muted/30 px-4 py-3">
+        <div className="rounded-md bg-teal-500/10 p-2 text-teal-600 dark:text-teal-400">
+          <Wrench className="h-5 w-5" />
+        </div>
+        <div className="space-y-0.5">
+          <h1 className="text-base font-semibold leading-tight">MMC Build</h1>
+          <p className="text-sm text-muted-foreground">
+            Select an active project to analyse its plans. MMC Build reviews
+            your design and flags opportunities to use prefabrication, SIP
+            panels, CLT, or modular components — with estimated cost and time
+            impact for each.
+          </p>
+        </div>
+      </div>
+
+      <ExplainerVideo
         module="build"
-        heading={
-          <>
-            Build{" "}
-            <span className="text-teal-400">Smarter</span>, Not Harder
-          </>
-        }
-        description="AI-powered design optimisation for prefabrication, SIP panels, CLT, and modular construction opportunities."
+        title="Designing with MMC instead of retrofitting it"
+        description="MMC = Modern Methods of Construction. Once your drawing set is locked, swapping in factory-built elements means redrawing — wall thicknesses, span tables, service routing all shift. MMC Build analyses your concept or schematic plans and tells you which methods would actually pay back on this project, while you can still change them."
+        bullets={[
+          {
+            heading: "Prefab & Volumetric",
+            body: "Whole rooms or pods built in a factory, craned in. Designs around repeatable bays, tight site access, or fast programmes lend themselves here.",
+          },
+          {
+            heading: "SIP & CLT Panels",
+            body: "Structural panels for walls, floors, roof. SIPs deliver insulation; CLT delivers structure plus carbon credentials — designers use them for clear spans and Passivhaus pathways.",
+          },
+          {
+            heading: "Hybrid",
+            body: "Mix MMC with traditional trades — the most common real-world answer. Build flags which elements pay back and which to leave conventional, so you draw once.",
+          },
+        ]}
       />
 
       <div className="space-y-6">
@@ -69,7 +93,7 @@ export default async function BuildPage() {
                             variant="outline"
                             className="border-amber-500 text-amber-600"
                           >
-                            Setup required
+                            Not activated
                           </Badge>
                         ) : (
                           <Badge variant="secondary" className="capitalize">
@@ -82,6 +106,12 @@ export default async function BuildPage() {
                           )}
                         </p>
                       </div>
+                      {isDraft && (
+                        <p className="mt-3 text-xs text-amber-700 dark:text-amber-500">
+                          Go to Projects and activate the project before
+                          running a Build analysis.
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 </Link>
