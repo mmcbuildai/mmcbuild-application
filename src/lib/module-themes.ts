@@ -5,6 +5,7 @@ import {
   Users,
   GraduationCap,
   CreditCard,
+  FolderOpen,
 } from "lucide-react";
 
 export const moduleThemes = {
@@ -65,6 +66,16 @@ export const moduleThemes = {
     heroGradient:
       "bg-gradient-to-br from-[#022C22] via-emerald-800 to-emerald-600",
     badgeLabel: "Billing",
+  },
+  projects: {
+    label: "Projects",
+    icon: FolderOpen,
+    accent: "text-sky-400",
+    accentBg: "bg-sky-400",
+    accentHover: "hover:bg-sky-500",
+    heroGradient:
+      "bg-gradient-to-br from-[#0C1E33] via-sky-800 to-sky-600",
+    badgeLabel: "Projects",
   },
 } as const;
 

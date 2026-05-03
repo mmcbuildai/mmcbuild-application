@@ -12,6 +12,7 @@ import { FolderOpen } from "lucide-react";
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog";
 import { CopyProjectButton } from "@/components/projects/copy-project-button";
 import { TestingGuide } from "@/components/dashboard/testing-guide";
+import { ExplainerVideo } from "@/components/shared/explainer-video";
 
 const showTestingGuide = process.env.NEXT_PUBLIC_TESTING_MODE === "true";
 
@@ -42,6 +43,27 @@ export default async function ProjectsPage({
         </div>
         <CreateProjectDialog defaultOpen={autoCreate} />
       </div>
+
+      <ExplainerVideo
+        module="projects"
+        videoUrl="/videos/projects-explainer.mp4"
+        title="One project, every module — set up once, reuse everywhere"
+        description="Projects is the foundation of MMC Build. Address, design intent, and drawings are captured once and shared across Comply, Build, and Quote — no re-entering data, no version drift."
+        bullets={[
+          {
+            heading: "Auto-derived intelligence",
+            body: "Drop in the address; we auto-derive climate zone, wind region, and council from public data — no manual lookups.",
+          },
+          {
+            heading: "Multi-format plans",
+            body: "PDF, DWG, DXF, SketchUp and Revit exports all accepted. Plans are read once and reused by every module.",
+          },
+          {
+            heading: "Activate to analyse",
+            body: "Walk through the short questionnaire, then activate. After that every module on the sidebar can run on this project.",
+          },
+        ]}
+      />
 
       {projects && projects.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

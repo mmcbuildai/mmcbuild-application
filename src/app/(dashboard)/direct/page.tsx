@@ -1,4 +1,5 @@
 import { ModuleHero } from "@/components/shared/module-hero";
+import { ExplainerVideo } from "@/components/shared/explainer-video";
 import { ProfessionalCard } from "@/components/direct/professional-card";
 import { DirectorySearch } from "@/components/direct/directory-search";
 import { DirectoryPagination } from "@/components/direct/directory-pagination";
@@ -96,6 +97,27 @@ export default async function DirectPage({
             <DirectPreviewCard />
           </Suspense>
         }
+      />
+
+      <ExplainerVideo
+        module="direct"
+        videoUrl="/videos/direct-explainer.mp4"
+        title="Australia's verified MMC supplier directory"
+        description="Find prefab, panelised, modular, and 3D concrete printing suppliers — searchable by state, capability, and certification — with compliance documents you can call up directly on your drawings."
+        bullets={[
+          {
+            heading: "Verified credentials",
+            body: "Each supplier's CodeMark, NCC, and product datasheets are uploaded by the supplier and verified by us. Specify with confidence.",
+          },
+          {
+            heading: "Capability filtering",
+            body: "Filter by state, MMC category, project size, and lead time. Surface only suppliers who can deliver what your design needs.",
+          },
+          {
+            heading: "Quote without leaving",
+            body: "When a supplier matches a Build suggestion, request a quote inside MMC Quote — no platform-hopping, no chasing emails.",
+          },
+        ]}
       />
 
       <div className="space-y-6">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ModuleHero } from "@/components/shared/module-hero";
+import { ExplainerVideo } from "@/components/shared/explainer-video";
 import { Button } from "@/components/ui/button";
 import { CourseSearch } from "@/components/train/course-search";
 import { CourseCard } from "@/components/train/course-card";
@@ -104,7 +105,28 @@ export default async function TrainPage({
         previewCard={<TrainPreviewCard />}
       />
 
-      <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto">
+      <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto space-y-6">
+        <ExplainerVideo
+          module="train"
+          videoUrl="/videos/train-explainer.mp4"
+          title="Short-form upskilling on Modern Methods of Construction"
+          description="Role-targeted modules — designers learn assembly detailing and span tables, certifiers learn pathway differences, builders learn site setup and crane logistics. Each module ~15-20 minutes, with worked examples from real Australian projects."
+          bullets={[
+            {
+              heading: "Pick your role",
+              body: "Designers, certifiers, and builders see the modules that actually matter for what they do — not a generic curriculum.",
+            },
+            {
+              heading: "Worked examples",
+              body: "Real Australian project case studies, not theory. Span tables, FSR impacts, crane logistics, certifier objections — what to expect, how to handle.",
+            },
+            {
+              heading: "Certificates",
+              body: "Pass the quiz, get a certificate to list on your professional profile. Track progress in your Learning Dashboard.",
+            },
+          ]}
+        />
+
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold">Course Catalog</h2>
           <div className="flex gap-2">
