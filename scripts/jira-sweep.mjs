@@ -11,15 +11,21 @@
  *                multiple deliverables in the description).
  *   - TO_DO    — no commits reference the key, no observable work yet.
  *   - UNCLEAR  — mixed or ambiguous signal; surfaced for the user to decide.
+ *   - NEEDS_NUDGE — assigned to a non-Dennis owner, the last sweep comment
+ *                is older than NUDGE_DAYS, and the owner hasn't replied.
  *
  * Modes:
  *   (default)        Dry run: print the triage report and exit. Makes no Jira
  *                    writes. Use this to review before --apply.
  *   --apply          Apply the unambiguous transitions (DONE / IN_PROGRESS),
- *                    posting an explanatory comment on each. Never touches
+ *                    posting an explanatory comment on each. Also posts a
+ *                    polite nudge on each NEEDS_NUDGE ticket. Never touches
  *                    UNCLEAR tickets — those are always printed for the user
  *                    to handle manually.
  *   --json           Emit the raw triage as JSON (useful for piping/scripts).
+ *   --nudge-days N   Override the nudge threshold (default 7).
+ *   --no-nudge       Skip the needs-nudge scan (faster — avoids per-ticket
+ *                    comment fetches).
  *
  * Skip rules (never auto-touched, even with --apply):
  *   - Issuetype Epic, Subtask
@@ -53,9 +59,30 @@ const AUTH = Buffer.from(`${EMAIL}:${TOKEN}`).toString("base64");
 
 const APPLY = process.argv.includes("--apply");
 const AS_JSON = process.argv.includes("--json");
+const NO_NUDGE = process.argv.includes("--no-nudge");
+const NUDGE_DAYS = (() => {
+  const i = process.argv.indexOf("--nudge-days");
+  if (i >= 0 && process.argv[i + 1]) {
+    const n = parseInt(process.argv[i + 1], 10);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return 7;
+})();
 
 // Owners that are "us" — only these tickets are eligible for auto-transition.
 const ME_NAMES = new Set(["Dennis McMahon", "unassigned"]);
+
+// Account that posts sweep comments. Used to detect prior sweep activity.
+const SWEEP_AUTHOR_EMAIL = (process.env.JIRA_EMAIL || "").toLowerCase();
+
+// Comments matching this regex are considered prior sweep comments.
+// Includes legacy wording ("ticket sweep", "jira-sweep") and the marker
+// added below.
+const SWEEP_COMMENT_RE = /jira-sweep|ticket sweep|\[sweep:v1\]/i;
+
+// Marker appended to every comment we author so future sweeps can recognise
+// them unambiguously even if the surrounding wording changes.
+const SWEEP_MARKER = "[sweep:v1]";
 
 // Heuristics for partial work in a commit message
 const PARTIAL_RE = /\b(wip|partial|in[-\s]?progress|first cut|stub|scaffold|todo)\b/i;
@@ -129,6 +156,52 @@ async function fetchOpenTickets() {
 async function fetchTransitions(key) {
   const r = await get(`/rest/api/3/issue/${key}/transitions`);
   return r.body?.transitions || [];
+}
+
+async function fetchComments(key) {
+  const r = await get(`/rest/api/3/issue/${key}/comment?orderBy=-created&maxResults=50`);
+  return r.body?.comments || [];
+}
+
+function commentText(c) {
+  return (c.body?.content || [])
+    .map((p) => (p.content || []).map((s) => s.text || "").join(" "))
+    .join(" ");
+}
+
+function isSweepComment(c) {
+  // Either the canonical marker, or recognised legacy wording.
+  return SWEEP_COMMENT_RE.test(commentText(c));
+}
+
+function isOwnerReply(c, ownerAccountId) {
+  return c.author?.accountId === ownerAccountId;
+}
+
+// Returns { lastSweepAt: Date|null, ownerRepliedAfter: boolean }
+function analyseConversation(comments, ownerAccountId) {
+  let lastSweepAt = null;
+  for (const c of comments) {
+    if (isSweepComment(c)) {
+      lastSweepAt = new Date(c.created);
+      break; // comments come newest-first
+    }
+  }
+  if (!lastSweepAt) return { lastSweepAt: null, ownerRepliedAfter: false };
+
+  let ownerRepliedAfter = false;
+  for (const c of comments) {
+    if (new Date(c.created) <= lastSweepAt) break;
+    if (isOwnerReply(c, ownerAccountId)) {
+      ownerRepliedAfter = true;
+      break;
+    }
+  }
+  return { lastSweepAt, ownerRepliedAfter };
+}
+
+function daysSince(date) {
+  return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function findTransition(transitions, targetName) {
@@ -234,12 +307,48 @@ async function main() {
       currentStatus: rec.status,
       issuetype: i.fields?.issuetype?.name || "",
       assignee: i.fields?.assignee?.displayName || "unassigned",
+      assigneeId: i.fields?.assignee?.accountId || null,
       bucket: rec.bucket,
       reason: rec.reason,
       linkedCommits: rec.linked.map((c) => `${c.sha} (${c.date}) ${c.subject}`),
       unclear: isUnclear(rec),
+      // Filled in by the nudge scan below
+      nudgeReason: null,
+      lastSweepAt: null,
     };
   });
+
+  // ---- Needs-nudge scan -----------------------------------------------------
+  // Fetch comments only for tickets assigned to non-Dennis owners. Each
+  // comment fetch is one HTTP call, so we cap concurrency to keep things
+  // responsive on long backlogs.
+  if (!NO_NUDGE) {
+    const candidates = triage.filter(
+      (t) =>
+        t.assigneeId &&
+        !ME_NAMES.has(t.assignee) &&
+        t.bucket !== "DONE" // anything we'd auto-close shouldn't be nudged
+    );
+
+    const CONCURRENCY = 6;
+    let cursor = 0;
+    async function worker() {
+      while (cursor < candidates.length) {
+        const t = candidates[cursor++];
+        const comments = await fetchComments(t.key);
+        const conv = analyseConversation(comments, t.assigneeId);
+        if (!conv.lastSweepAt) continue;
+        const age = daysSince(conv.lastSweepAt);
+        if (age >= NUDGE_DAYS && !conv.ownerRepliedAfter) {
+          t.nudgeReason = `last sweep comment ${age}d ago, no reply from ${t.assignee}`;
+          t.lastSweepAt = conv.lastSweepAt.toISOString().slice(0, 10);
+          // Move into NEEDS_NUDGE bucket regardless of original classification.
+          t.bucket = "NEEDS_NUDGE";
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  }
 
   if (AS_JSON) {
     console.log(JSON.stringify(triage, null, 2));
@@ -247,20 +356,22 @@ async function main() {
   }
 
   // ---- Print report ---------------------------------------------------------
-  const buckets = { DONE: [], IN_PROGRESS: [], TO_DO: [], UNCLEAR: [], SKIP: [] };
+  const buckets = { DONE: [], IN_PROGRESS: [], TO_DO: [], UNCLEAR: [], NEEDS_NUDGE: [], SKIP: [] };
   for (const t of triage) {
     if (t.unclear) buckets.UNCLEAR.push(t);
     else buckets[t.bucket].push(t);
   }
 
-  console.log(`Sweep of project ${PROJECT}: ${issues.length} open tickets, ${commits.length} recent commits scanned\n`);
+  console.log(`Sweep of project ${PROJECT}: ${issues.length} open tickets, ${commits.length} recent commits scanned${NO_NUDGE ? " (nudge scan skipped)" : `, nudge threshold ${NUDGE_DAYS}d`}\n`);
 
   function printBucket(name, items) {
     if (!items.length) return;
     console.log(`\n=== ${name} (${items.length}) ===`);
     for (const t of items) {
-      console.log(`  ${t.key.padEnd(11)} [${t.currentStatus.padEnd(11)}] ${t.summary.slice(0, 75)}`);
-      if (t.bucket !== "TO_DO" && t.bucket !== "SKIP") {
+      console.log(`  ${t.key.padEnd(11)} [${t.currentStatus.padEnd(11)}] (${t.assignee.padEnd(15)}) ${t.summary.slice(0, 60)}`);
+      if (t.bucket === "NEEDS_NUDGE") {
+        console.log(`              → ${t.nudgeReason}`);
+      } else if (t.bucket !== "TO_DO" && t.bucket !== "SKIP") {
         console.log(`              → ${t.reason}`);
         for (const c of t.linkedCommits.slice(0, 3)) {
           console.log(`                ${c.slice(0, 100)}`);
@@ -273,15 +384,16 @@ async function main() {
 
   printBucket("DONE — recommend transition to Done", buckets.DONE);
   printBucket("IN PROGRESS — recommend transition to In Progress", buckets.IN_PROGRESS);
+  printBucket(`NEEDS NUDGE — owner silent for ≥${NUDGE_DAYS}d after sweep comment`, buckets.NEEDS_NUDGE);
   printBucket("UNCLEAR — please define status", buckets.UNCLEAR);
   printBucket("TO DO — no observable work, leaving as-is", buckets.TO_DO);
   printBucket("SKIP — not eligible for auto-transition", buckets.SKIP);
 
   console.log("\n---");
-  console.log(`Summary: DONE=${buckets.DONE.length} IN_PROGRESS=${buckets.IN_PROGRESS.length} UNCLEAR=${buckets.UNCLEAR.length} TO_DO=${buckets.TO_DO.length} SKIP=${buckets.SKIP.length}`);
+  console.log(`Summary: DONE=${buckets.DONE.length} IN_PROGRESS=${buckets.IN_PROGRESS.length} NEEDS_NUDGE=${buckets.NEEDS_NUDGE.length} UNCLEAR=${buckets.UNCLEAR.length} TO_DO=${buckets.TO_DO.length} SKIP=${buckets.SKIP.length}`);
 
   if (!APPLY) {
-    console.log("\nDry run. Re-run with --apply to transition the DONE and IN_PROGRESS tickets (UNCLEAR are always left alone).");
+    console.log("\nDry run. Re-run with --apply to transition DONE/IN_PROGRESS and post nudges on NEEDS_NUDGE (UNCLEAR are always left alone).");
     return;
   }
 
@@ -320,7 +432,7 @@ async function main() {
       continue;
     }
 
-    const commentBody = `Auto-update by jira-sweep on ${new Date().toISOString().slice(0, 10)}.\n\nTransitioned from ${t.currentStatus} → ${t.target}.\n\nReason: ${t.reason}\n\nLinked commits:\n${t.linkedCommits.slice(0, 5).join("\n")}\n\nIf this is wrong, revert the status and add a "do-not-sweep" label so future runs skip this ticket.`;
+    const commentBody = `${SWEEP_MARKER} Auto-update by jira-sweep on ${new Date().toISOString().slice(0, 10)}.\n\nTransitioned from ${t.currentStatus} → ${t.target}.\n\nReason: ${t.reason}\n\nLinked commits:\n${t.linkedCommits.slice(0, 5).join("\n")}\n\nIf this is wrong, revert the status and add a "do-not-sweep" label so future runs skip this ticket.`;
     await req("POST", `/rest/api/3/issue/${t.key}/comment`, { body: adfDoc(commentBody) });
 
     console.log(`  ✓ ${t.key}: ${t.currentStatus} → ${t.target}`);
@@ -328,6 +440,24 @@ async function main() {
   }
 
   console.log(`\nApplied: ${ok}  Skipped: ${skip}  Failed: ${fail}`);
+
+  // ---- Nudges ---------------------------------------------------------------
+  if (buckets.NEEDS_NUDGE.length) {
+    console.log(`\nPosting ${buckets.NEEDS_NUDGE.length} nudge comment(s)...`);
+    let nok = 0, nfail = 0;
+    for (const t of buckets.NEEDS_NUDGE) {
+      const body = `${SWEEP_MARKER} Nudge from jira-sweep on ${new Date().toISOString().slice(0, 10)}.\n\n${t.assignee} — the previous sweep comment (${t.lastSweepAt}) hasn't had a reply from you. ${t.nudgeReason}.\n\nQuick reply please:\n  - "still required" → I'll factor into Sprint 6 planning\n  - "delete" → I'll close this ticket\n  - "subsumed by SCRUM-NN" → I'll close as duplicate of that ticket\n\nIf you've actioned this elsewhere, just drop a one-liner so the next sweep stops nudging you. Add the "do-not-sweep" label to opt this ticket out permanently.`;
+      const c = await req("POST", `/rest/api/3/issue/${t.key}/comment`, { body: adfDoc(body) });
+      if (c.status >= 400) {
+        console.log(`  ✗ ${t.key} nudge failed (${c.status})`);
+        nfail++;
+      } else {
+        console.log(`  ✓ ${t.key} nudged ${t.assignee}`);
+        nok++;
+      }
+    }
+    console.log(`Nudges sent: ${nok}  Failed: ${nfail}`);
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
