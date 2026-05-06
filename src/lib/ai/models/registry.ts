@@ -25,7 +25,8 @@ export type AIFunction =
   | "reconciliation"
   | "training_content"
   | "plan_vision"
-  | "cert_metadata";
+  | "cert_metadata"
+  | "assistant";
 
 export type QualityTier = "standard" | "high" | "premium";
 

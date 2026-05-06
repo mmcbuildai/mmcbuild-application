@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { ChatWidget } from "@/components/shared/chat-widget";
 
 export default async function DashboardLayout({
   children,
@@ -51,17 +50,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <>
-      <DashboardShell
-        tier={tier}
-        runCount={runCount}
-        fullName={profile?.full_name ?? null}
-        role={profile?.role ?? null}
-        orgName={orgName}
-      >
-        {children}
-      </DashboardShell>
-      <ChatWidget />
-    </>
+    <DashboardShell
+      tier={tier}
+      runCount={runCount}
+      fullName={profile?.full_name ?? null}
+      role={profile?.role ?? null}
+      orgName={orgName}
+    >
+      {children}
+    </DashboardShell>
   );
 }

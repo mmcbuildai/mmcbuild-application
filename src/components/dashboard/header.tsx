@@ -3,6 +3,7 @@
 import { Menu, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { HelpButton } from "@/components/ai-assistant/help-button";
 
 export type DashboardHeaderProps = {
   isSidebarOpen: boolean;
@@ -46,6 +47,7 @@ export function DashboardHeader({
         <p className="text-sm text-muted-foreground">{orgName}</p>
       </div>
       <div className="flex items-center gap-3">
+        <HelpButton />
         <div className="text-right">
           <p className="text-sm font-medium">{fullName ?? "User"}</p>
           <p className="text-xs capitalize text-muted-foreground">
