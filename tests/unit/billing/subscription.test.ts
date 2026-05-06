@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock the db module
 const mockFrom = vi.fn();
 const mockRpc = vi.fn();
 vi.mock("@/lib/supabase/db", () => ({
@@ -10,30 +9,33 @@ vi.mock("@/lib/supabase/db", () => ({
   }),
 }));
 
-// Import after mocks are set up
 import { getSubscriptionStatus, checkAndIncrementUsage } from "@/lib/stripe/subscription";
 
-function mockQuery(data: unknown, error: unknown = null) {
-  return {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    in: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data, error }),
+// Supabase query builders are thenable: `await client.from(...).select(...).eq(...).order(...)`
+// resolves to `{ data, error }`. The mock chain mirrors that — every chain method returns
+// `chain`, the whole chain resolves on await, and `.single()` resolves to the same payload.
+function mockChain(data: unknown, error: unknown = null) {
+  const result = { data, error };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chain: any = {
+    select: vi.fn(() => chain),
+    eq: vi.fn(() => chain),
+    in: vi.fn(() => chain),
+    order: vi.fn(() => chain),
+    limit: vi.fn(() => chain),
+    single: vi.fn().mockResolvedValue(result),
+    then: (onFulfilled: (value: typeof result) => unknown) => Promise.resolve(result).then(onFulfilled),
   };
+  return chain;
 }
 
-// TODO(SCRUM-122): mocks target @/lib/supabase/db but the subscription
-// module was refactored to use @/lib/supabase/admin (createAdminClient) and
-// now reads different fields on the organisations row. Rewrite mocks.
-describe.skip("getSubscriptionStatus", () => {
+describe("getSubscriptionStatus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("returns active subscription status for paid user", async () => {
-    const mockSub = {
+    const sub = {
       plan_id: "professional",
       status: "active",
       usage_count: 15,
@@ -41,7 +43,7 @@ describe.skip("getSubscriptionStatus", () => {
       cancel_at_period_end: false,
     };
 
-    mockFrom.mockReturnValue(mockQuery(mockSub));
+    mockFrom.mockReturnValue(mockChain([sub]));
 
     const status = await getSubscriptionStatus("org-1");
 
@@ -53,7 +55,7 @@ describe.skip("getSubscriptionStatus", () => {
   });
 
   it("returns canRunCheck=false when at usage limit", async () => {
-    const mockSub = {
+    const sub = {
       plan_id: "basic",
       status: "active",
       usage_count: 10,
@@ -61,7 +63,7 @@ describe.skip("getSubscriptionStatus", () => {
       cancel_at_period_end: false,
     };
 
-    mockFrom.mockReturnValue(mockQuery(mockSub));
+    mockFrom.mockReturnValue(mockChain([sub]));
 
     const status = await getSubscriptionStatus("org-1");
 
@@ -71,7 +73,7 @@ describe.skip("getSubscriptionStatus", () => {
   });
 
   it("returns canRunCheck=false for past_due subscription", async () => {
-    const mockSub = {
+    const sub = {
       plan_id: "professional",
       status: "past_due",
       usage_count: 5,
@@ -79,7 +81,7 @@ describe.skip("getSubscriptionStatus", () => {
       cancel_at_period_end: false,
     };
 
-    mockFrom.mockReturnValue(mockQuery(mockSub));
+    mockFrom.mockReturnValue(mockChain([sub]));
 
     const status = await getSubscriptionStatus("org-1");
 
@@ -88,18 +90,14 @@ describe.skip("getSubscriptionStatus", () => {
   });
 
   it("returns trial status for org with no subscription", async () => {
-    // First call: subscriptions query returns null
-    const subQuery = mockQuery(null);
-    // Second call: organisations query returns trial data
-    const orgQuery = mockQuery({
+    const subsQuery = mockChain([]); // no active subs
+    const orgQuery = mockChain({
       trial_started_at: new Date().toISOString(),
       trial_ends_at: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
       trial_usage_count: 1,
     });
 
-    mockFrom
-      .mockReturnValueOnce(subQuery)
-      .mockReturnValueOnce(orgQuery);
+    mockFrom.mockReturnValueOnce(subsQuery).mockReturnValueOnce(orgQuery);
 
     const status = await getSubscriptionStatus("org-1");
 
@@ -111,16 +109,14 @@ describe.skip("getSubscriptionStatus", () => {
   });
 
   it("returns expired when trial runs exhausted", async () => {
-    const subQuery = mockQuery(null);
-    const orgQuery = mockQuery({
+    const subsQuery = mockChain([]);
+    const orgQuery = mockChain({
       trial_started_at: new Date().toISOString(),
       trial_ends_at: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
       trial_usage_count: 3,
     });
 
-    mockFrom
-      .mockReturnValueOnce(subQuery)
-      .mockReturnValueOnce(orgQuery);
+    mockFrom.mockReturnValueOnce(subsQuery).mockReturnValueOnce(orgQuery);
 
     const status = await getSubscriptionStatus("org-1");
 
@@ -129,16 +125,14 @@ describe.skip("getSubscriptionStatus", () => {
   });
 
   it("returns expired when trial period has elapsed", async () => {
-    const subQuery = mockQuery(null);
-    const orgQuery = mockQuery({
+    const subsQuery = mockChain([]);
+    const orgQuery = mockChain({
       trial_started_at: new Date(Date.now() - 70 * 24 * 60 * 60 * 1000).toISOString(),
       trial_ends_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
       trial_usage_count: 1,
     });
 
-    mockFrom
-      .mockReturnValueOnce(subQuery)
-      .mockReturnValueOnce(orgQuery);
+    mockFrom.mockReturnValueOnce(subsQuery).mockReturnValueOnce(orgQuery);
 
     const status = await getSubscriptionStatus("org-1");
 
@@ -147,13 +141,13 @@ describe.skip("getSubscriptionStatus", () => {
   });
 });
 
-describe.skip("checkAndIncrementUsage", () => {
+describe("checkAndIncrementUsage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("blocks when usage limit reached", async () => {
-    const mockSub = {
+    const sub = {
       plan_id: "basic",
       status: "active",
       usage_count: 10,
@@ -161,7 +155,7 @@ describe.skip("checkAndIncrementUsage", () => {
       cancel_at_period_end: false,
     };
 
-    mockFrom.mockReturnValue(mockQuery(mockSub));
+    mockFrom.mockReturnValue(mockChain([sub]));
 
     const result = await checkAndIncrementUsage("org-1");
 
@@ -170,7 +164,7 @@ describe.skip("checkAndIncrementUsage", () => {
   });
 
   it("allows and increments when under limit", async () => {
-    const mockSub = {
+    const sub = {
       plan_id: "professional",
       status: "active",
       usage_count: 5,
@@ -178,7 +172,7 @@ describe.skip("checkAndIncrementUsage", () => {
       cancel_at_period_end: false,
     };
 
-    mockFrom.mockReturnValue(mockQuery(mockSub));
+    mockFrom.mockReturnValue(mockChain([sub]));
     mockRpc.mockResolvedValue({ data: 6 });
 
     const result = await checkAndIncrementUsage("org-1");
