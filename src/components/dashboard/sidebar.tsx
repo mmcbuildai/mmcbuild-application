@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -71,9 +72,14 @@ export function Sidebar({ isOpen, tier, runCount }: SidebarProps) {
       {/* Logo */}
       <div className="flex h-16 shrink-0 items-center px-5">
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600 font-bold text-sm text-white">
-            M
-          </div>
+          <Image
+            src="/mmcbuildlogo.png"
+            alt="MMC Build"
+            width={32}
+            height={32}
+            className="h-8 w-8 rounded-lg"
+            priority
+          />
           <span className="text-lg font-bold text-white whitespace-nowrap">MMC Build</span>
         </Link>
       </div>

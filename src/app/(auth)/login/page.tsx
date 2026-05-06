@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { signIn, signInWithMagicLink } from "../actions";
@@ -38,6 +39,16 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
+        <div className="flex justify-center mb-3">
+          <Image
+            src="/mmcbuildlogo.png"
+            alt="MMC Build"
+            width={64}
+            height={64}
+            className="h-16 w-16 rounded-lg"
+            priority
+          />
+        </div>
         <CardTitle className="text-2xl font-bold">MMC Build</CardTitle>
         <CardDescription>
           AI-Powered Compliance & Construction Intelligence
