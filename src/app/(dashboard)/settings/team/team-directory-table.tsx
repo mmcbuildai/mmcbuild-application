@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -232,10 +233,10 @@ function EditDirectoryEntryForm({
     <>
       <DialogHeader>
         <DialogTitle>Edit {entry.contact_name}</DialogTitle>
-        <p className="text-sm text-muted-foreground">
+        <DialogDescription>
           Updating these fields will propagate to {entry.project_count}{" "}
           project(s).
-        </p>
+        </DialogDescription>
       </DialogHeader>
       <div className="space-y-3">
         <div>
