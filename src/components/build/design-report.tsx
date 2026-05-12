@@ -1,6 +1,7 @@
 import { SuggestionCard } from "./suggestion-card";
 import { getTechnologyLabel } from "@/lib/ai/types";
 import { ReportExportButton } from "@/components/shared/report-export-button";
+import { DaeDownloadButton } from "./dae-download-button";
 import { ReportLegend } from "./report-legend";
 import { DecisionSummary } from "./decision-summary";
 import type { SuggestionDecision } from "@/app/(dashboard)/build/actions";
@@ -26,6 +27,7 @@ interface DesignReportProps {
     id: string;
     summary: string | null;
     completed_at: string | null;
+    spatial_layout?: unknown;
   };
   suggestions: Suggestion[];
 }
@@ -35,7 +37,12 @@ export function DesignReport({ check, suggestions }: DesignReportProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-3">
+        <DaeDownloadButton
+          checkId={check.id}
+          fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.dae`}
+          available={Boolean(check.spatial_layout)}
+        />
         <ReportExportButton
           url={`/api/build/report/${check.id}`}
           fallbackFilename={`mmc-build-report-${check.id.slice(0, 8)}.pdf`}

@@ -1,0 +1,83 @@
+import { createClient } from "@/lib/supabase/server";
+import { db } from "@/lib/supabase/db";
+import { buildDaeFromLayout, type DaeSuggestion } from "@/lib/build/dae-exporter";
+import type { SpatialLayout } from "@/lib/build/spatial/types";
+import { NextResponse } from "next/server";
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ checkId: string }> },
+) {
+  const { checkId } = await params;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const admin = db();
+
+  const { data: check, error: checkError } = await admin
+    .from("design_checks")
+    .select("id, status, project_id, spatial_layout")
+    .eq("id", checkId)
+    .single();
+
+  if (checkError || !check) {
+    return NextResponse.json({ error: "Report not found" }, { status: 404 });
+  }
+
+  const rec = check as {
+    id: string;
+    status: string;
+    project_id: string;
+    spatial_layout: SpatialLayout | null;
+  };
+
+  if (rec.status !== "completed") {
+    return NextResponse.json({ error: "Report not yet completed" }, { status: 400 });
+  }
+  if (!rec.spatial_layout) {
+    return NextResponse.json(
+      {
+        error:
+          "No 3D layout available for this report. Re-run optimisation on a plan whose floor plan page is detectable.",
+      },
+      { status: 409 },
+    );
+  }
+
+  const { data: project } = await admin
+    .from("projects")
+    .select("name")
+    .eq("id", rec.project_id)
+    .single();
+
+  const { data: suggestions } = await admin
+    .from("design_suggestions")
+    .select("id, technology_category, suggested_alternative, affected_wall_ids, affected_room_ids, decision")
+    .eq("check_id", checkId);
+
+  const dae = buildDaeFromLayout({
+    layout: rec.spatial_layout,
+    suggestions: ((suggestions ?? []) as unknown as DaeSuggestion[]),
+    projectName: (project as { name?: string } | null)?.name ?? "Untitled Project",
+    reportId: rec.id,
+  });
+
+  const projectSlug = ((project as { name?: string } | null)?.name ?? "project")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+$/, "");
+
+  return new NextResponse(dae, {
+    headers: {
+      "Content-Type": "model/vnd.collada+xml",
+      "Content-Disposition": `attachment; filename="mmc-build-${projectSlug}-${checkId.slice(0, 8)}.dae"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
