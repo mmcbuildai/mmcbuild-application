@@ -30,9 +30,9 @@ const moduleNav: {
   icon: typeof FileCheck;
   color: string;
 }[] = [
-  { name: "MMC Comply", href: "/comply", icon: FileCheck, color: "bg-teal-700" },
   { name: "MMC Build", href: "/build", icon: Building2, color: "bg-teal-600" },
   { name: "MMC Quote", href: "/quote", icon: FileText, color: "bg-teal-500" },
+  { name: "MMC Comply", href: "/comply", icon: FileCheck, color: "bg-teal-700" },
   { name: "MMC Direct", href: "/direct", icon: Truck, color: "bg-cyan-700" },
   { name: "MMC Train", href: "/train", icon: GraduationCap, color: "bg-sky-700" },
 ];
