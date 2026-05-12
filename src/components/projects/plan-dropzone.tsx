@@ -29,7 +29,7 @@ export function PlanDropzone({ projectId }: PlanDropzoneProps) {
       const kind = detectPlanKind(file.name, file.type);
       if (!kind) {
         setError(
-          "Unsupported file type. Use PDF, JPG, PNG, WebP, or DWG.",
+          "Unsupported file type. Use PDF, JPG, PNG, WebP, DWG, RVT, SKP, or DOC/DOCX.",
         );
         return;
       }
@@ -166,7 +166,7 @@ export function PlanDropzone({ projectId }: PlanDropzoneProps) {
               Drag and drop your building plan here
             </p>
             <p className="mb-3 text-xs text-muted-foreground">
-              or click to browse — PDF, JPG, PNG, WebP, or DWG (max 50MB)
+              or click to browse — PDF, JPG, PNG, WebP, DWG, RVT, SKP, DOC, DOCX (max 50MB)
             </p>
             <Button variant="outline" size="sm" asChild>
               <label className="cursor-pointer">
@@ -180,7 +180,8 @@ export function PlanDropzone({ projectId }: PlanDropzoneProps) {
               </label>
             </Button>
             <p className="mt-3 text-[11px] text-muted-foreground">
-              DWG files are converted to DXF automatically — layers and entities are preserved for analysis.
+              DWG files are converted to DXF (layers preserved). RVT, SKP, and Word files are
+              converted to PDF server-side before analysis — conversion can take a few minutes.
             </p>
           </>
         )}

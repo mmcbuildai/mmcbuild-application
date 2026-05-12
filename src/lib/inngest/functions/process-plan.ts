@@ -1,6 +1,11 @@
 import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestPlan, ingestPlanFromText } from "@/lib/comply/ingestion";
+import {
+  cloudConvertInputFormat,
+  requiresPdfConversion,
+  type PlanFileKind,
+} from "@/lib/plans/file-kind";
 
 export const processPlan = inngest.createFunction(
   {
@@ -52,7 +57,7 @@ export const processPlan = inngest.createFunction(
         org_id: string;
         file_path: string;
         file_name: string;
-        file_kind?: "pdf" | "image" | "dwg" | null;
+        file_kind?: PlanFileKind | null;
       };
 
       if (eventPlanId) {
@@ -115,7 +120,7 @@ export const processPlan = inngest.createFunction(
 
       const arrayBuffer = await data.arrayBuffer();
       const sourceBuffer: Buffer = Buffer.from(arrayBuffer);
-      const kind: "pdf" | "image" | "dwg" = plan.file_kind ?? "pdf";
+      const kind: PlanFileKind = plan.file_kind ?? "pdf";
 
       if (kind === "dwg") {
         const { convertDwg } = await import("@/lib/plans/dwg-converter");
@@ -152,6 +157,38 @@ export const processPlan = inngest.createFunction(
 
         // DXF parse failed — keep the file but flag it.
         return { pageCount: 0, chunkCount: 0, manualReview: true };
+      }
+
+      // RVT / SKP / DOC / DOCX → convert to PDF via CloudConvert, then run
+      // the standard PDF ingestion path. Conversion failures fall back to
+      // manual_review with the original file still in storage.
+      if (requiresPdfConversion(kind)) {
+        const inputFormat = cloudConvertInputFormat(kind, plan.file_name);
+        if (!inputFormat) {
+          return { pageCount: 0, chunkCount: 0, manualReview: true };
+        }
+        const { convertViaCloudConvert } = await import(
+          "@/lib/plans/dwg-converter"
+        );
+        const conv = await convertViaCloudConvert(
+          sourceBuffer,
+          plan.file_name,
+          inputFormat,
+          "pdf",
+        );
+        if ("error" in conv) {
+          console.warn(
+            `[processPlan] ${kind} conversion failed for ${plan.id}: ${conv.error}. Falling back to manual_review.`,
+          );
+          return { pageCount: 0, chunkCount: 0, manualReview: true };
+        }
+        return await ingestPlan(
+          plan.org_id,
+          plan.id,
+          conv.buffer,
+          "pdf",
+          plan.file_name,
+        );
       }
 
       return await ingestPlan(plan.org_id, plan.id, sourceBuffer, kind, plan.file_name);

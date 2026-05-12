@@ -473,7 +473,7 @@ export async function registerPlan(
   fileName: string,
   filePath: string,
   fileSizeBytes: number,
-  fileKind: "pdf" | "image" | "dwg" = "pdf"
+  fileKind: "pdf" | "image" | "dwg" | "rvt" | "skp" | "doc" = "pdf"
 ) {
   const supabase = await createClient();
   const {

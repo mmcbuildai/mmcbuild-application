@@ -23,6 +23,10 @@ export type DwgConvertResult =
   | { buffer: Buffer; format: "pdf" | "dxf" }
   | { error: string };
 
+export type CloudConvertResult =
+  | { buffer: Buffer; format: string }
+  | { error: string };
+
 interface CCTaskResultForm {
   url: string;
   parameters: Record<string, string>;
@@ -46,11 +50,35 @@ export async function convertDwg(
   fileName: string,
   outputFormat: "pdf" | "dxf" = "dxf",
 ): Promise<DwgConvertResult> {
+  const result = await convertViaCloudConvert(
+    dwgBuffer,
+    fileName,
+    "dwg",
+    outputFormat,
+    "application/acad",
+  );
+  if ("error" in result) return result;
+  return { buffer: result.buffer, format: outputFormat };
+}
+
+/**
+ * Run a CloudConvert job for any supported input format (rvt, skp, doc, docx,
+ * etc) and return the converted buffer. PDF is the typical target for
+ * non-DWG sources because the downstream ingestion pipeline (parsePdf →
+ * chunk → embed) already handles PDFs natively.
+ */
+export async function convertViaCloudConvert(
+  sourceBuffer: Buffer,
+  fileName: string,
+  inputFormat: string,
+  outputFormat: string,
+  uploadMimeType: string = "application/octet-stream",
+): Promise<CloudConvertResult> {
   const apiKey = process.env.CLOUDCONVERT_API_KEY;
   if (!apiKey) {
     return { error: "CLOUDCONVERT_API_KEY not configured" };
   }
-  if (dwgBuffer.length > MAX_DWG_BYTES) {
+  if (sourceBuffer.length > MAX_DWG_BYTES) {
     return { error: `File exceeds ${MAX_DWG_BYTES / 1024 / 1024}MB limit` };
   }
 
@@ -67,7 +95,7 @@ export async function convertDwg(
         "convert-file": {
           operation: "convert",
           input: "import-file",
-          input_format: "dwg",
+          input_format: inputFormat,
           output_format: outputFormat,
         },
         "export-file": {
@@ -92,14 +120,14 @@ export async function convertDwg(
     return { error: "CloudConvert did not return an upload URL" };
   }
 
-  // 2. Upload the DWG via the signed multipart form
+  // 2. Upload the source file via the signed multipart form
   const form = new FormData();
   for (const [key, value] of Object.entries(uploadForm.parameters)) {
     form.append(key, value);
   }
   form.append(
     "file",
-    new Blob([new Uint8Array(dwgBuffer)], { type: "application/acad" }),
+    new Blob([new Uint8Array(sourceBuffer)], { type: uploadMimeType }),
     fileName,
   );
 
@@ -110,7 +138,7 @@ export async function convertDwg(
 
   if (!uploadResp.ok) {
     const text = await uploadResp.text().catch(() => "");
-    return { error: `DWG upload to CloudConvert failed: ${uploadResp.status} ${text.slice(0, 200)}` };
+    return { error: `Upload to CloudConvert failed: ${uploadResp.status} ${text.slice(0, 200)}` };
   }
 
   // 3. Poll the job status until conversion finishes (or fails / times out)
