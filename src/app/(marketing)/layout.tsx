@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import Chatbot from "@/components/marketing/chatbot";
 
 export default function MarketingLayout({
   children,
@@ -101,6 +102,7 @@ export default function MarketingLayout({
           </div>
         </div>
       </footer>
+      <Chatbot />
     </div>
   );
 }
