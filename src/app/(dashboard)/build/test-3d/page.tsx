@@ -17,54 +17,33 @@ export default function Test3DPage() {
         </p>
       </div>
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
-        <p className="font-medium text-amber-900">
-          Roadmap: native .rvt / .skp upload — under review, not built yet
-        </p>
-        <p className="mt-2 text-amber-900">
-          This harness accepts <strong>PDF, PNG, JPG only</strong>. Native
-          upload of Revit (.rvt) and SketchUp (.skp) is on the roadmap but
-          deliberately deferred:
-        </p>
-        <ul className="mt-2 space-y-1.5 text-amber-900 list-disc pl-5">
+      <div className="rounded-lg border bg-white px-4 py-3 text-sm">
+        <p className="font-medium">Supported file types</p>
+        <ul className="mt-2 space-y-1.5 text-zinc-700 list-disc pl-5">
           <li>
-            The spatial extractor is Claude Vision — it reads pixels, not
-            CAD binaries. PDF works because we render the PDF page to PNG
-            before extraction.
+            <strong>PDF</strong> &mdash; rendered to PNG via{" "}
+            <code>pdf-to-img</code>, then extracted via Claude Vision.
           </li>
           <li>
-            <code>.rvt</code> is a proprietary Autodesk binary. Server-side
-            parsing requires Autodesk Platform Services (APS) — paid,
-            multi-week integration with per-upload cost.
+            <strong>PNG, JPG</strong> &mdash; direct to Vision.
           </li>
           <li>
-            <code>.skp</code> is a proprietary Trimble binary. No
-            production-grade Node.js parser exists. Would require
-            Trimble&apos;s C++/Ruby SDK or a custom render pipeline.
+            <strong>RVT, SKP, DOC, DOCX, DWG</strong> &mdash; converted to PDF
+            via CloudConvert (~$0.01&ndash;0.02 per file, ~30s&ndash;3 min
+            depending on size), then same path as PDF. This matches the
+            production pipeline; the harness is not a separate code path.
+          </li>
+          <li>
+            <strong>WebP</strong> &mdash; not currently supported (extractor
+            media-type mismatch). Convert to PNG/JPG first.
           </li>
         </ul>
-        <p className="mt-2 text-amber-900">
-          Decision pending the MCP spike (
-          <code>docs/spike-revit-sketchup-mcp.md</code>, SCRUM-48). Two
-          architectural options under review:
-        </p>
-        <ol className="mt-2 space-y-1.5 text-amber-900 list-decimal pl-5">
-          <li>
-            <strong>MCP / desktop-bridge path</strong> — the user&apos;s CAD
-            app reads the file locally; an MCP server sends structured data
-            (not the file) to our pipeline. No upload required, preserves
-            REGULATED-tier auth/billing boundary.
-          </li>
-          <li>
-            <strong>Cloud-render path</strong> — server-side APS renders
-            .rvt to images; we extract from those images. Higher capability
-            ceiling, but adds Autodesk dependency and per-upload cost.
-          </li>
-        </ol>
-        <p className="mt-3 text-amber-900">
-          <strong>Workaround for now:</strong> export to PDF from your CAD
-          app (Revit: File &rarr; Export &rarr; PDF; SketchUp: File &rarr;
-          Export &rarr; 2D Graphic &rarr; PDF) and upload the PDF.
+        <p className="mt-3 text-xs text-zinc-500">
+          Uploads go to Supabase Storage first (bucket{" "}
+          <code>plan-uploads</code>, path{" "}
+          <code>&lt;org_id&gt;/test-3d/&hellip;</code>), then the Server Action
+          downloads from storage. This bypasses the Vercel function 4.5&nbsp;MB
+          request-body limit. Hard cap: 50&nbsp;MB to match production.
         </p>
       </div>
 
