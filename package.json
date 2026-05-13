@@ -20,6 +20,7 @@
     "@caistech/property-services-sdk": "^0.3.0",
     "@hookform/resolvers": "^5.2.2",
     "@huggingface/inference": "^4.13.14",
+    "@napi-rs/canvas": "^0.1.97",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@stripe/stripe-js": "^9.0.0",
