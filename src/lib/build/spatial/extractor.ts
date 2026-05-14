@@ -12,6 +12,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { extractJson } from "@/lib/ai/extract-json";
 import type { SpatialLayout } from "./types";
 
 const SPATIAL_EXTRACTION_PROMPT = `You are an architectural plan analyser. Extract all spatial elements from this floor plan image as structured JSON.
@@ -137,6 +138,12 @@ export async function extractFloorPlanFromPdf(
   try {
     const anthropic = getClient();
 
+    // Assistant prefill `{` forces Claude to continue the response as JSON
+    // rather than starting with conversational preamble like "Looking at...".
+    // The prefill is NOT echoed in response.content — we prepend it manually
+    // before parsing.
+    const PREFILL = "{";
+
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 8192,
@@ -155,9 +162,15 @@ export async function extractFloorPlanFromPdf(
             },
             {
               type: "text",
-              text: userText,
+              text:
+                userText +
+                "\n\nRespond with ONLY the JSON object — no preamble, no explanation, no markdown fences. Start with { and end with }.",
             },
           ],
+        },
+        {
+          role: "assistant",
+          content: PREFILL,
         },
       ],
     });
@@ -172,12 +185,9 @@ export async function extractFloorPlanFromPdf(
       };
     }
 
-    let jsonStr = textBlock.text.trim();
-    if (jsonStr.startsWith("```")) {
-      jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-    }
+    const fullText = PREFILL + textBlock.text;
 
-    const parsed = JSON.parse(jsonStr) as {
+    type PdfExtractionShape = {
       detectedPage: number | null;
       totalPages: number | null;
       rooms: SpatialLayout["rooms"];
@@ -189,6 +199,22 @@ export async function extractFloorPlanFromPdf(
       confidence: number;
       notes?: string;
     };
+
+    let parsed: PdfExtractionShape;
+    try {
+      parsed = extractJson<PdfExtractionShape>(fullText);
+    } catch (parseErr) {
+      console.error(
+        "[extractFloorPlanFromPdf] JSON parse failed. Response preview:",
+        fullText.slice(0, 500),
+      );
+      return {
+        layout: null,
+        detectedPage: null,
+        totalPages: null,
+        error: `Model returned non-JSON response: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
+      };
+    }
 
     if (parsed.detectedPage == null || !parsed.rooms || !parsed.walls) {
       return {
