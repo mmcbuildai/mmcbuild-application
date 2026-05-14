@@ -177,10 +177,10 @@ export async function extractFloorPlanFromPdf(
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 16000,
+      max_tokens: 10000,
       thinking: {
         type: "enabled",
-        budget_tokens: 8000,
+        budget_tokens: 4000,
       },
       system: PDF_NATIVE_EXTRACTION_PROMPT + contextBlock,
       messages: [
@@ -528,9 +528,15 @@ export type ScheduleExtraction = {
 };
 
 /**
- * Generic per-page extractor — sends the full PDF with a page hint and a
- * task-specific system prompt. Uses extended thinking on the same model
- * as the floor-plan extractor.
+ * Generic per-page extractor — sends a single-page PDF and a task-specific
+ * system prompt. Returns parsed JSON or null on failure.
+ *
+ * Note: extended thinking is intentionally OFF here. The orchestrator now
+ * passes a single-page PDF (not the full set), so the task is tightly
+ * scoped and a straightforward response is fast enough to stay inside
+ * Vercel's edge connection-close window (~60-100s). The classifier and the
+ * floor-plan extractor still use thinking — those are higher-stakes and
+ * inherently slower regardless.
  */
 async function extractPagePartial<T>(
   pdfBase64: string,
@@ -540,9 +546,11 @@ async function extractPagePartial<T>(
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 12000,
-      thinking: { type: "enabled", budget_tokens: 5000 },
+      // Haiku 4.5 — much faster than Sonnet, sufficient for the narrow
+      // single-page extraction tasks (elevation roof form, section
+      // storeys, schedule materials).
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4000,
       system: systemPrompt,
       messages: [
         {
@@ -558,7 +566,7 @@ async function extractPagePartial<T>(
             },
             {
               type: "text",
-              text: `Focus on page ${pageNumber} of this PDF. Return ONLY the JSON object — no preamble, no markdown fences.`,
+              text: `This PDF contains the architectural page to analyse (originally page ${pageNumber} of the source set). Return ONLY the JSON object — no preamble, no markdown fences.`,
             },
           ],
         },
