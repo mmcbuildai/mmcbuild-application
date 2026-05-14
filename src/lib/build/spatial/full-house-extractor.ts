@@ -30,6 +30,16 @@ import {
 import type { SpatialLayout, RoofForm } from "./types";
 
 /**
+ * Cap the classifier at the first N pages of the source PDF. Floor plans,
+ * elevations, sections, and schedules live near the front of any
+ * architectural set; pages beyond ~15 are typically construction details
+ * which the per-type extractors don't use. Without this cap the classifier
+ * spends ~30-40s on a 35-page set, blowing the Vercel edge connection
+ * close window.
+ */
+const CLASSIFIER_PAGE_CAP = 15;
+
+/**
  * Extract a single page from a multi-page PDF and return it as its own
  * base64-encoded PDF document. Used so per-page extractors only carry
  * the page they need (typically 200-500 KB vs 9-12 MB for the full set).
@@ -46,6 +56,27 @@ async function singlePagePdfBase64(
   const out = await PDFDocument.create();
   const [copied] = await out.copyPages(sourceDoc, [pageNumber - 1]);
   out.addPage(copied);
+  const bytes = await out.save();
+  return Buffer.from(bytes).toString("base64");
+}
+
+/**
+ * Build a base64-encoded PDF containing only the first `count` pages of
+ * the source. Returns the original base64 if the source already has
+ * <= count pages.
+ */
+async function firstNPagesPdfBase64(
+  sourceDoc: PDFDocument,
+  originalBase64: string,
+  count: number,
+): Promise<string> {
+  const totalPages = sourceDoc.getPageCount();
+  if (totalPages <= count) return originalBase64;
+
+  const out = await PDFDocument.create();
+  const indices = Array.from({ length: count }, (_, i) => i);
+  const copiedPages = await out.copyPages(sourceDoc, indices);
+  for (const p of copiedPages) out.addPage(p);
   const bytes = await out.save();
   return Buffer.from(bytes).toString("base64");
 }
@@ -78,8 +109,36 @@ export async function extractFullHouse(
     `[extractFullHouse] start — pdf base64 length ${pdfBase64.length} chars (~${Math.round(pdfBase64.length / 1024 / 1024)} MB)`,
   );
 
-  // 1. Classify all pages
-  const classifications = await classifyAllPagesNative(pdfBase64);
+  // 1. Parse source PDF once with pdf-lib. Used to (a) cap the classifier
+  // input at the first CLASSIFIER_PAGE_CAP pages and (b) split per-page
+  // PDFs for extractors after classification.
+  let sourceDoc: PDFDocument;
+  try {
+    const pdfBytes = Buffer.from(pdfBase64, "base64");
+    sourceDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  } catch (err) {
+    console.error("[extractFullHouse] failed to parse source PDF:", err);
+    return {
+      layout: null,
+      classifications: [],
+      floorPlanPage: null,
+      elevationsExtracted: [],
+      sectionExtracted: null,
+      scheduleExtracted: null,
+      totalPages: null,
+      error: `pdf-lib could not parse the source PDF: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+  const sourcePageCount = sourceDoc.getPageCount();
+  console.log(`[extractFullHouse] source has ${sourcePageCount} pages`);
+
+  // 2. Classify pages — capped at the first CLASSIFIER_PAGE_CAP.
+  const classifierPdfBase64 = await firstNPagesPdfBase64(
+    sourceDoc,
+    pdfBase64,
+    CLASSIFIER_PAGE_CAP,
+  );
+  const classifications = await classifyAllPagesNative(classifierPdfBase64);
   console.log(
     `[extractFullHouse] classifier returned ${classifications.length} pages at +${Date.now() - t0}ms`,
   );
@@ -91,12 +150,12 @@ export async function extractFullHouse(
       elevationsExtracted: [],
       sectionExtracted: null,
       scheduleExtracted: null,
-      totalPages: null,
+      totalPages: sourcePageCount,
       error: "Page classification failed",
     };
   }
 
-  // 2. Find pages by type. Manual override wins.
+  // 3. Find pages by type. Manual override wins.
   const floorPlanPage =
     options?.floorPlanPageOverride ??
     classifications.find((c) => c.type === "floor_plan_ground")?.pageNumber ??
@@ -111,30 +170,8 @@ export async function extractFullHouse(
   const schedulePage =
     classifications.find((c) => c.type === "schedule")?.pageNumber ?? null;
 
-  // 3. Parse the full PDF once and split out per-page PDFs for each
-  // extraction. Each per-page extractor receives only its page (~200-500 KB)
-  // instead of the full 9-12 MB set. Massive reduction in outbound payload
-  // and concurrent connection size to Anthropic.
-  let sourceDoc: PDFDocument;
-  try {
-    const pdfBytes = Buffer.from(pdfBase64, "base64");
-    sourceDoc = await PDFDocument.load(pdfBytes, {
-      ignoreEncryption: true,
-    });
-  } catch (err) {
-    console.error("[extractFullHouse] failed to parse source PDF:", err);
-    return {
-      layout: null,
-      classifications,
-      floorPlanPage,
-      elevationsExtracted: [],
-      sectionExtracted: null,
-      scheduleExtracted: null,
-      totalPages: classifications.length,
-      error: `pdf-lib could not parse the source PDF: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
-
+  // 4. Split out per-page PDFs for each extraction using the already
+  // parsed sourceDoc.
   const splitT = Date.now();
   const [floorPlanPageBase64, sectionPageBase64, schedulePageBase64, ...elevationPageBase64s] =
     await Promise.all([
@@ -158,7 +195,7 @@ export async function extractFullHouse(
           // Restore the original page number (the extractor saw a single-page
           // PDF so it returned 1; we want the page from the source doc).
           detectedPage: floorPlanPage,
-          totalPages: classifications.length,
+          totalPages: sourcePageCount,
         }),
       )
     : Promise.resolve(null);
@@ -233,7 +270,7 @@ export async function extractFullHouse(
       elevationsExtracted: elevationsValid,
       sectionExtracted: sectionResult,
       scheduleExtracted: scheduleResult,
-      totalPages: floorPlanResult?.totalPages ?? classifications.length,
+      totalPages: floorPlanResult?.totalPages ?? sourcePageCount,
       error: floorPlanResult?.error ?? "No floor plan extracted",
     };
   }
@@ -317,6 +354,6 @@ export async function extractFullHouse(
     elevationsExtracted: elevationsValid,
     sectionExtracted: sectionResult,
     scheduleExtracted: scheduleResult,
-    totalPages: floorPlanResult.totalPages ?? classifications.length,
+    totalPages: floorPlanResult.totalPages ?? sourcePageCount,
   };
 }

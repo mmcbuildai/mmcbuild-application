@@ -25,7 +25,11 @@ import { extractJson } from "@/lib/ai/extract-json";
 const MAX_PAGES_TO_CLASSIFY = 15;
 const CLASSIFIER_SCALE = 1.0;
 const CLASSIFIER_MODEL = "claude-haiku-4-5-20251001";
-const MULTICLASS_MODEL = "claude-sonnet-4-20250514";
+// Multi-class native classifier — Haiku 4.5 is fast enough to label a
+// 15-page PDF in ~10s. Sonnet on the same task takes ~30-40s, which
+// pushed the orchestrator past Vercel's edge connection-close window
+// for large plan sets.
+const MULTICLASS_MODEL = "claude-haiku-4-5-20251001";
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
