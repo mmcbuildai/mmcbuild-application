@@ -20,10 +20,12 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { renderAllPdfPages } from "./pdf-to-image";
+import { extractJson } from "@/lib/ai/extract-json";
 
 const MAX_PAGES_TO_CLASSIFY = 15;
 const CLASSIFIER_SCALE = 1.0;
 const CLASSIFIER_MODEL = "claude-haiku-4-5-20251001";
+const MULTICLASS_MODEL = "claude-sonnet-4-20250514";
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -130,4 +132,122 @@ export async function findFloorPlanPage(
   }
 
   return { pageNumber: null, classifications, totalPagesRendered: pages.length };
+}
+
+// ============================================================================
+// Multi-class native-PDF classifier — used by full-house orchestrator.
+// Single Sonnet call reads the whole PDF and returns per-page classifications.
+// ============================================================================
+
+export type PageType =
+  | "floor_plan_ground"
+  | "floor_plan_upper"
+  | "elevation_n"
+  | "elevation_s"
+  | "elevation_e"
+  | "elevation_w"
+  | "elevation_other"
+  | "section"
+  | "roof_plan"
+  | "schedule"
+  | "site_plan"
+  | "cover"
+  | "details"
+  | "other";
+
+export interface PageTypeClassification {
+  pageNumber: number;
+  type: PageType;
+  confidence: number;
+  notes?: string;
+}
+
+const MULTICLASS_PROMPT = `You are an architectural plan classifier. You are looking at a multi-page architectural plan PDF.
+
+Classify EVERY page using ONE of these types:
+
+- floor_plan_ground : top-down view of ground floor with internal walls and room labels
+- floor_plan_upper : top-down view of first/second floor with internal walls and room labels
+- elevation_n : north elevation (view from north — labelled "North" or "N")
+- elevation_s : south elevation
+- elevation_e : east elevation
+- elevation_w : west elevation
+- elevation_other : elevation page where the cardinal direction is unclear or it shows multiple elevations
+- section : vertical slice through the building (shows floor/ceiling heights, roof structure internally)
+- roof_plan : top-down view of the roof showing pitch directions, ridges, hips
+- schedule : schedule of finishes, materials schedule, door/window schedule, fixtures schedule
+- site_plan : building footprint on the lot showing boundaries / setbacks
+- cover : cover sheet, title sheet, sheet index, revision table
+- details : construction details, joinery details, sections of small assemblies
+- other : anything else (legends, notes-only pages, structural, services)
+
+Look at every page in order. Use page labels (titles like "ELEVATION NORTH", "GROUND FLOOR PLAN") where available — they are authoritative. If a label is missing, infer from drawing content.
+
+OUTPUT FORMAT — return ONLY valid JSON, an array of one entry per page:
+[
+  { "pageNumber": 1, "type": "cover", "confidence": 0.95, "notes": "Sheet A0.00" },
+  { "pageNumber": 2, "type": "site_plan", "confidence": 0.9 },
+  { "pageNumber": 3, "type": "floor_plan_ground", "confidence": 0.95, "notes": "GROUND FLOOR PLAN 1:100" },
+  ...
+]
+
+Return ONLY the JSON array — no preamble, no markdown fences.`;
+
+/**
+ * Classify all pages of a PDF in one Sonnet call using native PDF support.
+ *
+ * Used by the full-house extractor to know which pages are floor plans,
+ * elevations, sections, etc. Then per-page-type extractors run on each
+ * useful page.
+ *
+ * @param pdfBase64 - Base64-encoded PDF (max ~32MB raw, 100 pages)
+ * @returns Array of classifications, one per page. Empty array on failure.
+ */
+export async function classifyAllPagesNative(
+  pdfBase64: string,
+): Promise<PageTypeClassification[]> {
+  const anthropic = getClient();
+
+  try {
+    const response = await anthropic.messages.create({
+      model: MULTICLASS_MODEL,
+      max_tokens: 8000,
+      system: MULTICLASS_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: pdfBase64,
+              },
+            },
+            {
+              type: "text",
+              text: "Classify every page of this PDF. Return ONLY the JSON array.",
+            },
+          ],
+        },
+      ],
+    });
+
+    const textBlock = response.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      console.error("[classifyAllPagesNative] no text content");
+      return [];
+    }
+
+    const parsed = extractJson<PageTypeClassification[]>(textBlock.text);
+    if (!Array.isArray(parsed)) {
+      console.error("[classifyAllPagesNative] parsed result is not array");
+      return [];
+    }
+    return parsed;
+  } catch (err) {
+    console.error("[classifyAllPagesNative] failed:", err);
+    return [];
+  }
 }

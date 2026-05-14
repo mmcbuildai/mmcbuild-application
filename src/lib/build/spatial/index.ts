@@ -5,6 +5,10 @@ export type {
   Opening,
   Point2D,
   SuggestionOverlay,
+  Roof,
+  RoofForm,
+  Storey,
+  Materials,
 } from "./types";
 export { buildFloorPlan3D, buildSuggestionHighlight } from "./geometry";
 // Note: extractSpatialLayout and renderPdfPage are server-only —
