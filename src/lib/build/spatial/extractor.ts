@@ -83,6 +83,22 @@ DO NOT do this. Instead:
 - **Internal walls** are partitions between rooms or short stub walls (e.g. wing walls, bulkheads).
 - **Party walls** apply only to attached/duplex/dual-occupancy buildings on shared boundaries.
 
+USE YOUR EXTENDED THINKING TO WORK SYSTEMATICALLY:
+
+Before writing the final JSON, walk through this checklist in your thinking:
+
+1. **Perimeter pass.** Trace the outer building outline as a continuous closed loop. List each external wall segment with its endpoints. The perimeter MUST close — the last endpoint of the last external wall MUST equal the first endpoint of the first external wall. If there is a gap, you missed a wall.
+
+2. **Room-by-room partition pass.** For every room you identify, list each of its boundary edges. Each edge is either (a) an external wall already listed in step 1, or (b) an internal partition shared with another room, or (c) an internal partition forming a corridor. Add every (b) and (c) to the wall list. Two adjacent rooms share ONE wall — list it once.
+
+3. **Stub-wall pass.** Look for short wall segments that don't fully partition a room: wing walls beside doors, bulkheads, kitchen islands, robe walls. Add each.
+
+4. **Opening pass.** For each door, window, slider, bifold, garage door — locate it on its parent wall and link via wall_id.
+
+5. **Self-check.** Count: rooms = R, walls = W. If W < 2×R, you have under-extracted. Return to step 2 and find the missing partitions before finalising. Do not output JSON with W < 2×R unless you have a specific reason (e.g. open-plan studio) and noted it in \`notes\`.
+
+Only after all five passes complete in your thinking, write the final JSON output.
+
 DATA FORMAT:
 
 - Rooms as closed polygons with metres coordinates from the bottom-left corner of the building.
@@ -154,15 +170,13 @@ export async function extractFloorPlanFromPdf(
   try {
     const anthropic = getClient();
 
-    // Assistant prefill `{` forces Claude to continue the response as JSON
-    // rather than starting with conversational preamble like "Looking at...".
-    // The prefill is NOT echoed in response.content — we prepend it manually
-    // before parsing.
-    const PREFILL = "{";
-
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 8192,
+      max_tokens: 16000,
+      thinking: {
+        type: "enabled",
+        budget_tokens: 8000,
+      },
       system: PDF_NATIVE_EXTRACTION_PROMPT + contextBlock,
       messages: [
         {
@@ -180,13 +194,9 @@ export async function extractFloorPlanFromPdf(
               type: "text",
               text:
                 userText +
-                "\n\nRespond with ONLY the JSON object — no preamble, no explanation, no markdown fences. Start with { and end with }.",
+                "\n\nUse extended thinking to walk through the five-pass checklist before writing the JSON. The final assistant message must contain ONLY the JSON object — no preamble, no markdown fences. Start with { and end with }.",
             },
           ],
-        },
-        {
-          role: "assistant",
-          content: PREFILL,
         },
       ],
     });
@@ -201,7 +211,7 @@ export async function extractFloorPlanFromPdf(
       };
     }
 
-    const fullText = PREFILL + textBlock.text;
+    const fullText = textBlock.text;
 
     type PdfExtractionShape = {
       detectedPage: number | null;
