@@ -155,12 +155,54 @@ export async function extractFullHouse(
     };
   }
 
-  // 3. Find pages by type. Manual override wins.
-  const floorPlanPage =
-    options?.floorPlanPageOverride ??
+  // 3. Find pages by type. Manual override wins, then preferred classes,
+  // then a smart fallback so a misclassification doesn't kill the run.
+  //
+  // Fallback rationale: the classifier is Haiku and gets brittle calls
+  // wrong (e.g. labelling an architectural floor plan as "cover" because
+  // of a heavy title block, or "details" because of dimension stacks).
+  // Rather than bailing with "No floor plan extracted", pick a plausible
+  // candidate and let the higher-stakes Sonnet floor plan extractor have
+  // a go. If that ALSO fails to extract anything useful, the orchestrator
+  // returns the same error but at least we tried.
+  const classifiedFloorPlanPage =
     classifications.find((c) => c.type === "floor_plan_ground")?.pageNumber ??
     classifications.find((c) => c.type === "floor_plan_upper")?.pageNumber ??
     null;
+
+  // Pages that COULD plausibly contain extractable floor-plan geometry,
+  // even if the classifier labelled them as something else. Excludes
+  // cover/site_plan/schedule/other — those are unambiguously not floor
+  // plans. Sorted by classifier confidence so the most confident
+  // candidate goes first.
+  const fallbackCandidates = classifications
+    .filter(
+      (c) =>
+        c.type === "details" ||
+        c.type === "section" ||
+        c.type === "roof_plan" ||
+        ELEVATION_TYPES.has(c.type) ||
+        c.type === "cover", // include cover as last resort — covers can be misread floor plans
+    )
+    .sort((a, b) => b.confidence - a.confidence);
+
+  // Single-page PDFs (typical for DWG → CloudConvert output): always
+  // try that page as the floor plan regardless of class.
+  const singlePageFallback =
+    classifications.length === 1 ? classifications[0].pageNumber : null;
+
+  const floorPlanPage =
+    options?.floorPlanPageOverride ??
+    classifiedFloorPlanPage ??
+    singlePageFallback ??
+    fallbackCandidates[0]?.pageNumber ??
+    null;
+
+  if (floorPlanPage && !classifiedFloorPlanPage && !options?.floorPlanPageOverride) {
+    console.log(
+      `[extractFullHouse] classifier found no floor plan — falling back to page ${floorPlanPage} as best candidate`,
+    );
+  }
 
   const elevationPages = classifications.filter((c) =>
     ELEVATION_TYPES.has(c.type),

@@ -27,6 +27,12 @@ export function Test3DHarness() {
   const [showJson, setShowJson] = useState(false);
 
   const isPdf = file?.type === "application/pdf" || file?.name.toLowerCase().endsWith(".pdf");
+  // DWG/RVT/SKP/DOC/DOCX get converted to PDF before extraction, so the page
+  // override applies to them too. Only true image files (PNG/JPG) have no
+  // page concept.
+  const hasPages =
+    isPdf ||
+    !!file?.name.toLowerCase().match(/\.(dwg|rvt|skp|doc|docx)$/);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -166,7 +172,7 @@ export function Test3DHarness() {
           )}
         </div>
 
-        {isPdf && (
+        {hasPages && (
           <div>
             <label className="block text-sm font-medium mb-1">
               PDF page (blank = auto-detect floor plan page)
