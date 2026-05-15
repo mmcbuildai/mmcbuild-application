@@ -70,10 +70,20 @@ export function PlanDropzone({ projectId }: PlanDropzoneProps) {
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
         const filePath = `${profile.org_id}/${projectId}/${Date.now()}_${safeName}`;
 
+        // Browsers don't set a MIME for DWG / RVT / SKP — the File.type
+        // is empty (or application/octet-stream) and the Supabase Storage
+        // bucket allowlist checks the File's underlying .type, not the
+        // contentType option. Re-wrap as a Blob with the correct MIME so
+        // the bucket policy sees the right value.
+        const contentType = contentTypeForKind(kind, file.name);
+        const typedBlob = new Blob([await file.arrayBuffer()], {
+          type: contentType,
+        });
+
         const { error: storageError } = await supabase.storage
           .from("plan-uploads")
-          .upload(filePath, file, {
-            contentType: contentTypeForKind(kind, file.name),
+          .upload(filePath, typedBlob, {
+            contentType,
           });
 
         if (storageError) {

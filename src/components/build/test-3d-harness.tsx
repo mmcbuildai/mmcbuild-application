@@ -78,10 +78,21 @@ export function Test3DHarness() {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const storagePath = `${profile.org_id}/test-3d/${Date.now()}_${safeName}`;
 
+      // Browsers don't set a MIME type for DWG / RVT / SKP / DOC. The
+      // File.type is empty (or application/octet-stream) and the Supabase
+      // Storage bucket policy checks the File's underlying .type — the
+      // upload() contentType option does NOT override that check. So we
+      // re-wrap the file's bytes as a Blob with the explicit MIME type
+      // so the bucket allowlist sees the correct value.
+      const contentType = contentTypeForKind(kind, file.name);
+      const typedBlob = new Blob([await file.arrayBuffer()], {
+        type: contentType,
+      });
+
       const { error: storageError } = await supabase.storage
         .from("plan-uploads")
-        .upload(storagePath, file, {
-          contentType: contentTypeForKind(kind, file.name),
+        .upload(storagePath, typedBlob, {
+          contentType,
         });
 
       if (storageError) {
