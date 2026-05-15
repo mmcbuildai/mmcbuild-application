@@ -527,30 +527,43 @@ export type ScheduleExtraction = {
   notes?: string;
 };
 
+type PagePartialConfig = {
+  /** Anthropic model id. Defaults to Haiku 4.5. */
+  model?: string;
+  /** Output token cap. Defaults to 4000. */
+  maxTokens?: number;
+  /** Optional extended-thinking budget (also raises max_tokens to fit). */
+  thinkingBudget?: number;
+};
+
 /**
  * Generic per-page extractor — sends a single-page PDF and a task-specific
  * system prompt. Returns parsed JSON or null on failure.
  *
- * Note: extended thinking is intentionally OFF here. The orchestrator now
- * passes a single-page PDF (not the full set), so the task is tightly
- * scoped and a straightforward response is fast enough to stay inside
- * Vercel's edge connection-close window (~60-100s). The classifier and the
- * floor-plan extractor still use thinking — those are higher-stakes and
- * inherently slower regardless.
+ * The orchestrator now passes a single-page PDF (not the full set), so most
+ * tasks are tightly scoped. Haiku 4.5 is the default — fast enough to stay
+ * inside Vercel's edge connection-close window. Callers can opt into Sonnet
+ * + extended thinking for higher-stakes visual reasoning (e.g. elevation
+ * roof-form detection).
  */
 async function extractPagePartial<T>(
   pdfBase64: string,
   pageNumber: number,
   systemPrompt: string,
+  config: PagePartialConfig = {},
 ): Promise<T | null> {
+  const model = config.model ?? "claude-haiku-4-5-20251001";
+  const maxTokens = config.maxTokens ?? 4000;
+  const thinking = config.thinkingBudget
+    ? { type: "enabled" as const, budget_tokens: config.thinkingBudget }
+    : undefined;
+
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      // Haiku 4.5 — much faster than Sonnet, sufficient for the narrow
-      // single-page extraction tasks (elevation roof form, section
-      // storeys, schedule materials).
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4000,
+      model,
+      max_tokens: maxTokens,
+      ...(thinking ? { thinking } : {}),
       system: systemPrompt,
       messages: [
         {
@@ -582,6 +595,15 @@ async function extractPagePartial<T>(
   }
 }
 
+/**
+ * Elevation extraction is the highest-stakes per-page task: it determines
+ * roof.form, pitch, eaves, and exterior cladding — the bits that make the
+ * 3D viewer look like an actual house. Haiku can't reliably read a roof
+ * silhouette and infer "this is a gable at 22.5°"; that's real visual
+ * reasoning. So elevation runs on Sonnet with extended thinking.
+ *
+ * Single-page PDF + 4000-token thinking budget = ~15-20s per call, parallel.
+ */
 export function extractElevation(
   pdfBase64: string,
   pageNumber: number,
@@ -590,6 +612,11 @@ export function extractElevation(
     pdfBase64,
     pageNumber,
     ELEVATION_PROMPT,
+    {
+      model: "claude-sonnet-4-20250514",
+      maxTokens: 8000,
+      thinkingBudget: 4000,
+    },
   );
 }
 

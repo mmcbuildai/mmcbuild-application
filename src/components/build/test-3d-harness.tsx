@@ -237,21 +237,35 @@ export function Test3DHarness() {
             {result.elevationsExtracted != null &&
               result.elevationsExtracted > 0 && (
                 <p>
-                  Extracted roof + cladding from{" "}
+                  Inspected{" "}
                   <strong>{result.elevationsExtracted}</strong> elevation
-                  page(s).
+                  page(s)
+                  {result.layout.roof
+                    ? " — roof + cladding merged into layout"
+                    : " — but no roof or cladding data was extracted (model may have been unable to read the page)"}
+                  .
                 </p>
               )}
             {result.sectionPage != null && (
               <p>
-                Extracted storey heights from section page{" "}
-                <strong>{result.sectionPage}</strong>.
+                Inspected section page{" "}
+                <strong>{result.sectionPage}</strong>
+                {result.layout.storey_details &&
+                result.layout.storey_details.length > 0
+                  ? ` — ${result.layout.storey_details.length} storey heights merged`
+                  : " — no storey heights extracted"}
+                .
               </p>
             )}
             {result.schedulePage != null && (
               <p>
-                Extracted material defaults from schedule page{" "}
-                <strong>{result.schedulePage}</strong>.
+                Inspected schedule page{" "}
+                <strong>{result.schedulePage}</strong>
+                {result.layout.materials &&
+                Object.keys(result.layout.materials).length > 0
+                  ? " — material defaults merged"
+                  : " — no material defaults extracted"}
+                .
               </p>
             )}
             {result.layout.roof && (
