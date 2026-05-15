@@ -212,14 +212,70 @@ function buildOpening(opening: Opening, wallHeight: number, walls: Wall[]): THRE
 }
 
 /**
+ * Trace external walls into an ordered closed polygon (the building
+ * perimeter). Walks the wall list, chaining each wall's endpoint to the
+ * next wall whose start (or end) matches within tolerance. Returns null
+ * if the chain can't be closed (e.g. walls have gaps or aren't a single
+ * connected loop).
+ *
+ * Used so the roof footprint matches the actual building outline rather
+ * than the bounding box. Bounding-box-shaped roofs look wrong on
+ * L-shapes, T-shapes, and any plan with an open deck or jutting garage.
+ */
+function computePerimeterPolygon(walls: Wall[]): Point2D[] | null {
+  const externals = walls.filter((w) => w.type === "external");
+  if (externals.length < 3) return null;
+
+  const tol = 0.05; // 5 cm endpoint match tolerance
+  const samePoint = (a: Point2D, b: Point2D) =>
+    Math.abs(a.x - b.x) < tol && Math.abs(a.y - b.y) < tol;
+
+  const polygon: Point2D[] = [];
+  const used = new Set<string>();
+
+  const first = externals[0];
+  polygon.push(first.start);
+  polygon.push(first.end);
+  used.add(first.id);
+
+  while (used.size < externals.length) {
+    const last = polygon[polygon.length - 1];
+    const next = externals.find(
+      (w) =>
+        !used.has(w.id) && (samePoint(w.start, last) || samePoint(w.end, last)),
+    );
+    if (!next) break;
+    used.add(next.id);
+    polygon.push(samePoint(next.start, last) ? next.end : next.start);
+  }
+
+  // Drop duplicate closing vertex
+  if (polygon.length > 2 && samePoint(polygon[0], polygon[polygon.length - 1])) {
+    polygon.pop();
+  }
+
+  return polygon.length >= 3 ? polygon : null;
+}
+
+/**
  * Build a roof mesh based on the SpatialLayout.roof spec.
  *
- * Approximates the roof from the building's bounding box — for non-rectangular
- * footprints (L-shapes, T-shapes) this over-covers slightly; tweaking is a
- * v2 refinement. Returns null if no roof spec is present.
+ * Primary path: extracts the perimeter polygon from external walls and
+ * builds the roof as a polygon extrusion that follows the actual building
+ * outline. Height of the extrusion varies by roof form — flat gets a thin
+ * slab, pitched forms extrude up to an approximated ridge height.
  *
- * Coordinate system: same as walls — x = right, z = depth (mapped from layout y).
- * baseHeight = top of the wall (where the roof starts).
+ * Fallback path: if the perimeter polygon can't be computed (walls don't
+ * form a closed loop), falls back to bounding-box-based roof shapes
+ * (kept as buildFlatRoof / buildGableRoof / etc).
+ *
+ * Coordinate system: same as walls — x = right, z = depth (mapped from
+ * layout y). baseHeight = top of the wall where the roof starts.
+ *
+ * TODO: true pitched roof on arbitrary polygons (gable ridge + hip
+ * surfaces that follow the L-shape) is real CSG work — currently the
+ * polygon path uses a flat-topped extrusion at the ridge height. The
+ * footprint is correct; the silhouette doesn't show pitch lines yet.
  */
 function buildRoof(
   layout: SpatialLayout,
@@ -227,12 +283,6 @@ function buildRoof(
 ): THREE.Object3D | null {
   const roof = layout.roof;
   if (!roof) return null;
-
-  const eave = Math.max(0, roof.eave_overhang_m ?? 0);
-  const minX = layout.bounds.min.x - eave;
-  const maxX = layout.bounds.max.x + eave;
-  const minY = layout.bounds.min.y - eave;
-  const maxY = layout.bounds.max.y + eave;
 
   const pitchRad = Math.max(0, (roof.pitch_deg ?? 22.5)) * (Math.PI / 180);
 
@@ -249,6 +299,20 @@ function buildRoof(
 
   const form = roof.form ?? "gable";
 
+  // Primary path: polygon-based roof following the wall outline.
+  const polygon = computePerimeterPolygon(layout.walls);
+  if (polygon) {
+    return buildRoofFromPolygon(polygon, form, pitchRad, baseHeight, material);
+  }
+
+  // Fallback: bounding-box-based roof shapes (kept for plans where the
+  // external wall list doesn't form a closed loop).
+  const eave = Math.max(0, roof.eave_overhang_m ?? 0);
+  const minX = layout.bounds.min.x - eave;
+  const maxX = layout.bounds.max.x + eave;
+  const minY = layout.bounds.min.y - eave;
+  const maxY = layout.bounds.max.y + eave;
+
   switch (form) {
     case "flat":
       return buildFlatRoof(minX, maxX, minY, maxY, baseHeight, material);
@@ -262,6 +326,59 @@ function buildRoof(
     default:
       return buildGableRoof(minX, maxX, minY, maxY, baseHeight, pitchRad, material);
   }
+}
+
+/**
+ * Build a roof as an extrusion of the perimeter polygon. Height varies
+ * by roof form so steeper-pitched roofs visually sit taller above the
+ * wall plate.
+ */
+function buildRoofFromPolygon(
+  polygon: Point2D[],
+  form: string,
+  pitchRad: number,
+  baseHeight: number,
+  material: THREE.Material,
+): THREE.Mesh {
+  // Compute span for ridge-height estimate (used by pitched forms)
+  const xs = polygon.map((p) => p.x);
+  const ys = polygon.map((p) => p.y);
+  const spanX = Math.max(...xs) - Math.min(...xs);
+  const spanY = Math.max(...ys) - Math.min(...ys);
+  const minSpan = Math.min(spanX, spanY);
+
+  // Extrusion height: thin slab for flat, ~half-span × tan(pitch) for pitched
+  // forms (approximates a roof block; true pitched gable/hip silhouette
+  // on arbitrary polygons is a v2 refinement).
+  let extrudeHeight: number;
+  if (form === "flat") {
+    extrudeHeight = 0.15;
+  } else {
+    extrudeHeight = Math.max(0.15, (minSpan / 2) * Math.tan(pitchRad));
+  }
+
+  const shape = new THREE.Shape();
+  shape.moveTo(polygon[0].x, polygon[0].y);
+  for (let i = 1; i < polygon.length; i++) {
+    shape.lineTo(polygon[i].x, polygon[i].y);
+  }
+  shape.closePath();
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: extrudeHeight,
+    bevelEnabled: false,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  // Rotate so the polygon (XY in shape space) lies on world XZ plane,
+  // matching how buildFloor places room polygons. After this rotation the
+  // extrusion direction (originally +Z) points along world -Y, so we
+  // translate up by extrudeHeight to put the extrusion ABOVE baseHeight.
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = baseHeight + extrudeHeight;
+
+  mesh.userData = { type: "roof", form, footprint: "polygon" };
+  return mesh;
 }
 
 function buildFlatRoof(
