@@ -105,7 +105,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
+                "flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap md:min-h-0",
                 isActive
                   ? "bg-white/10 text-white"
                   : "text-slate-400 hover:bg-white/5 hover:text-white"
@@ -132,7 +132,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
+                "flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap md:min-h-0",
                 isActive
                   ? "bg-white/10 text-white"
                   : "text-slate-400 hover:bg-white/5 hover:text-white"
@@ -187,7 +187,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
+                  "flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap md:min-h-0",
                   isActive
                     ? "bg-white/10 text-white"
                     : "text-slate-400 hover:bg-white/5 hover:text-white"
@@ -207,7 +207,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
           <form action={signOut}>
             <Button
               variant="ghost"
-              className="w-full justify-start gap-3 px-3 text-slate-400 hover:text-red-400 hover:bg-white/5"
+              className="min-h-11 w-full justify-start gap-3 px-3 text-slate-400 hover:text-red-400 hover:bg-white/5 md:min-h-0"
               type="submit"
             >
               <LogOut className="h-4 w-4" />

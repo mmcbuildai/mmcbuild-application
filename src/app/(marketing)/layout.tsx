@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import Chatbot from "@/components/marketing/chatbot";
+import { MobileMarketingNav } from "@/components/marketing/mobile-nav";
 
 const solutions = [
   { name: "MMC Comply", href: "/mmc-comply", description: "AI-powered NCC compliance" },
@@ -9,6 +10,15 @@ const solutions = [
   { name: "MMC Quote", href: "/mmc-quote", description: "Intelligent quoting & estimation" },
   { name: "MMC Directory", href: "/mmc-directory", description: "Verified trades & suppliers" },
   { name: "MMC Train", href: "/mmc-train", description: "Industry training & certification" },
+];
+
+const primaryLinks = [
+  { name: "Pricing", href: "/pricing" },
+  { name: "Trades & Suppliers", href: "/mmc-suppliers" },
+  { name: "Blog", href: "/blog" },
+  { name: "About", href: "/about" },
+  { name: "Case Studies", href: "/case-studies" },
+  { name: "Contact", href: "/contact" },
 ];
 
 export default function MarketingLayout({
@@ -58,41 +68,30 @@ export default function MarketingLayout({
                 </div>
               </div>
             </div>
-            <Link href="/pricing" className="text-slate-600 hover:text-slate-900 transition-colors">
-              Pricing
-            </Link>
-            <Link
-              href="/mmc-suppliers"
-              className="text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              Trades &amp; Suppliers
-            </Link>
-            <Link href="/blog" className="text-slate-600 hover:text-slate-900 transition-colors">
-              Blog
-            </Link>
-            <Link href="/about" className="text-slate-600 hover:text-slate-900 transition-colors">
-              About
-            </Link>
-            <Link
-              href="/case-studies"
-              className="text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              Case Studies
-            </Link>
-            <Link href="/contact" className="text-slate-600 hover:text-slate-900 transition-colors">
-              Contact
-            </Link>
+            {primaryLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                {link.name}
+              </Link>
+            ))}
           </div>
-          <div className="flex items-center gap-4">
-            <Link href="/login" className="text-sm text-slate-600 hover:text-slate-900 transition-colors">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Link
+              href="/login"
+              className="hidden text-sm text-slate-600 hover:text-slate-900 transition-colors sm:inline"
+            >
               Sign In
             </Link>
             <Link
               href="/signup"
-              className="inline-flex h-9 items-center rounded-md bg-blue-600 px-4 text-sm font-medium text-white shadow hover:bg-blue-700 transition-colors"
+              className="hidden h-9 items-center rounded-md bg-blue-600 px-4 text-sm font-medium text-white shadow hover:bg-blue-700 transition-colors md:inline-flex"
             >
               Get Started
             </Link>
+            <MobileMarketingNav solutions={solutions} links={primaryLinks} />
           </div>
         </div>
       </nav>
