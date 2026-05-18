@@ -44,7 +44,7 @@ function ForgotPasswordForm() {
             priority
           />
         </div>
-        <CardTitle className="text-2xl font-bold">Reset Password</CardTitle>
+        <CardTitle className="text-2xl sm:text-3xl font-bold">Reset Password</CardTitle>
         <CardDescription>
           Enter your email and we&apos;ll send you a reset link.
         </CardDescription>
@@ -64,15 +64,16 @@ function ForgotPasswordForm() {
               name="email"
               type="email"
               placeholder="you@company.com.au"
+              className="h-11"
               required
             />
           </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full h-11" disabled={isLoading}>
             {isLoading ? "Sending..." : "Send Reset Link"}
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="text-center text-sm">
+      <CardFooter className="justify-center text-center text-sm">
         <Link
           href="/login"
           className="text-muted-foreground hover:underline"
@@ -86,7 +87,7 @@ function ForgotPasswordForm() {
 
 export default function ForgotPasswordPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="flex min-h-dvh items-center justify-center px-4 py-8 sm:px-6">
       <Suspense fallback={<div className="text-muted-foreground">Loading...</div>}>
         <ForgotPasswordForm />
       </Suspense>

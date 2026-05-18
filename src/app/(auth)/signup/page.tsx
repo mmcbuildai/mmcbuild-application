@@ -46,7 +46,7 @@ function SignupForm() {
             priority
           />
         </div>
-        <CardTitle className="text-2xl font-bold">
+        <CardTitle className="text-2xl sm:text-3xl font-bold">
           Create your MMC Build account
         </CardTitle>
         <CardDescription>
@@ -70,6 +70,7 @@ function SignupForm() {
               name="full_name"
               type="text"
               placeholder="Jane Smith"
+              className="h-11"
               required
             />
           </div>
@@ -80,6 +81,7 @@ function SignupForm() {
               name="org_name"
               type="text"
               placeholder="Smith Constructions Pty Ltd"
+              className="h-11"
               required
             />
           </div>
@@ -90,6 +92,7 @@ function SignupForm() {
               name="email"
               type="email"
               placeholder="you@company.com.au"
+              className="h-11"
               required
             />
           </div>
@@ -100,18 +103,19 @@ function SignupForm() {
               name="password"
               type="password"
               minLength={8}
+              className="h-11"
               required
             />
             <p className="text-xs text-muted-foreground">
               Minimum 8 characters
             </p>
           </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full h-11" disabled={isLoading}>
             {isLoading ? "Creating account..." : "Create Account"}
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="text-center text-sm">
+      <CardFooter className="justify-center text-center text-sm">
         <p className="text-muted-foreground">
           Already have an account?{" "}
           <Link href="/login" className="text-primary hover:underline">
@@ -125,7 +129,7 @@ function SignupForm() {
 
 export default function SignupPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="flex min-h-dvh items-center justify-center px-4 py-8 sm:px-6">
       <Suspense fallback={<div className="text-muted-foreground">Loading...</div>}>
         <SignupForm />
       </Suspense>
