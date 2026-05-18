@@ -147,27 +147,27 @@ export default async function HomePage() {
         <div className="absolute top-0 left-1/2 w-[1000px] h-[500px] -translate-x-1/2 bg-blue-600/20 blur-[100px] rounded-full pointer-events-none" />
         <div className="absolute bottom-0 right-0 w-[800px] h-[600px] bg-teal-600/10 blur-[120px] rounded-full pointer-events-none" />
 
-        <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8 lg:py-32 flex flex-col items-center text-center z-10">
-          <div className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300 mb-8 backdrop-blur-sm">
-            <span className="flex h-2 w-2 rounded-full bg-blue-400 mr-2 animate-pulse" />
+        <div className="relative z-10 mx-auto flex max-w-7xl flex-col items-center px-4 py-16 text-center sm:px-6 sm:py-24 lg:px-8 lg:py-32">
+          <div className="mb-6 inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300 backdrop-blur-sm sm:mb-8">
+            <span className="mr-2 flex h-2 w-2 animate-pulse rounded-full bg-blue-400" />
             The Future of Building is Here
           </div>
-          <h1 className="text-5xl font-extrabold tracking-tight sm:text-6xl lg:text-7xl max-w-5xl mb-8 text-white leading-tight">
-            Modern Methods of Construction Ecosystem <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-400">
+          <h1 className="mb-6 max-w-5xl text-3xl font-extrabold leading-tight tracking-tight text-white sm:mb-8 sm:text-5xl lg:text-7xl">
+            Modern Methods of Construction Ecosystem{" "}
+            <span className="block bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text text-transparent">
               Powered by AI
             </span>
           </h1>
-          <p className="mx-auto mt-0 max-w-2xl text-xl text-slate-300 mb-10 leading-relaxed">
+          <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-slate-300 sm:mb-10 sm:text-xl">
             MMC Build accelerates the construction process while maintaining architectural integrity.
             Create houses that are cost effective, faster, and more sustainable.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+          <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row">
             <Button
               asChild
               size="lg"
-              className="bg-blue-600 hover:bg-blue-500 text-white text-lg h-14 px-10 rounded-full shadow-xl shadow-blue-600/20"
+              className="h-12 rounded-full bg-blue-600 px-8 text-base text-white shadow-xl shadow-blue-600/20 hover:bg-blue-500 sm:h-14 sm:px-10 sm:text-lg"
             >
               <Link href="/contact">
                 Join the Waitlist <ArrowRight className="ml-2 h-5 w-5" />

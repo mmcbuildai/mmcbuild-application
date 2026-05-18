@@ -370,20 +370,20 @@ export function PricingClient() {
             Complete Feature Breakdown
           </h2>
 
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
-            <div className="overflow-x-auto">
-              <div className="max-h-[800px] overflow-y-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-900 text-white sticky top-0 z-10">
+          <div className="rounded-2xl border border-slate-200 bg-white shadow-lg">
+            <div className="overflow-x-auto overscroll-x-contain">
+              <div className="max-h-[80dvh] overflow-y-auto">
+                <table className="w-full min-w-[640px]">
+                  <thead className="sticky top-0 z-10 bg-slate-900 text-white">
                     <tr>
-                      <th className="text-left py-6 px-6 font-bold text-lg w-2/5">Feature</th>
-                      <th className="text-center py-6 px-6 font-bold text-lg w-1/5 border-l border-slate-700">
+                      <th className="w-2/5 px-4 py-4 text-left text-sm font-bold sm:px-6 sm:py-6 sm:text-lg">Feature</th>
+                      <th className="w-1/5 border-l border-slate-700 px-3 py-4 text-center text-sm font-bold sm:px-6 sm:py-6 sm:text-lg">
                         Basic
                       </th>
-                      <th className="text-center py-6 px-6 font-bold text-lg w-1/5 border-l border-slate-700">
+                      <th className="w-1/5 border-l border-slate-700 px-3 py-4 text-center text-sm font-bold sm:px-6 sm:py-6 sm:text-lg">
                         Professional
                       </th>
-                      <th className="text-center py-6 px-6 font-bold text-lg w-1/5 border-l border-slate-700">
+                      <th className="w-1/5 border-l border-slate-700 px-3 py-4 text-center text-sm font-bold sm:px-6 sm:py-6 sm:text-lg">
                         Enterprise
                       </th>
                     </tr>
@@ -394,7 +394,7 @@ export function PricingClient() {
                         <tr className="bg-slate-100">
                           <td
                             colSpan={4}
-                            className="py-3 px-6 font-bold text-slate-900 text-sm uppercase tracking-wide"
+                            className="px-4 py-3 text-sm font-bold uppercase tracking-wide text-slate-900 sm:px-6"
                           >
                             {section.title}
                           </td>
@@ -404,14 +404,14 @@ export function PricingClient() {
                             key={`${section.title}-${idx}`}
                             className="border-t border-slate-200 hover:bg-slate-50"
                           >
-                            <td className="py-4 px-6 text-slate-700">{row[0]}</td>
+                            <td className="px-4 py-3 text-sm text-slate-700 sm:px-6 sm:py-4 sm:text-base">{row[0]}</td>
                             {([row[1], row[2], row[3]] as boolean[]).map((cell, cellIdx) => (
                               <td
                                 key={cellIdx}
-                                className="py-4 px-6 text-center border-l border-slate-200"
+                                className="border-l border-slate-200 px-3 py-3 text-center sm:px-6 sm:py-4"
                               >
                                 {cell ? (
-                                  <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto" />
+                                  <CheckCircle2 className="mx-auto h-5 w-5 text-green-600" />
                                 ) : (
                                   <span className="text-slate-300">—</span>
                                 )}
