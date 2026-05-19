@@ -101,7 +101,6 @@ export const runCostEstimation = inngest.createFunction(
       if (r.storeys) lines.push(`Storeys: ${r.storeys}`);
       if (r.climate_zone) lines.push(`Climate zone: ${r.climate_zone}`);
       if (r.building_class) lines.push(`Building class: ${r.building_class}`);
-      if (r.framing_material) lines.push(`Framing: ${r.framing_material}`);
       if (r.roof_material) lines.push(`Roof: ${r.roof_material}`);
       if (r.wall_cladding) lines.push(`Cladding: ${r.wall_cladding}`);
       if (r.soil_classification) lines.push(`Soil: ${r.soil_classification}`);

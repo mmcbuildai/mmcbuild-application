@@ -33,14 +33,12 @@ export const COMPLIANCE_USER_CONTEXT_TEMPLATE = (data: Record<string, string | n
 CLASSIFICATION & GENERAL:
 - Building Classification: ${v("building_class", "Class 1a")}
 - Construction Type: ${v("construction_type", "Type C")}
-- Importance Level: ${v("importance_level", "2")}
 
 H1 — STRUCTURE & FOOTINGS:
 - Number of Storeys: ${v("storeys", "1")}
 - Total Floor Area: ${v("floor_area")} m²
 - Soil Classification (AS 2870): ${v("soil_classification")}
 - Footing Type: ${v("footing_type")}
-- Framing Material: ${v("framing_material")}
 - Wind Classification (AS 4055): ${v("wind_classification")}
 - Terrain Category: ${v("terrain_category")}
 
@@ -90,7 +88,5 @@ H5/H8 — ACCESS & LIVABLE HOUSING:
 - Step-free Entry: ${v("has_step_free_entry", "false")}
 - Accessible Bathroom: ${v("accessible_bathroom", "false")}
 - Min Door Width: ${v("min_door_width")} mm
-- Min Corridor Width: ${v("min_corridor_width")} mm
-- Services: ${v("services")}
-- Special Requirements: ${v("special_requirements")}`;
+- Min Corridor Width: ${v("min_corridor_width")} mm`;
 };

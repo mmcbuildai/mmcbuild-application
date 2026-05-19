@@ -33,13 +33,11 @@ const BUILDING_TYPOLOGIES = [
 ];
 const BUILDING_CLASSES = ["Class 1a", "Class 1b", "Class 10a", "Class 10b"];
 const CONSTRUCTION_TYPES = ["Type A", "Type B", "Type C"];
-const IMPORTANCE_LEVELS = ["1", "2", "3", "4"];
 const CLIMATE_ZONES = [1, 2, 3, 4, 5, 6, 7, 8];
 const BAL_RATINGS = ["N/A", "BAL-LOW", "BAL-12.5", "BAL-19", "BAL-29", "BAL-40", "BAL-FZ"];
 
 const SOIL_CLASSIFICATIONS = ["A", "S", "M", "M-D", "H1", "H2", "E", "P"];
 const FOOTING_TYPES = ["Strip footing", "Pad footing", "Raft slab", "Waffle slab", "Stiffened raft", "Stumps/Piers", "Screw piles"];
-const FRAMING_MATERIALS = ["Timber", "Steel", "Timber + Steel hybrid", "Masonry", "SIPs"];
 const WIND_CLASSIFICATIONS = ["N1", "N2", "N3", "N4", "N5", "N6", "C1", "C2", "C3", "C4"];
 const TERRAIN_CATEGORIES = ["TC1", "TC2", "TC2.5", "TC3"];
 
@@ -295,12 +293,10 @@ export function QuestionnaireForm({
     building_typology: defaults.building_typology ?? "",
     building_class: defaults.building_class ?? "",
     construction_type: defaults.construction_type ?? "",
-    importance_level: defaults.importance_level ?? "",
     storeys: defaults.storeys ?? "",
     floor_area: defaults.floor_area ?? "",
     soil_classification: defaults.soil_classification ?? "",
     footing_type: defaults.footing_type ?? "",
-    framing_material: defaults.framing_material ?? "",
     wind_classification: defaults.wind_classification ?? autoWind ?? "",
     terrain_category: defaults.terrain_category ?? "",
     roof_material: defaults.roof_material ?? "",
@@ -339,8 +335,6 @@ export function QuestionnaireForm({
     accessible_bathroom: defaults.accessible_bathroom ?? "false",
     min_door_width: defaults.min_door_width ?? "",
     min_corridor_width: defaults.min_corridor_width ?? "",
-    services: defaults.services ?? "",
-    special_requirements: defaults.special_requirements ?? "",
   });
 
   const update = (key: string, value: string) =>
@@ -502,12 +496,6 @@ export function QuestionnaireForm({
                 onChange={(v) => update("construction_type", v)}
                 options={CONSTRUCTION_TYPES}
               />
-              <SelectField
-                label="Importance Level"
-                value={responses.importance_level}
-                onChange={(v) => update("importance_level", v)}
-                options={IMPORTANCE_LEVELS}
-              />
             </>
           )}
 
@@ -541,12 +529,6 @@ export function QuestionnaireForm({
                 onChange={(v) => update("footing_type", v)}
                 options={FOOTING_TYPES}
                 placeholder="Select if known — MMC product selection may change this"
-              />
-              <SelectField
-                label="Framing Material"
-                value={responses.framing_material}
-                onChange={(v) => update("framing_material", v)}
-                options={FRAMING_MATERIALS}
               />
               <LockedAutoField
                 label="Wind Classification (AS 4055)"
@@ -832,20 +814,6 @@ export function QuestionnaireForm({
                 placeholder="1000"
                 value={responses.min_corridor_width}
                 onChange={(v) => update("min_corridor_width", v)}
-              />
-              <TextField
-                label="Services"
-                placeholder="e.g., smoke alarms, ducted A/C, gas cooktop"
-                value={responses.services}
-                onChange={(v) => update("services", v)}
-                helper="Used to plan service routing in the 3D model and trigger service-specific compliance checks."
-              />
-              <TextField
-                label="Special Requirements"
-                placeholder="e.g., accessibility provisions, heritage overlay"
-                value={responses.special_requirements}
-                onChange={(v) => update("special_requirements", v)}
-                helper="Heritage controls, accessibility upgrades, and other constraints that should shape optimisation outputs."
               />
             </>
           )}
