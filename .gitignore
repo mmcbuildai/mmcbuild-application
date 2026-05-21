@@ -67,3 +67,7 @@ CLAUDE.local.md
 # Dotfile-prefixed entries in scripts/ are session scratch: parsed Jira
 # attachments, transcript intermediates, one-off state dumps. Never commit.
 scripts/.*
+
+# Diagnostic/recon working dir — converted PDFs, rendered PNGs, bbox JSONs.
+# Useful locally but never commit (large + per-developer).
+tmp/

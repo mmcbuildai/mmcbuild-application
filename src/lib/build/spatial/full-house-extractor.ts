@@ -329,7 +329,36 @@ export async function extractFullHouse(
     `[extractFullHouse] extractions complete at +${Date.now() - t0}ms — floorPlan=${floorPlanResult?.layout ? "ok" : "fail"}, elevations=${elevationsValid.length}/${elevationPages.length}, section=${sectionResult ? "ok" : "none"}, schedule=${scheduleResult ? "ok" : "none"}`,
   );
 
-  if (!floorPlanResult || !floorPlanResult.layout) {
+  // Tier 2 fallback — for CAD doc-set DWGs where CloudConvert dumps multiple
+  // paper-space layouts as tiles in one model-space canvas. The existing
+  // classifier sees one busy page and can't match floor_plan_ground; this
+  // pass uses Claude vision to find each drawing tile, then iterates
+  // floor-plan candidates with a verify-then-extract prompt.
+  // Off by default — flip ENABLE_SHEET_DECOMPOSITION=true to enable.
+  let floorPlanLayout = floorPlanResult?.layout ?? null;
+  let sheetDecompositionUsed = false;
+  if (
+    (!floorPlanResult || !floorPlanResult.layout) &&
+    process.env.ENABLE_SHEET_DECOMPOSITION === "true"
+  ) {
+    console.log(
+      `[extractFullHouse] standard extractor returned no layout — invoking sheet decomposer fallback`,
+    );
+    const { decomposeSheetAndExtractFloorPlan } = await import(
+      "./sheet-decomposer"
+    );
+    const pdfBytes = Buffer.from(pdfBase64, "base64");
+    const decompResult = await decomposeSheetAndExtractFloorPlan(pdfBytes);
+    console.log(
+      `[extractFullHouse] sheet decomposer: drawings=${decompResult.drawingsDetected}, attempts=${decompResult.attempts.length}, layout=${decompResult.layout ? "ok" : "fail"}`,
+    );
+    if (decompResult.layout) {
+      floorPlanLayout = decompResult.layout;
+      sheetDecompositionUsed = true;
+    }
+  }
+
+  if (!floorPlanLayout) {
     return {
       layout: null,
       classifications,
@@ -342,8 +371,14 @@ export async function extractFullHouse(
     };
   }
 
-  // 4. Merge into one SpatialLayout
-  const layout: SpatialLayout = { ...floorPlanResult.layout };
+  // 4. Merge into one SpatialLayout — uses floorPlanLayout which may have come
+  // from either the standard extractor or the sheet decomposer fallback.
+  const layout: SpatialLayout = { ...floorPlanLayout };
+  if (sheetDecompositionUsed && !layout.notes) {
+    layout.notes = "Extracted via sheet decomposer (multi-drawing CAD sheet fallback).";
+  } else if (sheetDecompositionUsed && layout.notes) {
+    layout.notes = `[sheet-decomposer] ${layout.notes}`;
+  }
 
   // Roof — pick highest-confidence elevation that has roof.form
   const elevationsWithRoof = elevationsValid.filter((e) => e.roof?.form);
@@ -404,11 +439,11 @@ export async function extractFullHouse(
 
   // Average confidence across all extractions
   const confidences = [
-    floorPlanResult.layout.confidence,
+    floorPlanLayout.confidence,
     ...elevationsValid.map((e) => e.confidence),
     sectionResult?.confidence ?? 0,
     scheduleResult?.confidence ?? 0,
-  ].filter((c) => c > 0);
+  ].filter((c): c is number => typeof c === "number" && c > 0);
   if (confidences.length > 0) {
     layout.confidence =
       confidences.reduce((s, c) => s + c, 0) / confidences.length;
@@ -421,6 +456,6 @@ export async function extractFullHouse(
     elevationsExtracted: elevationsValid,
     sectionExtracted: sectionResult,
     scheduleExtracted: scheduleResult,
-    totalPages: floorPlanResult.totalPages ?? sourcePageCount,
+    totalPages: floorPlanResult?.totalPages ?? sourcePageCount,
   };
 }
