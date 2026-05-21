@@ -53,11 +53,24 @@ async function singlePagePdfBase64(
   const totalPages = sourceDoc.getPageCount();
   if (pageNumber < 1 || pageNumber > totalPages) return null;
 
-  const out = await PDFDocument.create();
-  const [copied] = await out.copyPages(sourceDoc, [pageNumber - 1]);
-  out.addPage(copied);
-  const bytes = await out.save();
-  return Buffer.from(bytes).toString("base64");
+  // pdf-lib can throw on malformed page objects (CAD-exported PDFs sometimes
+  // ship pages with non-standard resource refs). Surfaces in production as
+  // the minified "Expected instance of b, but got instance of undefined"
+  // assertion. Treat as a soft failure so the orchestrator can skip the page
+  // and continue with whatever else is extractable.
+  try {
+    const out = await PDFDocument.create();
+    const [copied] = await out.copyPages(sourceDoc, [pageNumber - 1]);
+    out.addPage(copied);
+    const bytes = await out.save();
+    return Buffer.from(bytes).toString("base64");
+  } catch (err) {
+    console.error(
+      `[singlePagePdfBase64] failed to extract page ${pageNumber}:`,
+      err,
+    );
+    return null;
+  }
 }
 
 /**
@@ -73,12 +86,24 @@ async function firstNPagesPdfBase64(
   const totalPages = sourceDoc.getPageCount();
   if (totalPages <= count) return originalBase64;
 
-  const out = await PDFDocument.create();
-  const indices = Array.from({ length: count }, (_, i) => i);
-  const copiedPages = await out.copyPages(sourceDoc, indices);
-  for (const p of copiedPages) out.addPage(p);
-  const bytes = await out.save();
-  return Buffer.from(bytes).toString("base64");
+  // Same defensive shape as singlePagePdfBase64: if pdf-lib throws on a
+  // malformed page object during copyPages, fall back to the full PDF so the
+  // classifier still gets something to look at rather than bubbling the
+  // minified type-check error up to the UI.
+  try {
+    const out = await PDFDocument.create();
+    const indices = Array.from({ length: count }, (_, i) => i);
+    const copiedPages = await out.copyPages(sourceDoc, indices);
+    for (const p of copiedPages) out.addPage(p);
+    const bytes = await out.save();
+    return Buffer.from(bytes).toString("base64");
+  } catch (err) {
+    console.error(
+      `[firstNPagesPdfBase64] failed to split first ${count} pages, falling back to full PDF:`,
+      err,
+    );
+    return originalBase64;
+  }
 }
 
 export type FullHouseExtraction = {
