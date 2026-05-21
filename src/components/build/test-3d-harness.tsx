@@ -272,6 +272,24 @@ export function Test3DHarness() {
         </div>
       )}
 
+      {/* Layout exists but is empty (zero walls / zero bounds). Most common
+          on multi-drawing title-block sheets where the page classifier
+          picked a non-floor-plan page and the extractor returned a no-op
+          layout. Surface explicitly instead of mounting blank canvases. */}
+      {result?.layout &&
+        result.layout.walls.length === 0 &&
+        result.layout.rooms.length === 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <strong className="block mb-1">No floor plan geometry extracted</strong>
+            The extractor returned 0 walls and 0 rooms. This usually means
+            the page that was inspected isn&apos;t a single floor-plan view —
+            common with CAD-exported PDFs where each sheet contains multiple
+            drawings (plan + elevations + section on one title-block).
+            Try a single-drawing PDF or use the page-number input above to
+            target a specific floor-plan page.
+          </div>
+        )}
+
       {result?.layout && (
         <>
           <div className="space-y-1 text-xs text-zinc-600">
@@ -347,40 +365,42 @@ export function Test3DHarness() {
             )}
           </div>
 
-          <div className="rounded-lg border bg-white p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">3D render</h2>
-              <div className="flex items-center gap-1 rounded-md border bg-zinc-50 p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("system-explorer")}
-                  className={`rounded px-2.5 py-1 transition-colors ${
-                    viewMode === "system-explorer"
-                      ? "bg-white shadow-sm font-medium text-zinc-900"
-                      : "text-zinc-600 hover:text-zinc-900"
-                  }`}
-                >
-                  System Explorer
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("standard")}
-                  className={`rounded px-2.5 py-1 transition-colors ${
-                    viewMode === "standard"
-                      ? "bg-white shadow-sm font-medium text-zinc-900"
-                      : "text-zinc-600 hover:text-zinc-900"
-                  }`}
-                >
-                  Standard
-                </button>
+          {result.layout.walls.length > 0 ? (
+            <div className="rounded-lg border bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold">3D render</h2>
+                <div className="flex items-center gap-1 rounded-md border bg-zinc-50 p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("system-explorer")}
+                    className={`rounded px-2.5 py-1 transition-colors ${
+                      viewMode === "system-explorer"
+                        ? "bg-white shadow-sm font-medium text-zinc-900"
+                        : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    System Explorer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("standard")}
+                    className={`rounded px-2.5 py-1 transition-colors ${
+                      viewMode === "standard"
+                        ? "bg-white shadow-sm font-medium text-zinc-900"
+                        : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    Standard
+                  </button>
+                </div>
               </div>
+              {viewMode === "system-explorer" ? (
+                <SystemExplorerView layout={result.layout} />
+              ) : (
+                <PlanComparison3D layout={result.layout} suggestions={[]} />
+              )}
             </div>
-            {viewMode === "system-explorer" ? (
-              <SystemExplorerView layout={result.layout} />
-            ) : (
-              <PlanComparison3D layout={result.layout} suggestions={[]} />
-            )}
-          </div>
+          ) : null}
 
           <div className="rounded-lg border bg-white">
             <button
