@@ -337,8 +337,16 @@ export async function extractFullHouse(
   // Off by default — flip ENABLE_SHEET_DECOMPOSITION=true to enable.
   let floorPlanLayout = floorPlanResult?.layout ?? null;
   let sheetDecompositionUsed = false;
+  // Trigger condition: no layout at all OR an empty layout (zero walls AND
+  // zero rooms — the "data but no image" symptom Karen reported, where the
+  // extractor returned a layout shape but couldn't actually find geometry).
+  const standardExtractorFailed =
+    !floorPlanResult ||
+    !floorPlanResult.layout ||
+    ((floorPlanResult.layout.walls?.length || 0) === 0 &&
+      (floorPlanResult.layout.rooms?.length || 0) === 0);
   if (
-    (!floorPlanResult || !floorPlanResult.layout) &&
+    standardExtractorFailed &&
     process.env.ENABLE_SHEET_DECOMPOSITION === "true"
   ) {
     console.log(
