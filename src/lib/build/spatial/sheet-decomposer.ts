@@ -9,44 +9,34 @@
  * / SAHA failure mode.
  *
  * This module fixes that case by:
- *   1. Rendering the busy page at high resolution
- *   2. Asking Claude vision to identify each drawing tile + classify it
- *   3. Trying floor-plan candidates in order of confidence × area
- *   4. For each, cropping just that bbox region and running the extractor
- *      with an explicit "verify-then-extract or return error" prompt
- *   5. Returning the first crop that produces a viable extraction
+ *   1. Sending the PDF natively to Claude vision to identify each drawing
+ *      tile's bounding box + classify it
+ *   2. Filtering to floor-plan candidates, sorted by confidence × area
+ *   3. For each candidate: cropping the PDF's CropBox to that bbox region
+ *      using pdf-lib, then sending the cropped single-page PDF natively to
+ *      Claude with a verify-then-extract prompt
+ *   4. Returning the first crop that produces a viable extraction
+ *
+ * No local raster rendering — uses Anthropic's native PDF document content
+ * type throughout. Aligns with the project's "prefer native API over bundle
+ * workarounds" rule, which was locked in after multiple commits trying to
+ * make pdfjs-dist/pdf-to-img/@napi-rs/canvas bundle correctly on Vercel.
  *
  * Cost: ~$0.05-$0.15 per DWG file (one bbox detection call + up to 6
  * verify+extract calls). Only runs when the standard classifier fails, so
  * adds zero cost to single-drawing council DA PDFs.
  *
- * Gated by ENABLE_SHEET_DECOMPOSITION feature flag — off by default until
- * validated against more file samples.
+ * Gated by ENABLE_SHEET_DECOMPOSITION feature flag.
  */
 
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import sharp from "sharp";
+import { PDFDocument } from "pdf-lib";
 import { extractJson } from "@/lib/ai/extract-json";
 import type { SpatialLayout } from "./types";
 
-// pdf-to-img wraps pdfjs-dist which expects DOMMatrix at module-load time.
-// Node serverless has no DOM. @napi-rs/canvas ships a native DOMMatrix class;
-// we attach it to globalThis BEFORE dynamically importing pdf-to-img.
-// Static import would hoist + evaluate before this polyfill runs.
-async function loadPdfToImg() {
-  if (typeof (globalThis as { DOMMatrix?: unknown }).DOMMatrix === "undefined") {
-    const canvas = await import("@napi-rs/canvas");
-    (globalThis as { DOMMatrix?: unknown }).DOMMatrix = canvas.DOMMatrix;
-  }
-  const mod = await import("pdf-to-img");
-  return mod.pdf;
-}
-
 const BBOX_DETECTOR_MODEL = "claude-sonnet-4-6";
 const EXTRACTOR_MODEL = "claude-sonnet-4-6";
-const FULL_RENDER_SCALE = 6.0;
-const BBOX_INPUT_WIDTH = 2400;
 const PAD_PCT = 2;
 const MAX_CANDIDATES_TO_TRY = 6;
 const MIN_VIABLE_WALLS = 4;
@@ -131,9 +121,9 @@ Output ONLY valid JSON (no markdown fences):
   ]
 }
 
-bbox is in PERCENTAGES (0-100) with origin TOP-LEFT. Add 2-3% padding so dimension lines aren't cut.`;
+bbox is in PERCENTAGES (0-100) of the PDF page, with origin TOP-LEFT. Add 2-3% padding so dimension lines aren't cut.`;
 
-const VERIFY_EXTRACT_PROMPT = `You are analysing a cropped image from a CAD drawing set. The image was tagged as a potential floor plan but VERIFY before extracting.
+const VERIFY_EXTRACT_PROMPT = `You are analysing a single page from a PDF. The page has been cropped to show one drawing that was tagged as a potential floor plan, but VERIFY before extracting.
 
 A real FLOOR PLAN has:
 - Top-down view of building interior
@@ -141,7 +131,7 @@ A real FLOOR PLAN has:
 - Room labels (Living, Bedroom, Kitchen, etc.) OR clear room divisions
 - Extent stops at building external walls (NOT showing lot, streets, neighbouring properties)
 
-If the image is anything else (site plan, elevation, schedule, detail, cover sheet), return:
+If the page is anything else (site plan, elevation, schedule, detail, cover sheet), return:
 {"error":"not_a_floor_plan","detected":"site_plan|elevation|schedule|details|cover|other"}
 
 If it IS a floor plan, extract:
@@ -159,6 +149,53 @@ If it IS a floor plan, extract:
 Trace EVERY wall segment — don't skip internal partitions. External walls form a closed perimeter loop. Use metres. Return ONLY JSON.`;
 
 /**
+ * Take a single-page source PDF and produce a new single-page PDF whose
+ * CropBox restricts the visible region to the given bbox (expressed as
+ * percentages of the source page with origin TOP-LEFT, matching Claude's
+ * bbox detector output). PDF coordinate space is bottom-left origin, so
+ * the y axis flips during conversion.
+ *
+ * Returns a base64-encoded PDF, or null if pdf-lib couldn't copy/save the
+ * page (defensive — some CAD-exported PDFs have malformed page objects).
+ */
+async function cropPdfPageToBbox(
+  sourcePdfBytes: Uint8Array,
+  bbox: { x: number; y: number; w: number; h: number },
+): Promise<string | null> {
+  try {
+    const sourceDoc = await PDFDocument.load(sourcePdfBytes, {
+      ignoreEncryption: true,
+    });
+    const out = await PDFDocument.create();
+    const [copied] = await out.copyPages(sourceDoc, [0]);
+    out.addPage(copied);
+
+    const { width: pageW, height: pageH } = copied.getSize();
+    const padX = (PAD_PCT / 100) * pageW;
+    const padY = (PAD_PCT / 100) * pageH;
+    const cropX = Math.max(0, (bbox.x / 100) * pageW - padX);
+    const cropW = Math.min(
+      pageW - cropX,
+      (bbox.w / 100) * pageW + 2 * padX,
+    );
+    // Flip y: PDF origin is bottom-left, bbox origin is top-left
+    const topPt = (bbox.y / 100) * pageH;
+    const heightPt = (bbox.h / 100) * pageH;
+    const cropYBottom = Math.max(0, pageH - topPt - heightPt - padY);
+    const cropH = Math.min(pageH - cropYBottom, heightPt + 2 * padY);
+
+    copied.setCropBox(cropX, cropYBottom, cropW, cropH);
+    copied.setMediaBox(cropX, cropYBottom, cropW, cropH);
+
+    const bytes = await out.save();
+    return Buffer.from(bytes).toString("base64");
+  } catch (err) {
+    console.error("[cropPdfPageToBbox] failed:", err);
+    return null;
+  }
+}
+
+/**
  * Decompose a multi-drawing CAD sheet into individual drawings and extract
  * a SpatialLayout from the first floor-plan candidate that verifies.
  *
@@ -171,40 +208,10 @@ export async function decomposeSheetAndExtractFloorPlan(
 ): Promise<SheetDecompositionResult> {
   const anthropic = getClient();
   const attempts: SheetDecompositionResult["attempts"] = [];
+  const pdfBase64 = pdfBuffer.toString("base64");
+  const sourceBytes = new Uint8Array(pdfBuffer);
 
-  // 1. Render at high resolution for cropping
-  let fullPng: Buffer | null = null;
-  try {
-    const pdfToImg = await loadPdfToImg();
-    const pages = await pdfToImg(pdfBuffer, { scale: FULL_RENDER_SCALE });
-    for await (const img of pages) {
-      fullPng = Buffer.from(img);
-      break;
-    }
-  } catch (err) {
-    return {
-      layout: null,
-      attempts,
-      drawingsDetected: 0,
-      error: `Page render failed: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
-  if (!fullPng) {
-    return { layout: null, attempts, drawingsDetected: 0, error: "No page rendered" };
-  }
-
-  const meta = await sharp(fullPng).metadata();
-  if (!meta.width || !meta.height) {
-    return { layout: null, attempts, drawingsDetected: 0, error: "Invalid page metadata" };
-  }
-
-  // 2. Downsample for bbox detection — Claude doesn't need 4800×3600 to find tiles
-  const bboxInput = await sharp(fullPng)
-    .resize(BBOX_INPUT_WIDTH, null, { fit: "inside" })
-    .png()
-    .toBuffer();
-
-  // 3. Bbox detection call
+  // 1. Bbox detection — send the PDF natively to Claude (no local raster)
   let drawings: DrawingRegion[] = [];
   try {
     const resp = await anthropic.messages.create({
@@ -217,12 +224,16 @@ export async function decomposeSheetAndExtractFloorPlan(
           role: "user",
           content: [
             {
-              type: "image",
-              source: { type: "base64", media_type: "image/png", data: bboxInput.toString("base64") },
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: pdfBase64,
+              },
             },
             {
               type: "text",
-              text: "Identify all drawing tiles. Be conservative on floor_plan_*. Return ONLY JSON.",
+              text: "Identify all drawing tiles on this PDF page. Be conservative on floor_plan_*. Return ONLY JSON.",
             },
           ],
         },
@@ -243,12 +254,19 @@ export async function decomposeSheetAndExtractFloorPlan(
   }
 
   if (drawings.length === 0) {
-    return { layout: null, attempts, drawingsDetected: 0, error: "No drawing tiles detected" };
+    return {
+      layout: null,
+      attempts,
+      drawingsDetected: 0,
+      error: "No drawing tiles detected",
+    };
   }
 
-  // 4. Filter to floor-plan candidates, sort by confidence × area
+  // 2. Filter to floor-plan candidates, sort by confidence × area
   const candidates = drawings
-    .filter((d) => d.type === "floor_plan_ground" || d.type === "floor_plan_upper")
+    .filter(
+      (d) => d.type === "floor_plan_ground" || d.type === "floor_plan_upper",
+    )
     .sort((a, b) => {
       const confDiff = b.confidence - a.confidence;
       if (Math.abs(confDiff) > 0.02) return confDiff;
@@ -264,30 +282,15 @@ export async function decomposeSheetAndExtractFloorPlan(
     };
   }
 
-  // 5. Iterate through candidates, return first that verifies + extracts
+  // 3. Iterate through candidates, return first that verifies + extracts
   for (let i = 0; i < Math.min(candidates.length, MAX_CANDIDATES_TO_TRY); i++) {
     const pick = candidates[i];
-    const px = Math.max(0, Math.floor(((pick.bbox.x - PAD_PCT) / 100) * meta.width));
-    const py = Math.max(0, Math.floor(((pick.bbox.y - PAD_PCT) / 100) * meta.height));
-    const pw = Math.min(
-      meta.width - px,
-      Math.ceil(((pick.bbox.w + 2 * PAD_PCT) / 100) * meta.width),
-    );
-    const ph = Math.min(
-      meta.height - py,
-      Math.ceil(((pick.bbox.h + 2 * PAD_PCT) / 100) * meta.height),
-    );
 
-    let cropped: Buffer;
-    try {
-      cropped = await sharp(fullPng)
-        .extract({ left: px, top: py, width: pw, height: ph })
-        .png()
-        .toBuffer();
-    } catch (err) {
+    const croppedPdfBase64 = await cropPdfPageToBbox(sourceBytes, pick.bbox);
+    if (!croppedPdfBase64) {
       attempts.push({
         candidate: pick,
-        outcome: { kind: "error", message: `crop failed: ${err instanceof Error ? err.message : String(err)}` },
+        outcome: { kind: "error", message: "pdf-lib crop failed" },
       });
       continue;
     }
@@ -303,8 +306,12 @@ export async function decomposeSheetAndExtractFloorPlan(
             role: "user",
             content: [
               {
-                type: "image",
-                source: { type: "base64", media_type: "image/png", data: cropped.toString("base64") },
+                type: "document",
+                source: {
+                  type: "base64",
+                  media_type: "application/pdf",
+                  data: croppedPdfBase64,
+                },
               },
               {
                 type: "text",
@@ -316,7 +323,10 @@ export async function decomposeSheetAndExtractFloorPlan(
       });
       const text = resp.content.find((b) => b.type === "text");
       if (!text || text.type !== "text") {
-        attempts.push({ candidate: pick, outcome: { kind: "error", message: "no text response" } });
+        attempts.push({
+          candidate: pick,
+          outcome: { kind: "error", message: "no text response" },
+        });
         continue;
       }
       const parsed = extractJson<
@@ -325,13 +335,19 @@ export async function decomposeSheetAndExtractFloorPlan(
       >(text.text);
 
       if (!parsed) {
-        attempts.push({ candidate: pick, outcome: { kind: "error", message: "JSON parse failed" } });
+        attempts.push({
+          candidate: pick,
+          outcome: { kind: "error", message: "JSON parse failed" },
+        });
         continue;
       }
       if ("error" in parsed && parsed.error) {
         attempts.push({
           candidate: pick,
-          outcome: { kind: "rejected", detectedAs: (parsed as { detected: string }).detected },
+          outcome: {
+            kind: "rejected",
+            detectedAs: (parsed as { detected: string }).detected,
+          },
         });
         continue;
       }
@@ -342,7 +358,12 @@ export async function decomposeSheetAndExtractFloorPlan(
 
       attempts.push({
         candidate: pick,
-        outcome: { kind: "extracted", walls: w, rooms: r, confidence: layout.confidence ?? 0 },
+        outcome: {
+          kind: "extracted",
+          walls: w,
+          rooms: r,
+          confidence: layout.confidence ?? 0,
+        },
       });
 
       if (w >= MIN_VIABLE_WALLS && r >= MIN_VIABLE_ROOMS) {
@@ -355,7 +376,10 @@ export async function decomposeSheetAndExtractFloorPlan(
     } catch (err) {
       attempts.push({
         candidate: pick,
-        outcome: { kind: "error", message: err instanceof Error ? err.message : String(err) },
+        outcome: {
+          kind: "error",
+          message: err instanceof Error ? err.message : String(err),
+        },
       });
     }
   }
