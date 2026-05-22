@@ -17,7 +17,12 @@ import { db } from "@/lib/supabase/db";
 import { inngest } from "@/lib/inngest/client";
 import type { Test3DResult } from "@/lib/build/test-3d-runner";
 
-export type { Test3DResult };
+// NOTE: "use server" files in Next.js can only export async functions at
+// runtime. `export type { Test3DResult }` looks fine to TypeScript but
+// Turbopack treats it as a value re-export in the SSR bundle and the
+// module fails to evaluate with "ReferenceError: Test3DResult is not
+// defined". Consumers (e.g. test-3d-harness.tsx) must import the type
+// directly from "@/lib/build/test-3d-runner".
 
 export type EnqueueTest3DInput = {
   storagePath: string;

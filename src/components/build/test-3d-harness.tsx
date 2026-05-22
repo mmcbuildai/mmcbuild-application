@@ -7,8 +7,8 @@ import { SystemExplorerView } from "./system-explorer-view";
 import {
   enqueueTest3D,
   getTest3DStatus,
-  type Test3DResult,
 } from "@/app/(dashboard)/build/test-3d/actions";
+import type { Test3DResult } from "@/lib/build/test-3d-runner";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import {
