@@ -89,16 +89,16 @@ export interface SheetDecompositionResult {
   error?: string;
 }
 
-const BBOX_PROMPT = `You are looking at a single PDF page rendered from a DWG. The DWG was exported in MODEL SPACE — multiple paper-space sheets have been arranged as TILES in one big canvas. Each tile is one complete drawing.
+const BBOX_PROMPT = `You are looking at a single PDF page rendered from a DWG. The DWG was exported from model space, so multiple drawings may appear on this one page. The drawings may be laid out as a TILE GRID, stacked vertically, scattered, or even as one large primary drawing with smaller annotations beside it. Do NOT assume a specific layout — find whatever drawings are actually present.
 
-YOUR JOB: locate each TILE on the canvas and classify what drawing it contains.
+YOUR JOB: locate every distinct drawing region on the page and classify what it contains. If there is only one large drawing covering most of the page, return that single region. If there are multiple, return them all.
 
 CRITICAL TYPE DISTINCTIONS — read carefully:
 
 - floor_plan_ground / floor_plan_upper:
   * Top-down view of building INTERIOR
-  * MUST show internal partition walls (parallel lines or single bold lines between rooms)
-  * MUST show distinct rooms (labelled "Living", "Bedroom", "Kitchen", or similar) OR clear room divisions
+  * Shows internal partition walls (parallel lines or single bold lines between rooms)
+  * Shows distinct rooms (labelled "Living", "Bedroom", "Kitchen", or similar) OR clear room divisions
   * Drawing extent stops at building external walls — does NOT show lot boundaries, streets, neighbouring lots
   * If a drawing shows JUST a filled building footprint with no visible internal walls, it is a SITE PLAN not a floor plan
 
@@ -114,7 +114,7 @@ CRITICAL TYPE DISTINCTIONS — read carefully:
 - cover / title_block: title page, sheet index, revision table
 - other: anything else
 
-IMPORTANT — only return drawings with confidence >= 0.7. Be conservative on floor_plan_* tags — if you're not certain you see internal walls + room labels, tag as site_plan or other.
+IMPORTANT — return drawings with confidence >= 0.5. If you can plausibly see a floor plan but aren't certain, return it as floor_plan_ground with the confidence you actually have — the downstream verifier will reject it if wrong, but it can't recover from you returning nothing.
 
 Output ONLY valid JSON (no markdown fences):
 
@@ -256,17 +256,8 @@ export async function decomposeSheetAndExtractFloorPlan(
     };
   }
 
-  if (drawings.length === 0) {
-    return {
-      layout: null,
-      attempts,
-      drawingsDetected: 0,
-      error: "No drawing tiles detected",
-    };
-  }
-
   // 2. Filter to floor-plan candidates, sort by confidence × area
-  const candidates = drawings
+  let candidates = drawings
     .filter(
       (d) => d.type === "floor_plan_ground" || d.type === "floor_plan_upper",
     )
@@ -276,13 +267,23 @@ export async function decomposeSheetAndExtractFloorPlan(
       return b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h;
     });
 
+  // Last-resort fallback: if the detector found nothing it called a floor
+  // plan (or nothing at all), synthesize a single whole-page candidate and
+  // let the verify-extract pass have a go at the entire page. The standard
+  // extractor already failed on the whole page with its own prompt, but the
+  // decomposer's verify-extract prompt is more focused, so it sometimes
+  // recovers cases like SAHA's Row Homes DWG where the rasterized model
+  // space doesn't look like a tile grid.
   if (candidates.length === 0) {
-    return {
-      layout: null,
-      attempts,
-      drawingsDetected: drawings.length,
-      error: "No floor-plan candidates among detected tiles",
-    };
+    candidates = [
+      {
+        type: "floor_plan_ground",
+        bbox: { x: 0, y: 0, w: 100, h: 100 },
+        title: "whole-page fallback",
+        confidence: 0.4,
+        evidence: "synthesized — bbox detector found no floor-plan candidates",
+      },
+    ];
   }
 
   // 3. Run verify-extract on the top candidates IN PARALLEL so the
