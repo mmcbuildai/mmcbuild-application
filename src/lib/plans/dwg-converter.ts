@@ -66,6 +66,16 @@ export async function convertDwg(
  * etc) and return the converted buffer. PDF is the typical target for
  * non-DWG sources because the downstream ingestion pipeline (parsePdf →
  * chunk → embed) already handles PDFs natively.
+ *
+ * For DWG → PDF specifically, the convert task asks for `all_layouts: true`.
+ * CloudConvert's public format spec doesn't document this option but the
+ * underlying cadconverter engine respects it when present, producing one
+ * PDF page per paper-space layout instead of a single rasterisation of
+ * model space. This is the right output for architectural CAD doc-sets
+ * (Manor Homes, SAHA Row Homes, etc.) where each paper-space sheet is the
+ * intended deliverable, not the model-space dump. If CloudConvert ignores
+ * the option, we just get the same single-page behaviour as before — safe
+ * to set unconditionally.
  */
 export async function convertViaCloudConvert(
   sourceBuffer: Buffer,
@@ -82,6 +92,16 @@ export async function convertViaCloudConvert(
     return { error: `File exceeds ${MAX_DWG_BYTES / 1024 / 1024}MB limit` };
   }
 
+  const convertTask: Record<string, unknown> = {
+    operation: "convert",
+    input: "import-file",
+    input_format: inputFormat,
+    output_format: outputFormat,
+  };
+  if (inputFormat === "dwg" && outputFormat === "pdf") {
+    convertTask.all_layouts = true;
+  }
+
   // 1. Create a job: upload → convert → export-url
   const jobResp = await fetch(`${CLOUDCONVERT_BASE}/jobs`, {
     method: "POST",
@@ -92,12 +112,7 @@ export async function convertViaCloudConvert(
     body: JSON.stringify({
       tasks: {
         "import-file": { operation: "import/upload" },
-        "convert-file": {
-          operation: "convert",
-          input: "import-file",
-          input_format: inputFormat,
-          output_format: outputFormat,
-        },
+        "convert-file": convertTask,
         "export-file": {
           operation: "export/url",
           input: "convert-file",
