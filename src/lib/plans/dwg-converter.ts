@@ -16,7 +16,18 @@
 
 const CLOUDCONVERT_BASE = "https://api.cloudconvert.com/v2";
 const POLL_INTERVAL_MS = 3000;
-const MAX_POLL_ATTEMPTS = 80; // ~4 minutes
+// 90s poll budget — must fit inside a single Vercel 300s step.run
+// invocation alongside the upload + initial job creation + final download.
+// If CloudConvert is slow on a given DWG (queue depth, large file, etc.)
+// we fail-fast and let the orchestrator try the alternative path (e.g.
+// DXF fails → PDF + AI vision). Was 80 attempts (240s) — that meant a
+// single slow CC call could blow past the entire step budget and trigger
+// Inngest transport retries that span 11+ minutes.
+const MAX_POLL_ATTEMPTS = 30;
+// Per-HTTP-call timeout. Any single fetch (job create, file upload,
+// status poll, file download) that takes longer than this aborts cleanly
+// rather than hanging the function until Vercel kills the connection.
+const FETCH_TIMEOUT_MS = 60_000;
 const MAX_DWG_BYTES = 50 * 1024 * 1024; // 50 MB matches plan-uploads cap
 
 export type DwgConvertResult =
@@ -104,6 +115,7 @@ export async function convertViaCloudConvert(
         },
       },
     }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!jobResp.ok) {
@@ -134,6 +146,10 @@ export async function convertViaCloudConvert(
   const uploadResp = await fetch(uploadForm.url, {
     method: "POST",
     body: form,
+    // 16MB DWG upload over slow link can otherwise hang past Vercel's
+    // 300s function timeout — abort cleanly at 60s so the caller can
+    // surface the failure and either retry or fall through.
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!uploadResp.ok) {
@@ -147,8 +163,9 @@ export async function convertViaCloudConvert(
 
     const statusResp = await fetch(`${CLOUDCONVERT_BASE}/jobs/${jobId}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    if (!statusResp.ok) continue;
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    }).catch(() => null);
+    if (!statusResp || !statusResp.ok) continue;
 
     const status = (await statusResp.json()) as CCJobResponse;
 
@@ -159,7 +176,9 @@ export async function convertViaCloudConvert(
         return { error: "CloudConvert finished without an export URL" };
       }
 
-      const fileResp = await fetch(fileUrl);
+      const fileResp = await fetch(fileUrl, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (!fileResp.ok) {
         return { error: `Converted file download failed: ${fileResp.status}` };
       }
