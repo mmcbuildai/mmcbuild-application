@@ -106,6 +106,23 @@ async function firstNPagesPdfBase64(
   }
 }
 
+export type DecomposerDiagnostic = {
+  status:
+    | "skipped-not-needed"
+    | "skipped-gate-off"
+    | "ran-success"
+    | "ran-failed";
+  drawingsDetected?: number;
+  attempts?: Array<{
+    candidate: { type: string; confidence: number; title?: string };
+    outcome:
+      | { kind: "rejected"; detectedAs: string }
+      | { kind: "extracted"; walls: number; rooms: number; confidence: number }
+      | { kind: "error"; message: string };
+  }>;
+  error?: string;
+};
+
 export type FullHouseExtraction = {
   layout: SpatialLayout | null;
   classifications: PageTypeClassification[];
@@ -114,6 +131,7 @@ export type FullHouseExtraction = {
   sectionExtracted: SectionExtraction | null;
   scheduleExtracted: ScheduleExtraction | null;
   totalPages: number | null;
+  decomposer?: DecomposerDiagnostic;
   error?: string;
 };
 
@@ -337,6 +355,7 @@ export async function extractFullHouse(
   // Off by default — flip ENABLE_SHEET_DECOMPOSITION=true to enable.
   let floorPlanLayout = floorPlanResult?.layout ?? null;
   let sheetDecompositionUsed = false;
+  let decomposer: DecomposerDiagnostic | undefined;
   // Trigger condition: no layout at all OR an empty layout (zero walls AND
   // zero rooms — the "data but no image" symptom Karen reported, where the
   // extractor returned a layout shape but couldn't actually find geometry).
@@ -345,10 +364,11 @@ export async function extractFullHouse(
     !floorPlanResult.layout ||
     ((floorPlanResult.layout.walls?.length || 0) === 0 &&
       (floorPlanResult.layout.rooms?.length || 0) === 0);
-  if (
-    standardExtractorFailed &&
-    process.env.ENABLE_SHEET_DECOMPOSITION?.trim() === "true"
-  ) {
+  if (!standardExtractorFailed) {
+    decomposer = { status: "skipped-not-needed" };
+  } else if (process.env.ENABLE_SHEET_DECOMPOSITION?.trim() !== "true") {
+    decomposer = { status: "skipped-gate-off" };
+  } else {
     console.log(
       `[extractFullHouse] standard extractor returned no layout — invoking sheet decomposer fallback`,
     );
@@ -360,6 +380,19 @@ export async function extractFullHouse(
     console.log(
       `[extractFullHouse] sheet decomposer: drawings=${decompResult.drawingsDetected}, attempts=${decompResult.attempts.length}, layout=${decompResult.layout ? "ok" : "fail"}`,
     );
+    decomposer = {
+      status: decompResult.layout ? "ran-success" : "ran-failed",
+      drawingsDetected: decompResult.drawingsDetected,
+      attempts: decompResult.attempts.map((a) => ({
+        candidate: {
+          type: a.candidate.type,
+          confidence: a.candidate.confidence,
+          title: a.candidate.title,
+        },
+        outcome: a.outcome,
+      })),
+      error: decompResult.error,
+    };
     if (decompResult.layout) {
       floorPlanLayout = decompResult.layout;
       sheetDecompositionUsed = true;
@@ -375,6 +408,7 @@ export async function extractFullHouse(
       sectionExtracted: sectionResult,
       scheduleExtracted: scheduleResult,
       totalPages: floorPlanResult?.totalPages ?? sourcePageCount,
+      decomposer,
       error: floorPlanResult?.error ?? "No floor plan extracted",
     };
   }
@@ -465,5 +499,6 @@ export async function extractFullHouse(
     sectionExtracted: sectionResult,
     scheduleExtracted: scheduleResult,
     totalPages: floorPlanResult?.totalPages ?? sourcePageCount,
+    decomposer,
   };
 }

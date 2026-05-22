@@ -279,14 +279,70 @@ export function Test3DHarness() {
       {result?.layout &&
         result.layout.walls.length === 0 &&
         result.layout.rooms.length === 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <strong className="block mb-1">No floor plan geometry extracted</strong>
-            The extractor returned 0 walls and 0 rooms. This usually means
-            the page that was inspected isn&apos;t a single floor-plan view —
-            common with CAD-exported PDFs where each sheet contains multiple
-            drawings (plan + elevations + section on one title-block).
-            Try a single-drawing PDF or use the page-number input above to
-            target a specific floor-plan page.
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-2">
+            <div>
+              <strong className="block mb-1">No floor plan geometry extracted</strong>
+              The extractor returned 0 walls and 0 rooms. This usually means
+              the page that was inspected isn&apos;t a single floor-plan view —
+              common with CAD-exported PDFs where each sheet contains multiple
+              drawings (plan + elevations + section on one title-block).
+              Try a single-drawing PDF or use the page-number input above to
+              target a specific floor-plan page.
+            </div>
+            {result.decomposer && (
+              <div className="rounded border border-amber-300 bg-amber-100/60 p-2 text-xs">
+                <div className="font-medium mb-1">
+                  Tier 2 sheet decomposer:{" "}
+                  <code>{result.decomposer.status}</code>
+                </div>
+                {result.decomposer.status === "skipped-gate-off" && (
+                  <div>
+                    Fallback gate <code>ENABLE_SHEET_DECOMPOSITION</code> is not
+                    set to <code>&quot;true&quot;</code> on this deploy. Set it
+                    on Vercel and redeploy to enable.
+                  </div>
+                )}
+                {result.decomposer.status === "skipped-not-needed" && (
+                  <div>
+                    Standard extractor returned a non-empty layout, so the
+                    fallback was bypassed.
+                  </div>
+                )}
+                {(result.decomposer.status === "ran-success" ||
+                  result.decomposer.status === "ran-failed") && (
+                  <div className="space-y-1">
+                    <div>
+                      Drawings detected:{" "}
+                      <code>{result.decomposer.drawingsDetected ?? 0}</code> ·
+                      Candidates tried:{" "}
+                      <code>{result.decomposer.attempts?.length ?? 0}</code>
+                    </div>
+                    {result.decomposer.error && (
+                      <div>
+                        Error: <code>{result.decomposer.error}</code>
+                      </div>
+                    )}
+                    {result.decomposer.attempts &&
+                      result.decomposer.attempts.length > 0 && (
+                        <ul className="list-disc pl-5 space-y-0.5">
+                          {result.decomposer.attempts.map((a, i) => (
+                            <li key={i} className="font-mono">
+                              {a.candidate.type} (
+                              {Math.round(a.candidate.confidence * 100)}%) →{" "}
+                              {a.outcome.kind === "rejected" &&
+                                `rejected as ${a.outcome.detectedAs}`}
+                              {a.outcome.kind === "extracted" &&
+                                `${a.outcome.walls} walls / ${a.outcome.rooms} rooms (conf ${Math.round(a.outcome.confidence * 100)}%)`}
+                              {a.outcome.kind === "error" &&
+                                `error: ${a.outcome.message}`}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

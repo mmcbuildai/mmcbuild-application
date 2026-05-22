@@ -6,7 +6,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { extractSpatialLayout } from "@/lib/build/spatial/extractor";
-import { extractFullHouse } from "@/lib/build/spatial/full-house-extractor";
+import {
+  extractFullHouse,
+  type DecomposerDiagnostic,
+} from "@/lib/build/spatial/full-house-extractor";
 import { convertViaCloudConvert } from "@/lib/plans/dwg-converter";
 import {
   detectPlanKind,
@@ -34,6 +37,9 @@ export type Test3DResult = {
   sectionPage?: number;
   /** v2-v4 — schedule page used for materials (if any). */
   schedulePage?: number;
+  /** Tier 2 sheet decomposer state — surfaced so the harness can show
+   * whether the fallback fired and what it found. */
+  decomposer?: DecomposerDiagnostic;
 };
 
 export async function extractTest3D(input: {
@@ -148,6 +154,7 @@ export async function extractTest3D(input: {
           detectedPage: result.floorPlanPage ?? undefined,
           pdfPageCount: result.totalPages ?? undefined,
           classifications: result.classifications,
+          decomposer: result.decomposer,
           error: result.error ?? "PDF extraction returned no layout",
         };
       }
@@ -164,6 +171,7 @@ export async function extractTest3D(input: {
         elevationsExtracted: result.elevationsExtracted.length,
         sectionPage: result.sectionExtracted?.pageNumber,
         schedulePage: result.scheduleExtracted?.pageNumber,
+        decomposer: result.decomposer,
       };
     }
 
