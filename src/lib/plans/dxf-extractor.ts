@@ -188,10 +188,13 @@ function unitFactorToMetres(insunits: number | undefined): number {
 // "ARC-PARTITION" etc. Include layers that match any of the common
 // wall-bearing patterns. Exclude annotation / dim / hatch / text / title
 // layers so we don't pick up labels and leader lines as walls.
+// Dropped word boundaries entirely — SAHA uses "Architecturals" (plural)
+// which trailing-\b breaks. Substring match is sufficient because the
+// EXCLUDE regex filters annotation/dim/text/etc. cases.
 const WALL_LAYER_INCLUDE_RE =
-  /\b(wall|a-?wall|partition|architectural|model|construct|building|footprint|outline)\b/i;
+  /(wall|a-?wall|partition|architectural|model[_-]?space|construct|building|footprint|outline)/i;
 const WALL_LAYER_EXCLUDE_RE =
-  /\b(annotation|annotations|dim|dimension|text|hatch|leader|title|legend|north|grid|axis|symbol|furniture|equipment|electrical|plumb|hydraulic|mechanical|fire)\b/i;
+  /(annotation|dim|dimension|text|hatch|leader|title|legend|north|grid|axis|symbol|furniture|equipment|electrical|plumb|hydraulic|mechanical|fire)/i;
 const MIN_WALL_LENGTH_M = 0.3; // segments shorter than 30cm are usually annotations or hatching, not real walls
 const MAX_WALL_LENGTH_M = 50; // segments longer than 50m are usually titleblock/sheet borders, not walls
 
