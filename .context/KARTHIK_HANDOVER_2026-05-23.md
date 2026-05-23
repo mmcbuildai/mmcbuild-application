@@ -1,119 +1,336 @@
-# Karthik handover — repos pushed, what to do next
+# MMC Build Handover — Karthik
 
-Two GitHub repos have been pushed to Dennis's personal account today
-(will be transferred to MMC Build org once you confirm the org slug):
+**Date:** 2026-05-23
+**Prepared by:** Dennis McMahon
+**Audience:** Karthik Rao
+**Estimated total time:** 60–90 minutes once you start
 
-- **`dennissolver/mmc-shared`** — shared services monorepo. Three packages
-  trimmed from cais-shared-services and renamed to `@mmcbuild/*`:
-  - `@mmcbuild/mapbox`
-  - `@mmcbuild/platform-trust-middleware`
-  - `@mmcbuild/property-services-sdk`
-- **`dennissolver/mmc-market`** — the mmcbuild app, currently consuming
-  `@caistech/*` packages (unchanged from current production).
+---
 
-The app still talks to Dennis's CAS-owned Supabase. Karen's existing
-test data is preserved. DNS stays on Base44 until Karen approves the
-Vercel-hosted version.
+## At a glance
 
-## What you do next (rough order)
+Two new GitHub repos have been pushed to Dennis's personal account for you to take over:
 
-### 1. Transfer the two repos to the MMC Build GitHub org
+1. **`dennissolver/mmc-shared`** — a trimmed shared-services monorepo containing the three internal packages the MMC Build app actually uses (mapbox, platform-trust-middleware, property-services-sdk), renamed from `@caistech/*` to `@mmcbuild/*`.
+2. **`dennissolver/mmc-market`** — the MMC Build web application itself, with full git history. Today it still consumes the `@caistech/*` packages from Dennis's GitHub Packages registry (unchanged from current production). After this handover, it will consume `@mmcbuild/*` from MMC Build's own registry.
 
-When you confirm the org slug, Dennis runs `gh repo transfer` for each.
-You accept via GitHub UI, then invite Dennis back as a collaborator so
-he can keep pushing.
+Your job is to (a) take ownership of both repos under the MMC Build GitHub org, (b) publish the three `@mmcbuild/*` packages to MMC Build's GitHub Packages registry, and (c) swap `mmc-market` from `@caistech/*` to `@mmcbuild/*`. The Vercel deploy keeps running throughout — there is no downtime in this handover.
 
-### 2. Generate a Personal Access Token (classic)
+---
 
-Direct link with the right scopes pre-selected:
-https://github.com/settings/tokens/new?scopes=repo,read:packages,write:packages
+## Architecture before and after
 
-Save the `ghp_...` value securely. Used in steps 3 and 5.
+```
+BEFORE (today)                          AFTER (post-handover)
+==============                          =====================
 
-### 3. Publish the three `@mmcbuild/*` packages to GitHub Packages
+mmcbuild-one.vercel.app                 mmcbuild-one.vercel.app
+        |                                       |
+        v                                       v
+  dennissolver/mmcbuild                   <MMC>/mmc-market
+  (Dennis's repo)                         (your repo)
+        |                                       |
+        | imports                               | imports
+        v                                       v
+  @caistech/* packages                    @mmcbuild/* packages
+  (Dennis's GitHub                         (your GitHub
+   Packages registry)                       Packages registry)
+        ^                                       ^
+        |                                       |
+        | published from                        | published from
+        |                                       |
+  caistech/cais-shared-services           <MMC>/mmc-shared
+  (Dennis's source)                       (your source)
+```
 
-From your local clone of `mmc-shared`:
+Supabase, DNS, and Base44 are **out of scope today** — see "Not in scope" at the end.
+
+---
+
+## Prerequisites — confirm before you start
+
+Tick each box before running any of the steps below.
+
+- [ ] You can access the MMC Build GitHub org and have admin permission to create repos and packages there
+- [ ] You can access the Vercel project at `vercel.com/mmc-build/mmcbuild` with permission to change environment variables and trigger redeploys
+- [ ] You have `git`, `node` (v20+), `pnpm` (v10+), and the GitHub CLI (`gh`) installed locally
+- [ ] You have read this entire document once before starting
+
+---
+
+## Step 1 — Take ownership of the two repos (5 min)
+
+### 1.1 — Tell Dennis the MMC Build GitHub org slug
+
+Dennis needs the exact case-sensitive org slug (e.g. `mmc-build`, `mmcbuildau`) to run the transfer command. Send it via Slack/WhatsApp.
+
+### 1.2 — Dennis runs the transfer from his machine
+
+For each repo, Dennis runs:
 
 ```bash
-# One-time: tell npm where your PAT lives
-# Use the LOCAL .npmrc in your home dir, NOT the repo one
-cat >> ~/.npmrc <<'EOF'
-//npm.pkg.github.com/:_authToken=PASTE_YOUR_PAT_HERE
-EOF
+gh repo transfer dennissolver/mmc-shared <YOUR_ORG_SLUG>
+gh repo transfer dennissolver/mmc-market <YOUR_ORG_SLUG>
+```
 
-# Build all three packages
-cd ~/path/to/mmc-shared
+Each command returns a URL.
+
+### 1.3 — You accept the transfer
+
+Open each URL in your browser, click **Accept transfer**. The repos now live at `<YOUR_ORG_SLUG>/mmc-shared` and `<YOUR_ORG_SLUG>/mmc-market`.
+
+### 1.4 — Invite Dennis back as a collaborator
+
+For each repo: **Settings → Collaborators → Add people → `dennissolver` → write access**. Without this, Dennis can't push fixes if anything goes wrong in later steps.
+
+### Verify step 1 worked
+
+```bash
+gh repo view <YOUR_ORG_SLUG>/mmc-shared
+gh repo view <YOUR_ORG_SLUG>/mmc-market
+```
+
+Both should print metadata without errors.
+
+---
+
+## Step 2 — Generate a GitHub Personal Access Token (5 min)
+
+Open this pre-filled link in your browser:
+
+https://github.com/settings/tokens/new?scopes=repo,read:packages,write:packages&description=mmcbuild-github-packages
+
+1. Pick an expiration (90 days or 1 year is fine).
+2. Click **Generate token**.
+3. **Copy the `ghp_...` value immediately** — you won't be able to see it again after navigating away.
+4. Save it in your password manager. You'll use it in steps 3 and 5.
+
+---
+
+## Step 3 — Publish the three @mmcbuild packages (15 min)
+
+### 3.1 — Configure npm to use your PAT for publishing
+
+Edit (or create) `~/.npmrc` in your home directory. **This is your personal config, not a repo file.**
+
+```ini
+//npm.pkg.github.com/:_authToken=PASTE_YOUR_PAT_HERE
+```
+
+Save and close.
+
+### 3.2 — Clone, install, build
+
+```bash
+cd ~/Projects   # or wherever you keep code
+git clone https://github.com/<YOUR_ORG_SLUG>/mmc-shared.git
+cd mmc-shared
 pnpm install
 pnpm -r run build
+```
 
-# Publish each
+After `build`, verify each package has a `dist/` directory:
+
+```bash
+ls packages/mapbox/dist
+ls packages/platform-trust-middleware/dist
+ls packages/property-services-sdk/dist
+```
+
+Each should show `index.js` and `index.d.ts`.
+
+### 3.3 — Publish each package
+
+```bash
 cd packages/mapbox && npm publish
 cd ../platform-trust-middleware && npm publish
 cd ../property-services-sdk && npm publish
 ```
 
-If GitHub returns 422 "package already exists in another scope", you
-need to flip visibility or create the package in the GitHub UI first
-(Settings → Packages on the MMC Build org). Then retry.
+Each `npm publish` should print a `+ @mmcbuild/<name>@<version>` confirmation.
 
-### 4. Update mmcbuild-prod (now `mmc-market`) to consume `@mmcbuild/*`
+### Verify step 3 worked
 
-Once the packages are published, in `mmc-market`:
+Go to **GitHub → MMC Build org → Packages tab**. You should see three packages listed: `mmcbuild/mapbox`, `mmcbuild/platform-trust-middleware`, `mmcbuild/property-services-sdk`.
 
-```json
-// package.json — swap these three lines:
-"@mmcbuild/mapbox": "^0.2.0",
-"@mmcbuild/platform-trust-middleware": "^0.4.0",
-"@mmcbuild/property-services-sdk": "^0.3.0",
-```
+### If publishing fails
 
-(Drop the `@caistech/*` entries.)
+| Error | Cause | Fix |
+|---|---|---|
+| `422 Unprocessable Entity` | GitHub Packages org settings require the package to exist in the UI first | In the org → Packages → New package → create empty stubs with the three names, then retry |
+| `401 Unauthorized` | PAT not loaded or wrong scope | Verify `~/.npmrc` has the line from 3.1; confirm PAT has `write:packages` scope |
+| `403 Forbidden` | The `repository` field in `package.json` points at a repo you don't own | Edit each package's `package.json` and change `repository.url` to point at `<YOUR_ORG>/mmc-shared` |
+| `pnpm install` fails with peer-deps errors | Older node or pnpm | Confirm node ≥ v20 and pnpm ≥ v10 |
 
-```ini
-# .npmrc — swap the scope line:
-@mmcbuild:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
-```
+---
+
+## Step 4 — Switch the mmc-market app to consume @mmcbuild (15 min)
+
+### 4.1 — Clone and prepare
 
 ```bash
-# Update all source imports
-find src -type f \( -name '*.ts' -o -name '*.tsx' \) -exec \
-  sed -i 's|@caistech/|@mmcbuild/|g' {} \;
-
-pnpm install
-pnpm build  # verify it compiles cleanly
+cd ~/Projects
+git clone https://github.com/<YOUR_ORG_SLUG>/mmc-market.git
+cd mmc-market
 ```
 
-Commit + push.
+### 4.2 — Update `package.json`
 
-### 5. Set `GITHUB_PACKAGES_TOKEN` on Vercel
+Find the three `@caistech/*` lines and replace them with the `@mmcbuild/*` equivalents:
 
-On the Vercel project for `mmc-market` (in the MMC Build team):
+```diff
+- "@caistech/mapbox": "^0.1.2",
+- "@caistech/platform-trust-middleware": "^0.3.1",
+- "@caistech/property-services-sdk": "^0.3.0",
++ "@mmcbuild/mapbox": "^0.2.0",
++ "@mmcbuild/platform-trust-middleware": "^0.4.0",
++ "@mmcbuild/property-services-sdk": "^0.3.0",
+```
 
-- Settings → Environment Variables
-- Add `GITHUB_PACKAGES_TOKEN` = the PAT from step 2
-- Apply to Production, Preview, Development
-- Trigger a redeploy
+Note the version bumps — confirm these match what was actually published in step 3.
 
-Vercel's build will now `pnpm install` and fetch `@mmcbuild/*` from
-your registry under your PAT.
+### 4.3 — Update `.npmrc` in the repo root
 
-## What's NOT in scope today
+```diff
+- @caistech:registry=https://npm.pkg.github.com
++ @mmcbuild:registry=https://npm.pkg.github.com
+  //npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
 
-- **Supabase data migration** (CAS-owned → MMC Build-owned).
-  Planned next-week maintenance. Preserves Karen's 16 users + 14 orgs
-  + 10 projects + 13 design checks + 2 KB collections.
-- **DNS cutover at VentraIP** (mmcbuild.com.au → Vercel).
-  After Karen's weekend testing on the Vercel URL.
-- **Base44 subscription cancellation** — after DNS cutover.
+### 4.4 — Update all source imports
 
-## Anything goes wrong, ping Dennis
+Find-and-replace `@caistech/` → `@mmcbuild/` across the source tree. On Linux/macOS/WSL:
 
-Dennis has admin on both Supabase projects and can iterate on the
-`mmc-shared` repo locally. Workflow:
+```bash
+find src -type f \( -name '*.ts' -o -name '*.tsx' \) -exec \
+  sed -i 's|@caistech/|@mmcbuild/|g' {} \;
+```
 
-- You hit a publish error → DM Dennis with the error text
-- Dennis fixes locally in `mmcbuild-shared`, pushes
-- You `git pull` your clone, retry `npm publish`
+On PowerShell:
+
+```powershell
+Get-ChildItem src -Recurse -Include *.ts,*.tsx | ForEach-Object {
+  (Get-Content $_.FullName) -replace '@caistech/', '@mmcbuild/' | Set-Content $_.FullName
+}
+```
+
+### 4.5 — Install and build locally to verify
+
+Export your PAT into the env first so the install can reach the registry:
+
+```bash
+export GITHUB_PACKAGES_TOKEN=ghp_your_pat_here
+pnpm install
+pnpm build
+```
+
+Build should complete with no errors.
+
+### 4.6 — Commit and push
+
+```bash
+git add package.json .npmrc src/
+git commit -m "chore(deps): migrate @caistech/* to @mmcbuild/*"
+git push origin main
+```
+
+### Verify step 4 worked
+
+`pnpm build` exits cleanly with no module-not-found errors. The push triggers a Vercel deploy that you'll fix in step 5.
+
+---
+
+## Step 5 — Wire Vercel and deploy (10 min)
+
+### 5.1 — Add the PAT to Vercel env
+
+Go to **vercel.com/mmc-build/mmcbuild → Settings → Environment Variables**.
+
+- Variable name: `GITHUB_PACKAGES_TOKEN`
+- Value: your PAT from step 2
+- Environments: tick Production, Preview, and Development
+
+Click **Save**.
+
+### 5.2 — Switch the connected GitHub repo
+
+Vercel currently auto-deploys from `dennissolver/mmcbuild`. Point it at `<YOUR_ORG_SLUG>/mmc-market`.
+
+**Settings → Git → Disconnect the current repo → Connect Git Repository → choose `<YOUR_ORG_SLUG>/mmc-market`.**
+
+### 5.3 — Trigger a redeploy
+
+**Deployments → most recent → ⋯ → Redeploy → "Use existing Build Cache" off → Redeploy.**
+
+Watch the build log. The `pnpm install` step should now successfully fetch the three `@mmcbuild/*` packages.
+
+### Verify step 5 worked
+
+- Build completes with green tick
+- The deployment URL responds: `curl -I https://mmcbuild-one.vercel.app/` returns `HTTP/2 200`
+- Click through one or two pages in the browser to confirm no runtime errors
+
+### If deploy fails
+
+| Error | Cause | Fix |
+|---|---|---|
+| `403 Forbidden` during install | Vercel can't authenticate to your registry | Confirm `GITHUB_PACKAGES_TOKEN` is on the right env, redeploy |
+| `404 Not Found` for `@mmcbuild/<x>` | Package not published, or wrong version range | Check the Packages tab on the MMC Build org; confirm versions match `package.json` |
+| Build succeeds but runtime errors | Something inside the @mmcbuild package version is different from @caistech | Ping Dennis with the error — likely a version mismatch in the publish step |
+
+---
+
+## Definition of Done
+
+You are finished when **all** of these are true:
+
+- [ ] `<YOUR_ORG_SLUG>/mmc-shared` and `<YOUR_ORG_SLUG>/mmc-market` exist on the MMC Build org
+- [ ] Dennis has been re-added as a collaborator on both
+- [ ] Three packages visible at MMC Build org → Packages: `mapbox`, `platform-trust-middleware`, `property-services-sdk`
+- [ ] `<YOUR_ORG_SLUG>/mmc-market` `main` branch has the `@caistech/*` → `@mmcbuild/*` migration commit on it
+- [ ] Vercel project for `mmcbuild` is connected to `<YOUR_ORG_SLUG>/mmc-market`
+- [ ] `GITHUB_PACKAGES_TOKEN` is set on Vercel env (Production, Preview, Development)
+- [ ] Latest Vercel deployment is green and the live URL responds 200
+- [ ] You and Dennis have confirmed the smoke test (sign in, load dashboard) works as before
+
+---
+
+## Not in scope today
+
+These are scheduled for later sessions and **deliberately not part of this handover**:
+
+- **Supabase data migration.** The app still talks to Dennis's CAS-owned Supabase project (`skyeqimwnyuuozvhubdc`). Karen's 16 users, 14 orgs, 10 projects, 13 design checks, and 2 KB collections are preserved on that project. Migration to MMC Build's Supabase (`lztzyfeivpsbqbsfzctw`) is planned for Mon–Wed next week as a 1-hour maintenance window — pg_dump + psql restore + storage bucket copy + env-var swap on Vercel.
+- **DNS cutover at VentraIP.** `mmcbuild.com.au` still resolves to Base44. The cutover to Vercel happens after Karen finishes her weekend testing on `mmcbuild-one.vercel.app` and signs off on visual parity.
+- **Base44 subscription cancellation.** Happens after DNS cutover.
+
+---
+
+## When to ping Dennis
+
+Direct him at any blocker that isn't covered by the troubleshooting tables above. Most likely friction points:
+
+- GitHub org settings around package visibility — these tend to need an admin click in the UI
+- pnpm version mismatch — the repo uses pnpm v10.26.2 (locked via `packageManager` field)
+- Discrepancy between published versions in step 3 and the versions referenced in step 4.2
+
+Workflow when something goes wrong:
+
+1. You hit an error → screenshot or paste the exact text to Dennis
+2. Dennis fixes locally in his `mmcbuild-shared` clone, pushes to `<YOUR_ORG>/mmc-shared`
+3. You `git pull` your clone and re-run the failed step
 
 No bottlenecks if both of you are around.
+
+---
+
+## Reference — repos and URLs
+
+| Resource | URL |
+|---|---|
+| `mmc-shared` (will transfer) | https://github.com/dennissolver/mmc-shared |
+| `mmc-market` (will transfer) | https://github.com/dennissolver/mmc-market |
+| Vercel project | https://vercel.com/mmc-build/mmcbuild |
+| Live deployment | https://mmcbuild-one.vercel.app/ |
+| GitHub Packages docs | https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry |
+| Supabase (CAS, in use today) | https://supabase.com/dashboard/project/skyeqimwnyuuozvhubdc |
+| Supabase (MMC Build, target) | https://supabase.com/dashboard/project/lztzyfeivpsbqbsfzctw |
