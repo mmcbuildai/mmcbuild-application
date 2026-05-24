@@ -11,15 +11,6 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.78.0
         version: 0.78.0(zod@4.3.6)
-      '@caistech/mapbox':
-        specifier: ^0.1.2
-        version: 0.1.2(typescript@5.9.3)
-      '@caistech/platform-trust-middleware':
-        specifier: ^0.3.1
-        version: 0.3.1(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)
-      '@caistech/property-services-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0(react@19.2.3)(typescript@5.9.3)
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.71.2(react@19.2.3))
@@ -335,23 +326,6 @@ packages:
 
   '@bufbuild/protobuf@2.12.0':
     resolution: {integrity: sha512-B/XlCaFIP8LOwzo+bz5uFzATYokcwCKQcghqnlfwSmM5eX/qTkvDBnDPs+gXtX/RyjxJ4DRikECcPJbyALA8FA==}
-
-  '@caistech/mapbox@0.1.2':
-    resolution: {integrity: sha512-ws9blSUNHzfJqrsqsDUWIg3ZB/ACHR9NsQYd8ZPp801M7RqRQbB2Revo4rHsIK2dethS/KfXx/nFGOpjnkjG+Q==, tarball: https://npm.pkg.github.com/download/@caistech/mapbox/0.1.2/0a2a6e5afbde456dce6833b4cdab0b1e1c1ef22f}
-    peerDependencies:
-      typescript: '>=5.0.0'
-
-  '@caistech/platform-trust-middleware@0.3.1':
-    resolution: {integrity: sha512-HLdjkjxF8N0BsV8PvuF4uimhtBGcluu86jmtJFgc+hOuTDFqTKKVyhwvQ2V10frIhgToA36gIknRgvFhXn5V2A==, tarball: https://npm.pkg.github.com/download/@caistech/platform-trust-middleware/0.3.1/eadaeb0c7ecea2706db6eeceb41eca1aa6ccb349}
-    peerDependencies:
-      next: '>=14.0.0'
-      typescript: '>=5.0.0'
-
-  '@caistech/property-services-sdk@0.3.0':
-    resolution: {integrity: sha512-tAmwvpzVdjPnuNFTS38pusZ6QwX06pZkgYQeGdqlWqBYORhSsadLMYuZ3s7hqJR3wUZOS5tfYs7wK1oKN4mNEg==, tarball: https://npm.pkg.github.com/download/@caistech/property-services-sdk/0.3.0/ca3bda15e920718cc4011e6f77f23f507390434b}
-    peerDependencies:
-      react: ^18.0.0 || ^19.0.0
-      typescript: '>=5.0.0'
 
   '@dimforge/rapier3d-compat@0.12.0':
     resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
@@ -6082,24 +6056,6 @@ snapshots:
       '@babel/helper-validator-identifier': 7.28.5
 
   '@bufbuild/protobuf@2.12.0': {}
-
-  '@caistech/mapbox@0.1.2(typescript@5.9.3)':
-    dependencies:
-      typescript: 5.9.3
-
-  '@caistech/platform-trust-middleware@0.3.1(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)':
-    dependencies:
-      '@supabase/supabase-js': 2.98.0
-      next: 16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      typescript: 5.9.3
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
-  '@caistech/property-services-sdk@0.3.0(react@19.2.3)(typescript@5.9.3)':
-    dependencies:
-      react: 19.2.3
-      typescript: 5.9.3
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 

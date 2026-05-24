@@ -3,8 +3,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { MapPin } from "lucide-react";
-import { forwardSearch, reverseSearch, parseCoordinates, featureToGeocodedAddress } from "@caistech/mapbox";
-import type { MapboxFeature, GeocodedAddress } from "@caistech/mapbox";
+import { forwardSearch, reverseSearch, parseCoordinates, featureToGeocodedAddress } from "@/lib/services/mapbox";
+import type { MapboxFeature, GeocodedAddress } from "@/lib/services/mapbox";
 
 interface AddressAutocompleteProps {
   onSelect: (address: GeocodedAddress) => void;

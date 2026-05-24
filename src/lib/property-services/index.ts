@@ -1,11 +1,9 @@
 /**
  * Property Services SDK — re-export shim.
  *
- * Now sourced from @caistech/property-services-sdk. Named exports are
- * listed explicitly because Turbopack's tree-shaker can't resolve
- * `export *` through a workspace-linked package's symlink.
- *
- * Keep this list in sync with the package's src/index.ts.
+ * Folded into the app at src/lib/services/property-services-sdk (was the
+ * @caistech/property-services-sdk package before the 2026-05-24 fold-in).
+ * Named exports are listed explicitly so Turbopack resolves them statically.
  */
 
 export {
@@ -14,7 +12,7 @@ export {
   createPropertyServices,
   usePropertyOnboarding,
   PropertyAssessment,
-} from '@caistech/property-services-sdk';
+} from '@/lib/services/property-services-sdk';
 
 export type {
   PropertyProfile,
@@ -31,4 +29,4 @@ export type {
   PropertyServicesConfig,
   UsePropertyOnboardingReturn,
   OnboardingStage,
-} from '@caistech/property-services-sdk';
+} from '@/lib/services/property-services-sdk';
