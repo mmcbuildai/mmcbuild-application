@@ -22,8 +22,14 @@
 - **Sanitize `/api/remediation/[token]/upload`** — basename the filename + enforce a MIME/extension allowlist (keep the 10MB cap). (cso MEDIUM.)
 - **`/beta` + Billing graceful no-profile state** — only reachable by a profile-less user (provisioning edge case the dashboard fallback already guides). Low value; tidy if convenient.
 
+## 🎙️ Voice agent (VOICE AI standard — pre-existing gap, not a split regression; from `/voice-auditor`)
+- **App `voice_agent_status` = partial.** The voice widget is a CDN `<elevenlabs-convai>` one-off in `(dashboard)/layout.tsx`, not the `@caistech/elevenlabs-convai` hub `/react` VoiceWidget. Backfill onto the hub; move the agent id into a scaffolded `voice.config.ts` (not `NEXT_PUBLIC_ELEVENLABS_AGENT_ID`).
+- **⚠️ Verify the agent id.** The hardcoded fallback `agent_8401ksadmdx1f1arf6xeq5spk2qf` is a rehearsals-ai/distributor stand-in, **not an MMC Build agent**. Provision a dedicated MMC BYOK agent, set its Security allowlist (prod domain + `*.vercel.app` + `localhost:3000`), and confirm the env var points at it (else the live widget uses the wrong agent on the operator's key).
+- **Memory loop = none** (greeter only): no recall/persist, no convai webhook → no HMAC, no memory tables, identity not server-derived. Wire the **Comply-intake clarifier** (`useConversation` + `sendContextualUpdate`, surface + draft aware — the Required surface's real need); add the memory webhook (HMAC, per `VOICE_MEMORY_STANDARD`) if cross-session memory is wanted.
+- **Brochure `voice_agent_status` = absent.** `chatbot.tsx` is a canned `setTimeout` stub branded "MMC Build AI Assistant" — de-brand to an honest contact CTA **or** replace with the hub VoiceWidget. Don't ship a fake labelled "AI."
+
 ## 📣 Content / branding (Karen's call — not engineering)
-- **Brochure public "MMC Directory" → "MMC Direct"** display copy (in-app is already "MMC Direct"); decide whether the `/mmc-directory` URL slug also changes (SEO/redirect).
+- **Complete the "MMC Direct" rename (Karen's decision: everywhere, or in-app-only with "Directory" as the public descriptor).** In-app module is already "MMC Direct" (sidebar, `/direct` heading, module-themes, Stripe). The `/review` re-check found **13 stale "MMC Directory"/"Trade Directory" refs** still to decide on: marketing pages (`(marketing)/layout.tsx`, `products`, `page.tsx`, `pricing/pricing-client.tsx`, `mmc-suppliers`, `mmc-directory`), the waitlist-form `directory` option label, the enquiry/review **email templates** ("Sent via MMC Build Trade Directory"), and `testing-guide.tsx`. Also decide whether the `/mmc-directory` URL slug changes (SEO/redirect). Public-branding + transactional-copy = Karen's call.
 - **Marketing credibility:** Tier-1 partner logos (real or reframe — legal risk if aspirational); round-number stats + unattributed testimonials; "industry-recognised certifications" accreditor; the "up to 60%" claim footnote; reconcile the hero "Join the Waitlist" vs corner "Get Started".
 
 ## 🔜 Process — next, in order (per Dennis 2026-05-25)
