@@ -18,8 +18,14 @@ function isAllowedOrigin(origin: string | null): origin is string {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.has(origin)) return true;
   try {
-    // marketing Vercel preview deploys
-    return new URL(origin).hostname.endsWith(".vercel.app");
+    // Scope to the mmcbuild-marketing Vercel project ONLY (prod alias + this
+    // team's preview deploys) — never all of *.vercel.app, which any attacker
+    // can register on the free tier.
+    const host = new URL(origin).hostname;
+    return (
+      host === "mmcbuild-marketing.vercel.app" ||
+      /^mmcbuild-marketing-[a-z0-9-]+-mmc-build\.vercel\.app$/.test(host)
+    );
   } catch {
     return false;
   }
