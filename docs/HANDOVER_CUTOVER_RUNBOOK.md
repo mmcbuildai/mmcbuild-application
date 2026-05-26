@@ -35,7 +35,8 @@ MMC project `lztzyfeivpsbqbsfzctw` (Sydney). You provided the dest; Dennis runs 
 | HubSpot allowed-domains | **You** |
 | Supabase **data** migration (dump + restore) | Dennis |
 | Supabase **Auth** config (Site URL, redirect allow-list, SMTP) | Dennis (self-serve, no token needed from you) |
-| `platform-trust` + `property-services` env values | Dennis (hands them over) |
+| `property-services` env values (the one CAS service MMC keeps) | Dennis (hands over) |
+| `platform-trust` — run self-contained on MMC infra (shared CAS key **not** handed over) | Dennis (config note) |
 
 ---
 
@@ -57,7 +58,11 @@ MMC project `lztzyfeivpsbqbsfzctw` (Sydney). You provided the dest; Dennis runs 
 ### Step 3 — Env vars (app project) — see `docs/env-cutover-template.md`
 - Fill **MMC's own accounts**: Supabase (URL / anon / service-role), Anthropic, OpenAI, Stripe,
   Resend, Inngest, Mapbox, + app config.
-- **Dennis fills:** the `platform-trust` trio + the `property-services` pair (handed over separately).
+- **Dennis hands over:** the `property-services` pair only — the one shared service MMC keeps
+  consuming from CAS (MMC-scoped, public key): `NEXT_PUBLIC_PROPERTY_SERVICES_URL` +
+  `NEXT_PUBLIC_PROPERTY_SERVICES_API_KEY`. **platform-trust is NOT handed over** — that's a shared
+  CAS service-role key; run the security gate self-contained on MMC's own Supabase (or with logging
+  off). See `docs/env-cutover-template.md` Part B.
 - **Rule (both Vercel teams enforce it):** secrets = **`Sensitive`**, **Production + Preview only,
   never Development**. Public `NEXT_PUBLIC_*` = plain, still prod+preview only. A plaintext secret
   gets flagged "Needs Attention."
@@ -115,7 +120,8 @@ The only step needing both of you in one ~1-hour window, because auth + data + e
 - The Supabase data dump + restore (blocked only on your DB password authenticating — once it does,
   the schema rehearsal + the final-window data load are his).
 - Supabase Auth config (Site URL / redirect / SMTP / email templates) — self-serve.
-- The `platform-trust` + `property-services` env values.
+- The `property-services` env values (the one sanctioned CAS dependency). platform-trust runs
+  self-contained on MMC infra — its shared CAS key is not handed over.
 - Stripping the now-redundant `(marketing)` routes from the app repo (cleanup, post-cutover).
 
 ---

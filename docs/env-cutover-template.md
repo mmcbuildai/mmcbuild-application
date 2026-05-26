@@ -6,8 +6,11 @@
 **application** (`mmc-application`: Comply, Build, Quote, Direct, Train, Billing)
 needs to run — and **who fills each one**. Per what was agreed on 15 May 2026,
 MMC Build owns its own accounts and keys with a clean billing boundary from day
-one. The only values Dennis pastes are the two shared-services backends that
-stay on CAS infrastructure for now (Part B).
+one. The only values Dennis pastes are the **property-services** backend keys —
+the single shared service MMC Build keeps consuming from CAS by agreement
+(2026-05-26, Part B). **platform-trust is no longer handed over**: its key is a
+*shared* CAS service-role key, so MMC Build runs the security gate on its own
+infrastructure instead.
 
 **This doc is the human-readable split.** The machine-readable source of truth is
 `byok.config.json` (every key: provider, format, dashboard URL, step-by-step
@@ -118,28 +121,39 @@ then pull these three straight from MMC Build's Supabase dashboard
 
 ---
 
-## Part B — Dennis pastes (CAS-hosted shared-services backends)
+## Part B — Dennis pastes (the one sanctioned CAS-hosted backend)
 
-These two backends stay on CAS infrastructure for now; MMC Build consumes them.
-Karthik does **not** create accounts for these — Dennis supplies the values
-directly. Both are feature-gated and can be turned off if MMC Build prefers to
-run without them initially.
+By agreement (2026-05-26), **property-services is the single shared service MMC
+Build keeps consuming from CAS.** Dennis supplies its values directly; Karthik
+creates no account for it. Everything else runs on MMC Build's own infrastructure.
 
-### Platform Trust — prompt-injection guard + rate-limit backend
-Required **only if** `ENABLE_SECURITY_GATE=true`. Leave blank and set
-`ENABLE_SECURITY_GATE=false` to run without it.
+### Platform Trust — NOT handed over (run self-contained)
+Its key is a **shared CAS `service_role` key** spanning the whole portfolio's
+trust-events project, so it must not leave CAS. The security gate (prompt-injection
+guard) is mandatory for this REGULATED product, so keep `ENABLE_SECURITY_GATE=true`
+and run it **self-contained**: either leave `PLATFORM_TRUST_*` unset (the gate runs;
+audit logging is skipped) or point them at **MMC Build's own** Supabase with a
+trust-events table. Do **not** paste the CAS values.
 
 | Env var | Req | Owner |
 |---|---|---|
-| `PLATFORM_TRUST_SUPABASE_URL` | `[O]` | Dennis pastes |
-| `PLATFORM_TRUST_SERVICE_KEY` | `[O]` | Dennis pastes |
-| `PLATFORM_TRUST_PROJECT_ID` | `[O]` | Dennis pastes |
+| `PLATFORM_TRUST_SUPABASE_URL` | `[O]` | MMC Build (own Supabase) or leave unset — **not** CAS |
+| `PLATFORM_TRUST_SERVICE_KEY` | `[O]` | MMC Build (own `service_role`) or leave unset — **not** CAS |
+| `PLATFORM_TRUST_PROJECT_ID` | `[O]` | `mmc-build` (namespacing label) |
 
 ### Property Services — site-intelligence backend (wind region, council, climate)
+The address → lot / zoning / climate lookup in project creation. Calls CAS-hosted
+edge functions; the key below is **MMC-scoped** (rate-limited to MMC Build) and is
+a public `NEXT_PUBLIC_` value, so handing it over carries no shared-secret risk.
+
 | Env var | Req | Owner |
 |---|---|---|
-| `NEXT_PUBLIC_PROPERTY_SERVICES_URL` | `[O]` | Dennis pastes |
-| `NEXT_PUBLIC_PROPERTY_SERVICES_ANON_KEY` | `[O]` | Dennis pastes |
+| `NEXT_PUBLIC_PROPERTY_SERVICES_URL` | `[R]`* | Dennis pastes |
+| `NEXT_PUBLIC_PROPERTY_SERVICES_API_KEY` | `[R]`* | Dennis pastes — **this is the key the app code actually reads** (sent as `X-API-Key`). |
+| `NEXT_PUBLIC_PROPERTY_SERVICES_ANON_KEY` | `[O]` | Dennis pastes — legacy/optional; only needed for pre-2026-04-30 `verify_jwt` deployments |
+
+*Required whenever the property-profile lookup is used — it's called with a
+non-null assertion in project creation, so if unset the lookup throws.
 
 ---
 
@@ -186,9 +200,10 @@ project unless you actively run the scripts that use them.
 - **`property-services` keys are not yet in `byok.config.json` /
   `.env.restore.local.example`.** They are listed in Part B above and in
   `.env.example`. Folding them into the wizard manifest is a follow-up.
-- **Naming drift on the property-services key:** `.env.example` uses
-  `NEXT_PUBLIC_PROPERTY_SERVICES_ANON_KEY`; the application code reads
-  `NEXT_PUBLIC_PROPERTY_SERVICES_API_KEY`. Reconcile to one name before relying
-  on it — flag to Dennis. (Both refer to the same CAS-hosted backend key.)
+- **Naming drift on the property-services key (now reflected in Part B):**
+  `.env.example` lists `NEXT_PUBLIC_PROPERTY_SERVICES_ANON_KEY`, but the application
+  code reads `NEXT_PUBLIC_PROPERTY_SERVICES_API_KEY` (the `X-API-Key` header). Part B
+  now hands over `_API_KEY` as the required one. Reconcile `.env.example` to the same
+  name as a follow-up so the two stop disagreeing.
 </content>
 </invoke>
