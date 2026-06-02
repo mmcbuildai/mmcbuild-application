@@ -495,6 +495,24 @@ export async function registerPlan(
   }
 
   const admin = createAdminClient();
+
+  const { data: existingPlan } = await admin
+    .from("plans")
+    .select("id, status")
+    .eq("project_id", projectId)
+    .eq("file_name", fileName)
+    .single();
+
+  if (existingPlan) {
+    if (existingPlan.status === "uploading" || existingPlan.status === "processing") {
+      return { error: "This file is already being uploaded or processed. Please wait for it to finish." };
+    }
+    return { 
+      error: `A file named "${fileName}" already exists in this project. Please rename the file and try again, or delete the existing file first.`,
+      existingPlanId: existingPlan.id,
+    };
+  }
+
   const { data: plan, error: insertError } = await admin
     .from("plans")
     .insert({
