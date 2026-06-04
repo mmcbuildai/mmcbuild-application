@@ -3712,7 +3712,7 @@ export const Constants = {
       ],
       review_status: ["pending", "approved", "rejected"],
       risk_level: ["low", "medium", "high", "critical"],
-      seat_type: ["internal", "external", "viewer"],
+      seat_type: ["internal", "external", "viewer", "beta"],
       suggestion_decision: ["undecided", "pursuing", "considering", "rejected"],
       trade_type: [
         "builder",

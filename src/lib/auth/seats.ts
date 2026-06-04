@@ -14,7 +14,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionStatus } from "@/lib/stripe/subscription";
 
-export type SeatType = "internal" | "external" | "viewer";
+export type SeatType = "internal" | "external" | "viewer" | "beta";
 
 /**
  * Seat caps per tier. Numbers come from the 2026-05-01 product review.
@@ -107,4 +107,8 @@ export async function getOrgSeatUsage(
 
 export function isSeatTypeProjectScoped(s: SeatType): boolean {
   return s === "external" || s === "viewer";
+}
+
+export function isSeatTypeCountsAgainstCap(s: SeatType): boolean {
+  return s === "internal";
 }

@@ -102,6 +102,7 @@ const SEAT_TYPE_LABEL: Record<SeatType, string> = {
 
 const SEAT_TYPE_HELPER: Record<SeatType, string> = {
   internal: "Full org access. Counts against your seat cap.",
+  beta: "Full org access. Bypasses module launch gates for testing.",
   external:
     "Project-scoped uploader and editor. No seat consumed. Choose which projects they can access.",
   viewer:
@@ -325,7 +326,10 @@ function InviteDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="internal">
-                  Internal team — full org access
+                  Internal team — full org access. Counts against seat cap.
+                </SelectItem>
+                <SelectItem value="beta">
+                  Beta Tester — full org access. Bypasses module launch gates.
                 </SelectItem>
                 <SelectItem value="external">
                   External collaborator — project-scoped uploader
