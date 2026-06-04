@@ -266,7 +266,7 @@ function InviteDialog({
   // Filter roles the current user can assign
   const availableRoles = ASSIGNABLE_ROLES.filter((r) => {
     const actorLevel = currentRole === "owner" ? 7 : currentRole === "admin" ? 6 : 0;
-    const targetLevel: Record<string, number> = { owner: 7, admin: 6, project_manager: 5, architect: 4, builder: 3, trade: 2, viewer: 1 };
+    const targetLevel: Record<string, number> = { owner: 7, admin: 6, beta: 5, project_manager: 4, architect: 3, builder: 2, trade: 1, viewer: 0 };
     return actorLevel > (targetLevel[r] ?? 0);
   });
 

@@ -4,16 +4,18 @@ import type { UserRole } from "@/lib/supabase/types";
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
   owner: 7,
   admin: 6,
-  project_manager: 5,
-  architect: 4,
-  builder: 3,
-  trade: 2,
-  viewer: 1,
+  beta: 5,
+  project_manager: 4,
+  architect: 3,
+  builder: 2,
+  trade: 1,
+  viewer: 0,
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   owner: "Owner",
   admin: "Admin",
+  beta: "Beta Tester",
   project_manager: "Project Manager",
   architect: "Architect",
   builder: "Builder",
@@ -24,6 +26,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 export const ROLE_COLORS: Record<UserRole, string> = {
   owner: "bg-purple-100 text-purple-800",
   admin: "bg-blue-100 text-blue-800",
+  beta: "bg-amber-100 text-amber-800",
   project_manager: "bg-indigo-100 text-indigo-800",
   architect: "bg-green-100 text-green-800",
   builder: "bg-orange-100 text-orange-800",
@@ -34,6 +37,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
 /** All roles that may appear in a role selector (excludes owner — owner is assigned, not selected) */
 export const ASSIGNABLE_ROLES: UserRole[] = [
   "admin",
+  "beta",
   "project_manager",
   "architect",
   "builder",
