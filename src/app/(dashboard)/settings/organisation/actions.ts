@@ -232,15 +232,18 @@ export async function inviteUser(
   }
 
   // External and viewer invites must be scoped to at least one project.
-  // Internal invites must NOT carry a project list — they get full org access.
-  if (seatType === "internal" && projectIds.length > 0) {
+  // Internal and beta invites must NOT carry a project list — they get full org access.
+  if ((seatType === "internal" || seatType === "beta") && projectIds.length > 0) {
     return { error: "Internal team members already have access to all projects" };
   }
-  if ((seatType === "external" || seatType === "viewer") && projectIds.length === 0) {
-    return { error: "External and viewer invites must specify at least one project" };
+  if (seatType === "external" && projectIds.length === 0) {
+    return { error: "External invites must specify at least one project" };
+  }
+  if (seatType === "viewer" && projectIds.length === 0) {
+    return { error: "Viewer invites must specify at least one project" };
   }
 
-  // Enforce seat cap for internal invites only.
+  // Enforce seat cap for internal invites only (beta doesn't count against cap).
   if (seatType === "internal") {
     const subscription = await getSubscriptionStatus(profile.org_id);
     const usage = await getOrgSeatUsage(profile.org_id, subscription.tier);
