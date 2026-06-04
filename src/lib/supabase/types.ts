@@ -1,6 +1,7 @@
 export type UserRole =
   | "owner"
   | "admin"
+  | "beta"
   | "project_manager"
   | "architect"
   | "builder"
