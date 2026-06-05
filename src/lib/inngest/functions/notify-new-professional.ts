@@ -1,5 +1,5 @@
 import { inngest } from "../client";
-import { Resend } from "resend";
+import { getResend, FROM_EMAIL } from "@/lib/email/resend";
 
 export const notifyNewProfessional = inngest.createFunction(
   {
@@ -9,7 +9,7 @@ export const notifyNewProfessional = inngest.createFunction(
   },
   { event: "direct/professional.registered" },
   async ({ event }) => {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = getResend();
 
     const {
       companyName,
@@ -45,7 +45,7 @@ export const notifyNewProfessional = inngest.createFunction(
     const to = process.env.KAREN_EMAIL || "karen.engel@mmcbuild.com.au";
 
     const result = await resend.emails.send({
-      from: "MMC Build <noreply@mmcbuild.com.au>",
+      from: FROM_EMAIL,
       to: [to],
       subject: `New Business Registration: ${companyName} - Approval Needed`,
       html,
