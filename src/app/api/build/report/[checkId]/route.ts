@@ -1,13 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { generateBuildPdf } from "@/lib/build/report-pdf";
+import { generateBuildDocx } from "@/lib/build/report-docx";
 import { NextResponse } from "next/server";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ checkId: string }> }
 ) {
   const { checkId } = await params;
+  const format = new URL(request.url).searchParams.get("format") === "docx" ? "docx" : "pdf";
 
   const supabase = await createClient();
   const {
@@ -48,7 +50,7 @@ export async function GET(
     .eq("check_id", checkId)
     .order("sort_order", { ascending: true });
 
-  const pdfBytes = generateBuildPdf({
+  const reportInput = {
     projectName: project?.name ?? "Untitled Project",
     projectAddress: project?.address ?? null,
     summary: rec.summary ?? "",
@@ -64,7 +66,7 @@ export async function GET(
       implementation_complexity: string;
       confidence: number;
     }[],
-  });
+  };
 
   const projectSlug = (project?.name ?? "project")
     .toLowerCase()
@@ -81,6 +83,17 @@ export async function GET(
   const vNum = (version as { version_number: number } | null)?.version_number;
   const vSuffix = vNum ? `-v${vNum}` : `-${checkId.slice(0, 8)}`;
 
+  if (format === "docx") {
+    const docxBytes = await generateBuildDocx(reportInput);
+    return new NextResponse(new Uint8Array(docxBytes), {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": `attachment; filename="mmc-build-${projectSlug}${vSuffix}.docx"`,
+      },
+    });
+  }
+
+  const pdfBytes = generateBuildPdf(reportInput);
   return new NextResponse(Buffer.from(pdfBytes), {
     headers: {
       "Content-Type": "application/pdf",
