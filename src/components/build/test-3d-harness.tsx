@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, FileText, Image as ImageIcon } from "lucide-react";
 import { PlanComparison3D } from "./plan-comparison-3d";
 import { SystemExplorerView } from "./system-explorer-view";
+import { VolumetricBuildSequence } from "./volumetric-build-sequence";
 import {
   enqueueTest3D,
   getTest3DStatus,
@@ -18,7 +19,7 @@ import {
 } from "@/lib/plans/file-kind";
 
 type Phase = "idle" | "uploading" | "extracting";
-type ViewMode = "system-explorer" | "standard";
+type ViewMode = "system-explorer" | "build-sequence" | "standard";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -479,6 +480,17 @@ export function Test3DHarness() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setViewMode("build-sequence")}
+                    className={`rounded px-2.5 py-1 transition-colors ${
+                      viewMode === "build-sequence"
+                        ? "bg-white shadow-sm font-medium text-zinc-900"
+                        : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                  >
+                    Build Sequence
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setViewMode("standard")}
                     className={`rounded px-2.5 py-1 transition-colors ${
                       viewMode === "standard"
@@ -492,6 +504,8 @@ export function Test3DHarness() {
               </div>
               {viewMode === "system-explorer" ? (
                 <SystemExplorerView layout={result.layout} />
+              ) : viewMode === "build-sequence" ? (
+                <VolumetricBuildSequence layout={result.layout} />
               ) : (
                 <PlanComparison3D layout={result.layout} suggestions={[]} />
               )}
