@@ -502,6 +502,43 @@ export function Test3DHarness() {
                   </button>
                 </div>
               </div>
+
+              {/* Explain the three views — switch with the tabs above */}
+              <div className="mb-4 rounded-md border border-zinc-200 bg-zinc-50/70 px-3 py-2.5 text-xs text-zinc-600">
+                <p className="mb-1 font-medium text-zinc-800">
+                  Three views of the same extracted plan — switch with the tabs
+                  above:
+                </p>
+                <ul className="space-y-1">
+                  <li>
+                    <span className="font-medium text-zinc-800">
+                      System Explorer
+                    </span>{" "}
+                    — the same footprint built four ways (Traditional,
+                    Panelised, Volumetric, 3D-printed) side by side. Each render
+                    expresses how that system is built (brick · factory panels
+                    with seams · craned modules · printed concrete layers), with
+                    cost / time / labour metrics and pros &amp; cons. The
+                    Traditional card has a brick-veneer ↔ double-brick toggle.
+                  </li>
+                  <li>
+                    <span className="font-medium text-zinc-800">
+                      Build Sequence
+                    </span>{" "}
+                    — an animated walkthrough of the build as a process: site
+                    set-out → slab + service stubs → crane set-up → modules
+                    craned into place one by one → stitch &amp; weatherproof →
+                    finish. Press Play or scrub the timeline. (Volumetric
+                    first.)
+                  </li>
+                  <li>
+                    <span className="font-medium text-zinc-800">Standard</span> —
+                    the plain extracted 3D model with the before / after
+                    optimisation comparison.
+                  </li>
+                </ul>
+              </div>
+
               {viewMode === "system-explorer" ? (
                 <SystemExplorerView layout={result.layout} />
               ) : viewMode === "build-sequence" ? (
