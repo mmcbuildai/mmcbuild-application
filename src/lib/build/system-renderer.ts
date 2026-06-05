@@ -258,15 +258,30 @@ const MODULE_W = 3.6; // road-transportable module width
 const MODULE_D = 6.0;
 const MODULE_GAP = 0.18; // visible joint between modules
 
-function buildModuleBoxes(
+/** A single volumetric module's footprint + height, in layout coordinates. */
+export interface ModulePlacement {
+  /** Module centre X (layout space, 0..bounds.width). */
+  cx: number;
+  /** Module centre Z (layout space, 0..bounds.depth). */
+  cz: number;
+  /** Module width (inset by the inter-module gap). */
+  w: number;
+  /** Module depth (inset by the inter-module gap). */
+  d: number;
+  /** Module height incl. floor/ceiling cassette. */
+  boxH: number;
+}
+
+/**
+ * Compute the volumetric module grid for a layout — the same partitioning
+ * buildModuleBoxes() renders, exposed so the build-sequence animation can place
+ * and animate each module individually. Modules are ordered row-major.
+ */
+export function computeModulePlacements(
   layout: SpatialLayout,
   wallHeight: number,
-  skinColor: number,
-  accent: number,
-): THREE.Group {
-  const group = new THREE.Group();
+): ModulePlacement[] {
   const { width, depth } = layout.bounds;
-
   // Longer side gets the long module dimension
   const cellW = width >= depth ? MODULE_D : MODULE_W;
   const cellD = width >= depth ? MODULE_W : MODULE_D;
@@ -274,7 +289,31 @@ function buildModuleBoxes(
   const rows = Math.max(1, Math.round(depth / cellD));
   const actualW = width / cols;
   const actualD = depth / rows;
-  const boxH = wallHeight + 0.25; // module incl. floor/ceiling cassette
+  const boxH = wallHeight + 0.25;
+
+  const placements: ModulePlacement[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      placements.push({
+        cx: c * actualW + actualW / 2,
+        cz: r * actualD + actualD / 2,
+        w: actualW - MODULE_GAP,
+        d: actualD - MODULE_GAP,
+        boxH,
+      });
+    }
+  }
+  return placements;
+}
+
+function buildModuleBoxes(
+  layout: SpatialLayout,
+  wallHeight: number,
+  skinColor: number,
+  accent: number,
+): THREE.Group {
+  const group = new THREE.Group();
+  const placements = computeModulePlacements(layout, wallHeight);
 
   const skinMaterial = new THREE.MeshStandardMaterial({
     color: skinColor,
@@ -289,25 +328,18 @@ function buildModuleBoxes(
     opacity: 0.95,
   });
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const w = actualW - MODULE_GAP;
-      const d = actualD - MODULE_GAP;
-      const cx = c * actualW + actualW / 2;
-      const cz = r * actualD + actualD / 2;
+  for (const p of placements) {
+    const boxGeo = new THREE.BoxGeometry(p.w, p.boxH, p.d);
+    const box = new THREE.Mesh(boxGeo, skinMaterial);
+    box.position.set(p.cx, p.boxH / 2, p.cz);
+    group.add(box);
 
-      const boxGeo = new THREE.BoxGeometry(w, boxH, d);
-      const box = new THREE.Mesh(boxGeo, skinMaterial);
-      box.position.set(cx, boxH / 2, cz);
-      group.add(box);
-
-      const frame = new THREE.LineSegments(
-        new THREE.EdgesGeometry(boxGeo),
-        edgeMaterial,
-      );
-      frame.position.set(cx, boxH / 2, cz);
-      group.add(frame);
-    }
+    const frame = new THREE.LineSegments(
+      new THREE.EdgesGeometry(boxGeo),
+      edgeMaterial,
+    );
+    frame.position.set(p.cx, p.boxH / 2, p.cz);
+    group.add(frame);
   }
 
   return group;
@@ -408,15 +440,8 @@ function restyleForSystem(group: THREE.Group, system: MMCSystem): void {
     const ud = obj.userData;
 
     if (ud?.type === "wall") {
-      // Find the source wall to know if it's external
-      const isExternal =
-        obj.material instanceof THREE.MeshStandardMaterial
-          ? true // we can't read type from material; assume external if not internal palette
-          : true;
-      // Read the wall colour heuristically: the existing code sets brighter
-      // colours for external walls. We'll just recolour everything with the
-      // system palette — external vs internal is communicated by relative
-      // brightness.
+      // Recolour every wall with the system palette for visual coherence —
+      // external vs internal is communicated by relative brightness.
       const newMat = new THREE.MeshStandardMaterial({
         color: palette.externalWall, // simplified; original code already
         // separates external vs internal — we override uniformly per system
