@@ -546,7 +546,20 @@ export async function registerPlan(
       },
     });
   } catch (e) {
+    // The processing pipeline is triggered entirely by this event. If the send
+    // fails, the plan would otherwise sit in "uploading" forever while the
+    // caller is told everything succeeded. Mark the row as errored (a retriable
+    // state — see retryPlanProcessing) and surface the failure to the caller.
     console.error("Failed to send Inngest event:", e);
+    await admin
+      .from("plans")
+      .update({ status: "error" } as never)
+      .eq("id", planId);
+    return {
+      error:
+        "The file uploaded, but processing could not be started. Please retry from the plan list.",
+      planId,
+    };
   }
 
   return { success: true, planId };
