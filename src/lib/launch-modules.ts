@@ -8,6 +8,17 @@ export const ALL_MODULES: readonly ModuleId[] = [
   "train",
 ] as const;
 
+// v1 launch scope (SCRUM-209 / ADR-007): Comply, Build and Quote are launched;
+// Direct and Train ship behind a "coming soon" gate until their public launch.
+// Owners/admins/beta roles bypass the gate (see canBypassLaunchGate), so
+// operators still see every module. NEXT_PUBLIC_MODULES_LAUNCH_LIST overrides
+// this default when set.
+export const DEFAULT_LAUNCHED_MODULES: readonly ModuleId[] = [
+  "comply",
+  "build",
+  "quote",
+] as const;
+
 function parseLaunchList(raw: string | undefined): readonly ModuleId[] | null {
   if (!raw) return null;
   const parsed = raw
@@ -20,7 +31,7 @@ function parseLaunchList(raw: string | undefined): readonly ModuleId[] | null {
 export function getLaunchedModules(
   rawEnv: string | undefined = process.env.NEXT_PUBLIC_MODULES_LAUNCH_LIST,
 ): readonly ModuleId[] {
-  return parseLaunchList(rawEnv) ?? ALL_MODULES;
+  return parseLaunchList(rawEnv) ?? DEFAULT_LAUNCHED_MODULES;
 }
 
 export function isModuleLaunched(

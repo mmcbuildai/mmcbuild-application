@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  ALL_MODULES,
+  DEFAULT_LAUNCHED_MODULES,
   getLaunchedModules,
   isModuleLaunched,
   canBypassLaunchGate,
@@ -9,12 +9,12 @@ import {
 
 describe("launch-modules", () => {
   describe("getLaunchedModules", () => {
-    it("returns all modules when env is undefined", () => {
-      expect(getLaunchedModules(undefined)).toEqual(ALL_MODULES);
+    it("falls back to the default launched set when env is undefined", () => {
+      expect(getLaunchedModules(undefined)).toEqual(DEFAULT_LAUNCHED_MODULES);
     });
 
-    it("returns all modules when env is empty string", () => {
-      expect(getLaunchedModules("")).toEqual(ALL_MODULES);
+    it("falls back to the default launched set when env is empty string", () => {
+      expect(getLaunchedModules("")).toEqual(DEFAULT_LAUNCHED_MODULES);
     });
 
     it("returns only the listed modules", () => {
@@ -36,8 +36,8 @@ describe("launch-modules", () => {
       ]);
     });
 
-    it("falls back to all modules when no valid ids remain", () => {
-      expect(getLaunchedModules("foo,bar")).toEqual(ALL_MODULES);
+    it("falls back to the default launched set when no valid ids remain", () => {
+      expect(getLaunchedModules("foo,bar")).toEqual(DEFAULT_LAUNCHED_MODULES);
     });
   });
 
@@ -50,10 +50,15 @@ describe("launch-modules", () => {
       expect(isModuleLaunched("direct", "comply,build")).toBe(false);
     });
 
-    it("true for all modules when env unset", () => {
-      for (const m of ALL_MODULES) {
+    it("true for the default launched modules when env unset", () => {
+      for (const m of DEFAULT_LAUNCHED_MODULES) {
         expect(isModuleLaunched(m, undefined)).toBe(true);
       }
+    });
+
+    it("gates Direct and Train by default when env unset (SCRUM-209)", () => {
+      expect(isModuleLaunched("direct", undefined)).toBe(false);
+      expect(isModuleLaunched("train", undefined)).toBe(false);
     });
   });
 
