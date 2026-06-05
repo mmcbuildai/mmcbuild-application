@@ -50,6 +50,7 @@ const testSteps = [
     href: "/build",
     color: "text-teal-500",
     steps: [
+      "Empty state (TC-BUILD-003): before creating any project — or on a fresh account with none — opening Build redirects you to Projects with a 'create' prompt. Verify this first, since once a project exists you can't return to the empty state without deleting it.",
       "From your project, run the design optimisation",
       "Review MMC-specific suggestions (modular sections, prefab, CLT alternatives)",
       "Explore the 3D plan viewer",
