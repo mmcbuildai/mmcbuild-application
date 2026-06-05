@@ -47,9 +47,24 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Resolve the session. The auth check must NEVER hard-500 the request:
+  // middleware runs on every route (including /login itself), so a throw here
+  // — notably from the Edge runtime on the logged-out path — would take down
+  // the login page and lock everyone out. On failure, degrade to
+  // "unauthenticated and continue": protected routes below still redirect to
+  // /login (fail-closed) and data access is guarded again at the page /
+  // server-action layer, so no protected content is exposed.
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] =
+    null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (err) {
+    console.error(
+      "middleware: auth.getUser() threw; treating request as unauthenticated",
+      err,
+    );
+  }
 
   const { pathname } = request.nextUrl;
 
