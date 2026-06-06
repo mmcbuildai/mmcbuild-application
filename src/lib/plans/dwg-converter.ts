@@ -16,22 +16,24 @@
 
 const CLOUDCONVERT_BASE = "https://api.cloudconvert.com/v2";
 const POLL_INTERVAL_MS = 3000;
-// 150s poll budget. Each CloudConvert call now runs inside its OWN
+// 240s poll budget (80 × 3s). The CloudConvert call runs inside its OWN
 // step.run (dwg-dxf-path / convert-to-pdf are separate steps since the
 // 839f3f3 + 381cc0e pipeline split), so it gets a full Vercel 300s
-// invocation rather than sharing one with the classifier/extractor/
-// decomposer chain. 150s leaves ~150s of step headroom for the source
-// download, signed upload, converted-file download, and intermediate
-// re-upload that bracket this call.
+// invocation. 240s poll + ~60s for create/upload/download stays inside
+// that 300s step; on exhaustion convertViaCloudConvert returns an error
+// RESULT (it does not throw), so there is no Inngest retry storm.
 //
-// History: was 240s (80 attempts) when extraction was monolithic — a
-// slow CC call then blew the whole step budget and spun Inngest
-// transport retries for 11+ min, so ae6916c cut it to 90s (30). But 90s
-// is below CloudConvert's own "30s–3min depending on size" envelope, so
-// genuinely large DWGs timed out (recon-dwg-to-pdf.mjs proves they
-// convert fine given ~240s). 150s restores headroom for large files
-// while staying safely inside the now-isolated per-step 300s budget.
-const MAX_POLL_ATTEMPTS = 50;
+// History: 240s (80) when extraction was monolithic spun 11-min transport
+// retries because a slow CC blew the whole *shared* step budget (ae6916c
+// cut it to 90s/30). 90s was below CloudConvert's "30s–3min" envelope so
+// large DWGs timed out; 150s (50) helped but still failed the big multi-
+// drawing doc-sets. MH01 ("Manor Homes 01", ~16.4MB, SCRUM-218) is the
+// confirmed case — recon-dwg-to-pdf.mjs proves it converts in ~240s. Now
+// that the CC call is isolated in its own 300s step, restoring the 240s
+// budget is safe (no shared-step blowout) and lets MH01-class files land.
+// If files need >~270s end-to-end, the durable fix is step.sleep poll
+// across multiple Inngest steps (removes the single-invocation ceiling).
+const MAX_POLL_ATTEMPTS = 80;
 // Per-HTTP-call timeout. Any single fetch (job create, file upload,
 // status poll, file download) that takes longer than this aborts cleanly
 // rather than hanging the function until Vercel kills the connection.
