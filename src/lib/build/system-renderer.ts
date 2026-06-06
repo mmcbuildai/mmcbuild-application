@@ -23,6 +23,13 @@ import type { SpatialLayout, Wall, Point2D } from "./spatial/types";
 
 export type MMCSystem = "traditional" | "panelised" | "volumetric" | "printed";
 
+/**
+ * Wall sub-variant for the Traditional system. AU mainstream is brick veneer
+ * (a timber/steel frame with a single brick skin); WA + the thermal-mass buyer
+ * use solid masonry (double-brick / blockwork). Only meaningful for traditional.
+ */
+export type TraditionalVariant = "brick-veneer" | "masonry";
+
 export interface SystemSpec {
   id: MMCSystem;
   label: string;
@@ -165,6 +172,17 @@ const PALETTES: Record<MMCSystem, SystemPalette> = {
     ground: 0xe4e0d8,
     overlay: 0x2563eb, // blue
   },
+};
+
+// Traditional → solid-masonry variant (double-brick / blockwork). Cooler grey
+// render with visible course lines, vs the warm terracotta face brick of the
+// brick-veneer default.
+const MASONRY_PALETTE: SystemPalette = {
+  externalWall: 0xb8b3a8, // rendered / grey block
+  internalWall: 0xd8d4cc,
+  roof: 0x5a554d,
+  ground: 0xe8e4dc,
+  overlay: 0x8a8378, // grey mortar course lines
 };
 
 // ----------------------------------------------------------------------------
@@ -424,16 +442,63 @@ function buildPrintLayers(
   return group;
 }
 
+/**
+ * Masonry course lines — thin horizontal bands at block-course pitch wrapped
+ * around external walls, proud of the face, so the wall reads as solid
+ * double-brick / blockwork rather than a smooth brick-veneer skin.
+ */
+const MASONRY_COURSE_PITCH_M = 0.2; // ~ concrete-block course height
+
+function buildMasonryCourses(
+  layout: SpatialLayout,
+  wallHeight: number,
+  color: number,
+): THREE.Group {
+  const group = new THREE.Group();
+  const mortarMat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.95,
+    metalness: 0,
+  });
+
+  for (const wall of layout.walls) {
+    if (wall.type !== "external") continue;
+    const len = wallLength(wall);
+    if (len < 0.3) continue;
+    const angle = wallAngle(wall);
+    const mid = wallMidpoint(wall);
+    const wallH = wall.height_m && wall.height_m > 0 ? wall.height_m : wallHeight;
+    const thickness = (wall.thickness || 0.11) + 0.03; // proud of the face
+
+    const courses = Math.max(2, Math.floor(wallH / MASONRY_COURSE_PITCH_M));
+    for (let i = 1; i < courses; i++) {
+      const y = i * (wallH / courses);
+      const geo = new THREE.BoxGeometry(len, 0.02, thickness);
+      const band = new THREE.Mesh(geo, mortarMat);
+      band.position.set(mid.x, y, mid.y);
+      band.rotation.y = -angle;
+      group.add(band);
+    }
+  }
+
+  return group;
+}
+
 // ----------------------------------------------------------------------------
 // Material recolouring walker
 // ----------------------------------------------------------------------------
 
 /**
  * Walk the Group produced by buildFloorPlan3D and restyle each mesh per the
- * target system's palette.
+ * target system's palette. An optional paletteOverride lets a sub-variant
+ * (e.g. traditional masonry) recolour without a new MMCSystem entry.
  */
-function restyleForSystem(group: THREE.Group, system: MMCSystem): void {
-  const palette = PALETTES[system];
+function restyleForSystem(
+  group: THREE.Group,
+  system: MMCSystem,
+  paletteOverride?: SystemPalette,
+): void {
+  const palette = paletteOverride ?? PALETTES[system];
 
   group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
@@ -520,15 +585,17 @@ function restyleForSystem(group: THREE.Group, system: MMCSystem): void {
 export function buildFloorPlan3DForSystem(
   layout: SpatialLayout,
   system: MMCSystem,
+  variant: TraditionalVariant = "brick-veneer",
 ): THREE.Group {
   const wallHeight = layout.wall_height || 2.4;
+  const masonry = system === "traditional" && variant === "masonry";
 
   // Start from the base geometry pipeline (gives us walls, roof, openings,
   // floors, ground — correctly centred)
   const group = buildFloorPlan3D(layout);
 
-  // Recolour materials per system
-  restyleForSystem(group, system);
+  // Recolour materials per system (masonry overrides the traditional palette)
+  restyleForSystem(group, system, masonry ? MASONRY_PALETTE : undefined);
 
   // Add system-specific overlays. They need to be centred the same way the
   // base group is — buildFloorPlan3D applies a `group.position.set(-cx, 0, -cz)`
@@ -547,6 +614,8 @@ export function buildFloorPlan3DForSystem(
     );
   } else if (system === "printed") {
     group.add(buildPrintLayers(layout, wallHeight, PALETTES.printed.externalWall));
+  } else if (masonry) {
+    group.add(buildMasonryCourses(layout, wallHeight, MASONRY_PALETTE.overlay));
   }
 
   return group;

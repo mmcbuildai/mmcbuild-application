@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -13,6 +13,7 @@ import {
   SYSTEM_SPECS,
   SYSTEM_METRICS,
   type MMCSystem,
+  type TraditionalVariant,
 } from "@/lib/build/system-renderer";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 
@@ -26,13 +27,15 @@ const SYSTEMS: MMCSystem[] = [
 function SystemCanvas({
   layout,
   system,
+  variant = "brick-veneer",
 }: {
   layout: SpatialLayout;
   system: MMCSystem;
+  variant?: TraditionalVariant;
 }) {
   const sceneGroup = useMemo(
-    () => buildFloorPlan3DForSystem(layout, system),
-    [layout, system],
+    () => buildFloorPlan3DForSystem(layout, system, variant),
+    [layout, system, variant],
   );
   const maxDim = Math.max(layout.bounds.width, layout.bounds.depth);
   const camDist = maxDim * 1.4;
@@ -86,6 +89,8 @@ function SystemCanvas({
 }
 
 export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
+  const [traditionalVariant, setTraditionalVariant] =
+    useState<TraditionalVariant>("brick-veneer");
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
@@ -129,10 +134,37 @@ export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs text-zinc-600">{spec.tagline}</p>
+                {sys === "traditional" && (
+                  <div className="mt-2 inline-flex rounded-md border bg-white p-0.5 text-[11px]">
+                    {(
+                      [
+                        ["brick-veneer", "Brick veneer"],
+                        ["masonry", "Double brick / block"],
+                      ] as [TraditionalVariant, string][]
+                    ).map(([v, label]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setTraditionalVariant(v)}
+                        className={`rounded px-2 py-0.5 transition-colors ${
+                          traditionalVariant === v
+                            ? "bg-zinc-900 text-white"
+                            : "text-zinc-600 hover:text-zinc-900"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="h-[320px] bg-gradient-to-b from-zinc-100 to-white">
-                <SystemCanvas layout={layout} system={sys} />
+                <SystemCanvas
+                  layout={layout}
+                  system={sys}
+                  variant={sys === "traditional" ? traditionalVariant : "brick-veneer"}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t bg-zinc-50/50 px-4 py-3 text-xs">
