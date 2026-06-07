@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getDesignReport } from "@/app/(dashboard)/build/actions";
 import { DesignReport } from "@/components/build/design-report";
 import { OptimisationProgress } from "@/components/build/optimisation-progress";
-import { Plan3DReveal } from "@/components/build/plan-3d-reveal";
+import { BuildExplorer3D } from "@/components/build/build-explorer-3d";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 
 export default async function ReportPage({
@@ -63,11 +63,12 @@ export default async function ReportPage({
           {/* Existing text-based report */}
           <DesignReport check={check} suggestions={suggestions} />
 
-          {/* 3D Plan Comparison Viewer — gated behind a click so the WebGL
-              canvas only mounts when the user asks for it. Mapping IDs come
-              from the AI optimisation step (SCRUM-161). */}
+          {/* 3D Build Explorer — System Explorer (4-system compare), Build
+              Sequence storyboard, and Plan Comparison. Gated behind a click so
+              the WebGL canvas only mounts when the user asks for it. Mapping IDs
+              come from the AI optimisation step (SCRUM-161). */}
           {check.spatial_layout && (
-            <Plan3DReveal
+            <BuildExplorer3D
               layout={check.spatial_layout}
               suggestions={suggestions.map((s) => ({
                 id: s.id,

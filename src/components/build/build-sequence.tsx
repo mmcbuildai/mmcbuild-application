@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SPIKE — multi-system build-sequence storyboard.
+ * Multi-system build-sequence storyboard.
  *
  * Shows the *build process as an action* for each construction system, on the
  * same extracted footprint:
@@ -15,7 +15,8 @@
  * roof/stitch → finish. Pick the system (and Traditional wall type) with the
  * selector; Play / scrub the timeline.
  *
- * Dev-only, mounted on /build/test-3d ("Build Sequence" tab). Verify by eye.
+ * Mounted on the per-project Design Optimisation Report (via BuildExplorer3D)
+ * and on the /build/test-3d harness ("Build Sequence" tab).
  */
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -31,12 +32,9 @@ import {
   computeModulePlacements,
   type ModulePlacement,
   type MMCSystem,
+  type TraditionalVariant,
 } from "@/lib/build/system-renderer";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
-
-// Defined locally so this component is independent of the (separate) masonry-
-// toggle PR; identical to the system-renderer export it will eventually share.
-type TraditionalVariant = "brick-veneer" | "masonry";
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
