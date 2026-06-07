@@ -95,17 +95,21 @@ export function SystemSelectionPanel({
       <CardContent className="space-y-4">
         <div className="grid gap-2 sm:grid-cols-2">
           {CONSTRUCTION_SYSTEMS.map((sys) => {
-            const disabled = sys.comingSoon;
-            const isSelected = !disabled && selected.has(sys.key);
+            const isSelected = selected.has(sys.key);
+            // Coming-soon systems can't be newly selected, but a previously
+            // saved one (legacy projects) stays visible and can be removed —
+            // otherwise it sits hidden in selected_systems, unremovable, and
+            // still flows downstream to Comply/Quote/etc.
+            const locked = sys.comingSoon && !isSelected;
             return (
               <button
                 key={sys.key}
                 type="button"
-                onClick={disabled ? undefined : () => toggle(sys.key)}
-                disabled={disabled}
-                aria-disabled={disabled}
+                onClick={locked ? undefined : () => toggle(sys.key)}
+                disabled={locked}
+                aria-disabled={locked}
                 className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
-                  disabled
+                  locked
                     ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-60"
                     : isSelected
                       ? "border-teal-300 bg-teal-50"
@@ -124,12 +128,12 @@ export function SystemSelectionPanel({
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium">{sys.label}</p>
-                    {disabled && (
+                    {sys.comingSoon && (
                       <Badge
                         variant="secondary"
                         className="bg-gray-200 px-1.5 py-0 text-[10px] font-medium text-gray-600"
                       >
-                        Coming soon
+                        {isSelected ? "No longer offered" : "Coming soon"}
                       </Badge>
                     )}
                   </div>

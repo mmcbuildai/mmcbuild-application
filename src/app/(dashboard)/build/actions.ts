@@ -314,7 +314,13 @@ export async function hasValidExtraction(planId: string): Promise<boolean> {
     .eq("org_id", profile.org_id)
     .eq("storage_path", plan.file_path)
     .eq("status", "done")
-    .not("result->layout", "is", null)
+    // Use ->> (text extraction): a failed extraction stores jsonb `null` at
+    // result.layout, and `->` yields jsonb-null which is NOT SQL NULL — so
+    // `result->layout is null` would NOT exclude it and the gate would wrongly
+    // unlock for invalid designs. `->>` returns SQL NULL for a json-null value
+    // (and the object's text for a real layout), so this correctly excludes
+    // layout-less "done" jobs.
+    .not("result->>layout", "is", null)
     .limit(1)
     .maybeSingle();
 

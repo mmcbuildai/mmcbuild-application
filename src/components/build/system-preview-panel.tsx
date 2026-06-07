@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Layers, Loader2, AlertCircle, PlayCircle, Box } from "lucide-react";
@@ -42,6 +42,14 @@ export function SystemPreviewPanel({
   const [view, setView] = useState<ViewMode>("build-sequence");
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
+
+  // Stop the poll loop on unmount so it doesn't keep calling the server action
+  // (and setState) after the user navigates away.
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearTimeout(pollRef.current);
+    };
+  }, []);
 
   // On a successful extraction, refresh server components so the Design
   // Optimisation gate unlocks (the build page re-checks hasPlanLayout). This
@@ -89,6 +97,8 @@ export function SystemPreviewPanel({
   }, [markReady]);
 
   const start = useCallback(async () => {
+    // Clear any in-flight poll chain so a retry can't run two loops at once.
+    if (pollRef.current) clearTimeout(pollRef.current);
     setPhase("working");
     setError(null);
     const res = await startProjectSystemPreview(planId);
