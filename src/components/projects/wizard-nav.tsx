@@ -31,6 +31,12 @@ interface WizardNavProps {
   /** Activation prerequisites — only relevant on the questionnaire step. */
   canActivate?: boolean;
   activationBlocker?: string | null;
+  /**
+   * Suppress the primary (Next / Save and Activate) action, leaving only Back.
+   * Used on the questionnaire step, where the questionnaire form itself owns
+   * the single "Save & Activate" action so there are not two buttons (SCRUM-268).
+   */
+  hidePrimaryAction?: boolean;
 }
 
 export function WizardNav({
@@ -39,6 +45,7 @@ export function WizardNav({
   isDraft,
   canActivate,
   activationBlocker,
+  hidePrimaryAction,
 }: WizardNavProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -92,7 +99,7 @@ export function WizardNav({
   return (
     <div className="flex flex-col gap-2 border-t pt-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
-      {isLast && !canActivate && activationBlocker && (
+      {isLast && !hidePrimaryAction && !canActivate && activationBlocker && (
         <p className="text-xs text-muted-foreground">{activationBlocker}</p>
       )}
       <div className="flex items-center justify-between gap-2">
@@ -105,7 +112,7 @@ export function WizardNav({
           <ArrowLeft className="mr-1 h-4 w-4" />
           Back
         </Button>
-        {isLast ? (
+        {hidePrimaryAction ? null : isLast ? (
           <Button
             onClick={handleActivate}
             disabled={!canActivate || activating}

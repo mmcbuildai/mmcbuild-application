@@ -266,6 +266,7 @@ export default async function ProjectOverviewPage({
           <div className="max-w-2xl">
             <QuestionnaireForm
               projectId={projectId}
+              isDraft={isDraft}
               existingResponses={
                 questionnaire?.responses as Record<string, unknown> | null
               }
@@ -280,20 +281,13 @@ export default async function ProjectOverviewPage({
               }
             />
           </div>
+          {/* The questionnaire form owns the single "Save & Activate" action on
+              the final step (SCRUM-268); WizardNav shows only Back here. */}
           <WizardNav
             projectId={projectId}
             currentTab="questionnaire"
             isDraft={isDraft}
-            canActivate={
-              !!readiness && readiness.hasPlans && readiness.hasQuestionnaire
-            }
-            activationBlocker={
-              readiness && !readiness.hasPlans
-                ? "Upload at least one plan that finishes processing before activating."
-                : readiness && !readiness.hasQuestionnaire
-                ? "Complete the questionnaire before activating."
-                : null
-            }
+            hidePrimaryAction
           />
         </>
       )}

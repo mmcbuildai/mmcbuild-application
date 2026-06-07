@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
-import { saveQuestionnaire } from "@/app/(dashboard)/projects/actions";
+import { saveQuestionnaire, activateProject } from "@/app/(dashboard)/projects/actions";
 import { toast } from "sonner";
 
 interface SiteIntelPrefill {
@@ -20,6 +20,13 @@ interface QuestionnaireFormProps {
   projectId: string;
   existingResponses?: Record<string, unknown> | null;
   siteIntel?: SiteIntelPrefill | null;
+  /**
+   * Draft projects show a single "Save & Activate" on the final step (the
+   * questionnaire is the last wizard tab); the separate WizardNav activate
+   * button is suppressed for drafts so there is only one action (SCRUM-268).
+   * Non-draft (editing an active project) just saves the responses.
+   */
+  isDraft?: boolean;
 }
 
 const BUILDING_TYPOLOGIES = [
@@ -269,6 +276,7 @@ export function QuestionnaireForm({
   projectId,
   existingResponses,
   siteIntel,
+  isDraft = false,
 }: QuestionnaireFormProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -365,6 +373,28 @@ export function QuestionnaireForm({
       toast.success("Project created! Head to MMC Comply to run your first assessment.");
       router.push(`/projects/${projectId}`);
     }
+  };
+
+  const handleSaveAndActivate = async () => {
+    setSaving(true);
+    setError(null);
+    const saveResult = await saveQuestionnaire(projectId, responses);
+    if (saveResult.error) {
+      setError(saveResult.error);
+      setSaving(false);
+      return;
+    }
+    const activateResult = await activateProject(projectId);
+    setSaving(false);
+    if (activateResult.error) {
+      // Responses are saved; the project just isn't ready to activate yet
+      // (e.g. no processed plan). Surface the blocker, keep the answers.
+      toast.success("Questionnaire saved.");
+      setError(activateResult.error);
+      return;
+    }
+    toast.success("Project activated. You're all set.");
+    router.push(`/projects/${projectId}`);
   };
 
   function goToStep(originalIndex: number) {
@@ -833,10 +863,15 @@ export function QuestionnaireForm({
 
         {!isLastVisible ? (
           <Button onClick={handleNext}>Next</Button>
+        ) : isDraft ? (
+          <Button onClick={handleSaveAndActivate} disabled={saving}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save & Activate
+          </Button>
         ) : (
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save & Continue
+            Save Changes
           </Button>
         )}
       </div>
