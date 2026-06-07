@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { Layers, Loader2, AlertCircle } from "lucide-react";
-import { SystemExplorerView } from "./system-explorer-view";
+import { BuildSequence } from "./build-sequence";
 import { startProjectSystemPreview } from "@/app/(dashboard)/build/actions";
 import { getTest3DStatus } from "@/app/(dashboard)/build/test-3d/actions";
 import type { SpatialLayout } from "@/lib/build/spatial";
@@ -10,13 +10,13 @@ import type { SpatialLayout } from "@/lib/build/spatial";
 type Phase = "idle" | "working" | "ready" | "error";
 
 /**
- * Pre-selection system preview for the project Build page.
+ * Pre-selection build-sequence preview for the project Build page.
  *
- * Lets the user see their already-uploaded plan rendered in all four MMC
- * systems BEFORE they choose a construction system below — so the choice is
- * informed by what each system actually looks like for their design. Runs the
- * same extraction pipeline as /build/test-3d against the project's plan (no
- * re-upload), then mounts the System Explorer.
+ * Lets the user watch their already-uploaded plan built as a step-by-step
+ * sequence in each MMC system BEFORE they choose a construction system below —
+ * so the choice is informed by seeing how each system actually goes together.
+ * Runs the same extraction pipeline as /build/test-3d against the project's
+ * plan (no re-upload), then mounts the Build Sequence storyboard.
  */
 export function SystemPreviewPanel({ planId }: { planId: string }) {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -33,7 +33,7 @@ export function SystemPreviewPanel({ planId }: { planId: string }) {
           setPhase("ready");
         } else {
           setError(
-            "We couldn't reconstruct a 3D layout from this plan. The 4-system comparison needs a readable floor plan.",
+            "We couldn't reconstruct a 3D layout from this plan. The build-sequence preview needs a readable floor plan.",
           );
           setPhase("error");
         }
@@ -82,11 +82,14 @@ export function SystemPreviewPanel({ planId }: { planId: string }) {
           <Layers className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
           <div>
             <p className="text-base font-medium text-zinc-900">
-              See your design in all 4 MMC systems
+              See your design built in the 4 MMC systems
             </p>
             <p className="mt-0.5 text-sm text-zinc-500">
-              Preview your uploaded plan as Traditional, Panelised, Volumetric
-              and 3D-printed before choosing a system below.
+              Watch your uploaded plan built as a step-by-step sequence in each
+              system — Traditional (timber frame &amp; cladding, or block),
+              Volumetric, Panelised (incl. SIP), and 3D concrete printing. See
+              how they work, then choose your preferred system for design
+              optimisation below.
             </p>
           </div>
         </div>
@@ -128,7 +131,7 @@ export function SystemPreviewPanel({ planId }: { planId: string }) {
 
       {phase === "ready" && layout && (
         <div className="border-t p-4">
-          <SystemExplorerView layout={layout} />
+          <BuildSequence layout={layout} />
         </div>
       )}
     </div>
