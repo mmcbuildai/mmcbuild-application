@@ -23,6 +23,7 @@ import {
   deleteCertification,
 } from "@/app/(dashboard)/projects/actions";
 import { createClient } from "@/lib/supabase/client";
+import { useStatusPolling } from "@/hooks/use-status-polling";
 
 const CERT_TYPE_OPTIONS = [
   { group: "Engineering", options: [
@@ -127,6 +128,11 @@ function certTypeLabel(certType: string): string {
 export function CertificationUpload({ projectId, existingCerts = [] }: CertificationUploadProps) {
   const router = useRouter();
   const { confirm, dialog: confirmDialog } = useConfirm();
+
+  // Auto-refresh while any certification is still uploading/processing so the
+  // status badge updates without a manual reload (SCRUM-267).
+  useStatusPolling(existingCerts.map((c) => c.status));
+
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);

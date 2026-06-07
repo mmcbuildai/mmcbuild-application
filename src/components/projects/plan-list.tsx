@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Trash2, Loader2, RotateCw } from "lucide-react";
 import { deletePlan, retryPlanProcessing } from "@/app/(dashboard)/projects/actions";
 import { useConfirm } from "@/hooks/use-confirm";
+import { useStatusPolling } from "@/hooks/use-status-polling";
 
 interface Plan {
   id: string;
@@ -31,6 +32,10 @@ export function PlanList({ plans }: { plans: Plan[] }) {
   const [deletePending, startDeleteTransition] = useTransition();
   const [retryPending, startRetryTransition] = useTransition();
   const { confirm, dialog } = useConfirm();
+
+  // Auto-refresh while any plan is still uploading/processing so the status
+  // badge updates without a manual reload (SCRUM-267).
+  useStatusPolling(plans.map((p) => p.status));
 
   async function handleDelete(planId: string) {
     const ok = await confirm({
