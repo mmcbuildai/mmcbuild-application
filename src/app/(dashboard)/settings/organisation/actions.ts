@@ -296,7 +296,7 @@ export async function inviteUser(
   }
 
   // Create invitation record
-  const { error: insertError } = await admin
+  const { data: createdInvite, error: insertError } = await admin
     .from("org_invitations")
     .insert({
       org_id: profile.org_id,
@@ -305,17 +305,38 @@ export async function inviteUser(
       seat_type: seatType,
       project_ids: projectIds,
       invited_by: profile.id,
-    } as never);
+    } as never)
+    .select("id")
+    .single();
 
-  if (insertError) {
-    return { error: `Failed to create invitation: ${insertError.message}` };
+  if (insertError || !createdInvite) {
+    return { error: `Failed to create invitation: ${insertError?.message ?? "unknown error"}` };
   }
+  const createdInviteId = (createdInvite as { id: string }).id;
 
-  // Send Supabase auth invite email — magic link
-  try {
-    await admin.auth.admin.inviteUserByEmail(email.trim().toLowerCase());
-  } catch {
-    // User may already have an account — that's OK, they'll join on next login
+  // Send the Supabase auth invitation email (magic link). inviteUserByEmail only
+  // succeeds for a BRAND-NEW user; an existing account returns `email_exists` and
+  // sends nothing. We must NOT swallow that — a silently-failed invite leaves a
+  // pending row with no email ever sent (the exact bug seen 2026-06-08; see memory
+  // project_auth_email_smtp_500). Surface the real outcome and roll the row back so
+  // there is no dead "pending" invitation the inviter can't action.
+  const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
+    email.trim().toLowerCase(),
+  );
+  if (inviteErr) {
+    await admin.from("org_invitations").delete().eq("id", createdInviteId);
+    revalidatePath("/settings/organisation");
+    const alreadyExists =
+      (inviteErr as { code?: string }).code === "email_exists" || inviteErr.status === 422;
+    if (alreadyExists) {
+      return {
+        error:
+          "This person already has an MMC Build account in another organisation. Adding an " +
+          "existing user to a second organisation needs multi-org membership, which isn't " +
+          "available yet — flag it with the team.",
+      };
+    }
+    return { error: `Could not send the invitation email: ${inviteErr.message}` };
   }
 
   revalidatePath("/settings/organisation");
@@ -368,9 +389,11 @@ export async function revokeInvitation(invitationId: string) {
     return { error: "Invitation not found" };
   }
 
+  // Hard-delete the invitation so it visibly clears from the pending list (a
+  // soft status flip left a lingering row that looked unresolved).
   const { error } = await admin
     .from("org_invitations")
-    .update({ status: "revoked" } as never)
+    .delete()
     .eq("id", invitationId);
 
   if (error) return { error: `Failed to revoke invitation: ${error.message}` };
@@ -418,11 +441,20 @@ export async function resendInvitation(invitationId: string) {
 
   if (updateError) return { error: `Failed to resend: ${updateError.message}` };
 
-  // Re-send auth invite
-  try {
-    await admin.auth.admin.inviteUserByEmail(inv.email);
-  } catch {
-    // User may already exist
+  // Re-send the auth invitation email. Surface a failure instead of swallowing it —
+  // an existing account returns `email_exists` and no email goes out.
+  const { error: resendErr } = await admin.auth.admin.inviteUserByEmail(inv.email);
+  if (resendErr) {
+    const alreadyExists =
+      (resendErr as { code?: string }).code === "email_exists" || resendErr.status === 422;
+    if (alreadyExists) {
+      return {
+        error:
+          "This person already has an MMC Build account, so an invitation email can't be sent. " +
+          "Adding an existing user to another organisation needs multi-org membership (not yet available).",
+      };
+    }
+    return { error: `Could not resend the invitation email: ${resendErr.message}` };
   }
 
   revalidatePath("/settings/organisation");
