@@ -122,91 +122,95 @@ export const processPlan = inngest.createFunction(
       const sourceBuffer: Buffer = Buffer.from(arrayBuffer);
       const kind: PlanFileKind = plan.file_kind ?? "pdf";
 
-      if (kind === "dwg") {
-        const { convertDwg } = await import("@/lib/plans/dwg-converter");
-        const conv = await convertDwg(sourceBuffer, plan.file_name, "dxf");
-        if ("error" in conv) {
-          console.warn(
-            `[processPlan] DWG conversion failed for ${plan.id}: ${conv.error}. Falling back to manual_review.`,
+      // Text extraction + embedding is a Comply-search enhancement, NOT a
+      // prerequisite for project setup. It must never hard-fail the plan: a
+      // throw here propagates to onFailure → status "error", which blocks
+      // activation even though the file is stored and the geometry is extracted
+      // separately by the eager test-3d job. Observed failures include
+      // pdf-parse@1.1.1 throwing "bad XRef entry" on malformed PDFs and embed
+      // errors on DWG-derived text. On ANY such failure, keep the file and fall
+      // back to manual_review (a usable, activatable state). (SCRUM-272)
+      try {
+        if (kind === "dwg") {
+          const { convertDwg } = await import("@/lib/plans/dwg-converter");
+          const conv = await convertDwg(sourceBuffer, plan.file_name, "dxf");
+          if ("error" in conv) {
+            console.warn(
+              `[processPlan] DWG conversion failed for ${plan.id}: ${conv.error}. Falling back to manual_review.`,
+            );
+            return { pageCount: 0, chunkCount: 0, manualReview: true };
+          }
+
+          const { extractLayersFromDxf, dxfToSearchableText } = await import(
+            "@/lib/plans/dxf-extractor"
           );
-          return { pageCount: 0, chunkCount: 0, manualReview: true };
-        }
+          const extracted = extractLayersFromDxf(conv.buffer);
 
-        const { extractLayersFromDxf, dxfToSearchableText } = await import(
-          "@/lib/plans/dxf-extractor"
-        );
-        const extracted = extractLayersFromDxf(conv.buffer);
+          if (extracted) {
+            await admin
+              .from("plans")
+              .update({ extracted_layers: extracted } as never)
+              .eq("id", plan.id);
 
-        if (extracted) {
-          await admin
-            .from("plans")
-            .update({ extracted_layers: extracted } as never)
-            .eq("id", plan.id);
-
-          const searchableText = dxfToSearchableText(extracted);
-          // Drive the embedding pipeline through ingestPlan with kind=pdf and
-          // a text-only payload synthesised from the DXF. parsePdf isn't run
-          // for this path; ingestPlan only chunks/embeds the text we provide.
-          //
-          // The embed is a Comply-search enhancement, not a prerequisite for
-          // project setup. A failure here must NOT kill the plan (it previously
-          // threw → onFailure → status "error", blocking activation even though
-          // the geometry extracted fine). Keep the file + extracted layers and
-          // fall back to manual_review so the plan stays usable. The error is
-          // logged so the embed root-cause can be fixed (SCRUM-272 follow-up).
-          try {
+            const searchableText = dxfToSearchableText(extracted);
             return await ingestPlanFromText({
               orgId: plan.org_id,
               planId: plan.id,
               text: searchableText,
               pageCount: 1,
             });
-          } catch (embedErr) {
-            console.error(
-              `[processPlan] DWG embed failed for ${plan.id}; keeping as manual_review:`,
-              embedErr,
-            );
-            return { pageCount: 1, chunkCount: 0, manualReview: true };
           }
-        }
 
-        // DXF parse failed — keep the file but flag it.
-        return { pageCount: 0, chunkCount: 0, manualReview: true };
-      }
-
-      // RVT / SKP / DOC / DOCX → convert to PDF via CloudConvert, then run
-      // the standard PDF ingestion path. Conversion failures fall back to
-      // manual_review with the original file still in storage.
-      if (requiresPdfConversion(kind)) {
-        const inputFormat = cloudConvertInputFormat(kind, plan.file_name);
-        if (!inputFormat) {
+          // DXF parse failed — keep the file but flag it.
           return { pageCount: 0, chunkCount: 0, manualReview: true };
         }
-        const { convertViaCloudConvert } = await import(
-          "@/lib/plans/dwg-converter"
-        );
-        const conv = await convertViaCloudConvert(
-          sourceBuffer,
-          plan.file_name,
-          inputFormat,
-          "pdf",
-        );
-        if ("error" in conv) {
-          console.warn(
-            `[processPlan] ${kind} conversion failed for ${plan.id}: ${conv.error}. Falling back to manual_review.`,
+
+        // RVT / SKP / DOC / DOCX → convert to PDF via CloudConvert, then run
+        // the standard PDF ingestion path. Conversion failures fall back to
+        // manual_review with the original file still in storage.
+        if (requiresPdfConversion(kind)) {
+          const inputFormat = cloudConvertInputFormat(kind, plan.file_name);
+          if (!inputFormat) {
+            return { pageCount: 0, chunkCount: 0, manualReview: true };
+          }
+          const { convertViaCloudConvert } = await import(
+            "@/lib/plans/dwg-converter"
           );
-          return { pageCount: 0, chunkCount: 0, manualReview: true };
+          const conv = await convertViaCloudConvert(
+            sourceBuffer,
+            plan.file_name,
+            inputFormat,
+            "pdf",
+          );
+          if ("error" in conv) {
+            console.warn(
+              `[processPlan] ${kind} conversion failed for ${plan.id}: ${conv.error}. Falling back to manual_review.`,
+            );
+            return { pageCount: 0, chunkCount: 0, manualReview: true };
+          }
+          return await ingestPlan(
+            plan.org_id,
+            plan.id,
+            conv.buffer,
+            "pdf",
+            plan.file_name,
+          );
         }
+
         return await ingestPlan(
           plan.org_id,
           plan.id,
-          conv.buffer,
-          "pdf",
+          sourceBuffer,
+          kind,
           plan.file_name,
         );
+      } catch (ingestErr) {
+        console.error(
+          `[processPlan] ingest failed for ${plan.id} (kind=${kind}); keeping file as manual_review:`,
+          ingestErr,
+        );
+        return { pageCount: 0, chunkCount: 0, manualReview: true };
       }
-
-      return await ingestPlan(plan.org_id, plan.id, sourceBuffer, kind, plan.file_name);
     });
 
     // 4. Update status: DWG/manual-review files are stored only; everything
