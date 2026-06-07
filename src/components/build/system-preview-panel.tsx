@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Layers, Loader2, AlertCircle, PlayCircle, Box } from "lucide-react";
 import { BuildSequence } from "./build-sequence";
 import { SystemExplorerView } from "./system-explorer-view";
@@ -33,14 +34,26 @@ export function SystemPreviewPanel({ planId }: { planId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("build-sequence");
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const router = useRouter();
+
+  // On a successful extraction, refresh server components so the Design
+  // Optimisation gate unlocks (the build page re-checks hasPlanLayout). This
+  // is a soft refresh — the panel keeps its rendered 3D.
+  const markReady = useCallback(
+    (l: SpatialLayout) => {
+      setLayout(l);
+      setPhase("ready");
+      router.refresh();
+    },
+    [router],
+  );
 
   const poll = useCallback((jobId: string) => {
     const tick = async () => {
       const status = await getTest3DStatus(jobId);
       if (status.status === "done") {
         if (status.result.layout) {
-          setLayout(status.result.layout);
-          setPhase("ready");
+          markReady(status.result.layout);
         } else {
           setError(
             "We couldn't reconstruct a 3D layout from this plan. The build-sequence preview needs a readable floor plan.",
@@ -66,7 +79,7 @@ export function SystemPreviewPanel({ planId }: { planId: string }) {
       pollRef.current = setTimeout(tick, 2500);
     };
     pollRef.current = setTimeout(tick, 2000);
-  }, []);
+  }, [markReady]);
 
   const start = useCallback(async () => {
     setPhase("working");
@@ -78,12 +91,11 @@ export function SystemPreviewPanel({ planId }: { planId: string }) {
       return;
     }
     if ("layout" in res) {
-      setLayout(res.layout);
-      setPhase("ready");
+      markReady(res.layout);
       return;
     }
     poll(res.jobId);
-  }, [planId, poll]);
+  }, [planId, poll, markReady]);
 
   return (
     <div className="rounded-lg border bg-white">

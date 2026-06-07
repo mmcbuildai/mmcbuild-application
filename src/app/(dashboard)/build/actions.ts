@@ -277,6 +277,46 @@ export async function getCachedPlanLayout(
   return cached?.result?.layout ?? null;
 }
 
+// Lightweight gate check: has this plan been extracted into a 3D layout yet
+// (via the build-page preview / test-3d)? Used to hard-gate Design Optimisation
+// behind "run the 3D preview first". Selects only an id — no jsonb payload.
+export async function hasPlanLayout(planId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile?.org_id) return false;
+
+  const { data: planRow } = await db()
+    .from("plans")
+    .select("org_id, file_path")
+    .eq("id", planId)
+    .single();
+  const plan = (planRow as unknown as {
+    org_id: string;
+    file_path: string | null;
+  } | null) ?? null;
+  if (!plan || plan.org_id !== profile.org_id || !plan.file_path) return false;
+
+  const { data: doneRow } = await db()
+    .from("test_3d_jobs")
+    .select("id")
+    .eq("org_id", profile.org_id)
+    .eq("storage_path", plan.file_path)
+    .eq("status", "done")
+    .limit(1)
+    .maybeSingle();
+
+  return !!doneRow;
+}
+
 export type StartSystemPreviewResult =
   | { layout: SpatialLayout }
   | { jobId: string }

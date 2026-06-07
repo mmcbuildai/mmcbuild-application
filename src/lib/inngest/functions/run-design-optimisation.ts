@@ -73,23 +73,56 @@ export const runDesignOptimisation = inngest.createFunction(
       return { checkId: check.id, error: "No plan content" };
     }
 
-    // 3b. Extract spatial layout from plan PDF (for 3D viewer + COLLADA export)
+    // 3b. Spatial layout for the 3D viewer + COLLADA export.
     //
-    // Architectural plan sets are multi-page (cover → site → floor plans →
-    // elevations → ...). Page 1 is almost never the floor plan. We classify
-    // each page first (cheap Haiku Vision call, ~$0.001/page) and route the
-    // first floor-plan page through the high-resolution extractor. Pages
-    // beyond the first MAX_PAGES_TO_CLASSIFY are skipped — floor plans
-    // always live near the front.
-    //
-    // bucket name is "plan-uploads" (matches plan-dropzone.tsx upload target).
-    // Split into two steps mirroring the /build/test-3d worker so neither
-    // exceeds the 300s per-invocation budget: (i) resolve the plan to a PDF in
-    // storage (CloudConvert for DWG/RVT/SKP/DOC; native PDFs pass through), then
-    // (ii) run the robust extractor. Only the PDF storage path crosses the step
+    // PRIMARY path: reuse the layout already extracted on the project page. The
+    // hard gate means the user must run "See your design built in the 4 MMC
+    // systems" (the test-3d extractor) before Design Optimisation unlocks, so a
+    // completed test_3d_jobs row for this plan almost always exists. Reusing it
+    // avoids a second, costly extraction and keeps the report's 3D identical to
+    // the preview's. (Karen 2026-06-07: extraction happens on the project page.)
+    const cachedLayout = (await step.run("reuse-project-page-layout", async () => {
+      const { data: plan } = await db()
+        .from("plans")
+        .select("file_path")
+        .eq("id", check.plan_id)
+        .single();
+      const filePath = (plan as { file_path?: string | null } | null)?.file_path;
+      if (!filePath) return null;
+
+      const { data: doneRow } = await db()
+        .from("test_3d_jobs")
+        .select("result")
+        .eq("org_id", check.org_id)
+        .eq("storage_path", filePath)
+        .eq("status", "done")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const layout =
+        (doneRow as { result?: { layout?: SpatialLayout | null } | null } | null)
+          ?.result?.layout ?? null;
+      if (layout) {
+        await db()
+          .from("design_checks")
+          .update({ spatial_layout: layout })
+          .eq("id", check.id);
+      }
+      return layout;
+    })) as SpatialLayout | null;
+
+    // FALLBACK path (only if no project-page extraction exists — legacy/edge):
+    // run the same robust extractor the project-page preview uses. Split into
+    // two steps mirroring the /build/test-3d worker so neither exceeds the 300s
+    // per-invocation budget: (i) resolve the plan to a PDF in storage
+    // (CloudConvert for DWG/RVT/SKP/DOC; native PDFs pass through), then (ii)
+    // run the robust extractor. Only the PDF storage path crosses the step
     // boundary — never the multi-MB buffer (Inngest 1MB step-result limit).
     // bucket name is "plan-uploads" (matches plan-dropzone.tsx upload target).
-    const pdfRef = (await step.run("convert-plan-to-pdf", async () => {
+    let pdfRef: { pdfPath: string } | null = null;
+    if (!cachedLayout) {
+      pdfRef = (await step.run("convert-plan-to-pdf", async () => {
       const { data: plan } = await db()
         .from("plans")
         .select("file_path, file_kind, file_name")
@@ -177,14 +210,17 @@ export const runDesignOptimisation = inngest.createFunction(
         return null;
       }
       return { pdfPath: intermediatePath };
-    })) as { pdfPath: string } | null;
+      })) as { pdfPath: string } | null;
+    }
 
-    const spatialLayout = pdfRef
-      ? ((await step.run("extract-spatial-layout", async () => {
+    let spatialLayout: SpatialLayout | null = cachedLayout;
+    if (!cachedLayout && pdfRef) {
+      const pdfPath = pdfRef.pdfPath;
+      spatialLayout = (await step.run("extract-spatial-layout", async () => {
           try {
             const { data: fileData } = await createAdminClient()
               .storage.from("plan-uploads")
-              .download(pdfRef.pdfPath);
+              .download(pdfPath);
             if (!fileData) return null;
             const pdfBuffer = Buffer.from(await fileData.arrayBuffer());
 
@@ -214,8 +250,8 @@ export const runDesignOptimisation = inngest.createFunction(
             console.error("Spatial extraction failed (non-fatal):", err);
             return null;
           }
-        })) as SpatialLayout | null)
-      : null;
+        })) as SpatialLayout | null;
+    }
 
     // 3c. Load selected construction systems
     const selectedSystems = await step.run("load-selected-systems", async () => {

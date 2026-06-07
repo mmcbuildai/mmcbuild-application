@@ -12,7 +12,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getProjectPlans } from "@/app/(dashboard)/projects/actions";
-import { getProjectDesignChecks, getProjectSelectedSystems } from "../actions";
+import {
+  getProjectDesignChecks,
+  getProjectSelectedSystems,
+  hasPlanLayout,
+} from "../actions";
 import { RunOptimisationButton } from "@/components/build/run-optimisation-button";
 import { SystemSelectionPanel } from "@/components/build/system-selection-panel";
 import { SystemPreviewPanel } from "@/components/build/system-preview-panel";
@@ -84,7 +88,11 @@ export default async function ProjectBuildPage({
   const readyPlan = plans.find(
     (p: { status: string }) => p.status === "ready"
   );
-  const canRun = !!readyPlan;
+  // Hard gate: Design Optimisation only unlocks after the user has run the 3D
+  // preview ("See your design built in the 4 MMC systems") and seen their
+  // design across the systems. The preview refreshes this page on success.
+  const hasPreviewed = readyPlan ? await hasPlanLayout(readyPlan.id) : false;
+  const canRun = !!readyPlan && hasPreviewed;
 
   return (
     <div className="space-y-6">
@@ -156,15 +164,21 @@ export default async function ProjectBuildPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {canRun ? (
+            {!readyPlan ? (
+              <p className="text-sm text-muted-foreground">
+                Upload and process a plan first.
+              </p>
+            ) : !hasPreviewed ? (
+              <p className="text-sm text-muted-foreground">
+                Run <span className="font-medium">&ldquo;See your design built
+                in the 4 MMC systems&rdquo;</span> above and review your design
+                first — Design Optimisation unlocks once you have.
+              </p>
+            ) : (
               <RunOptimisationButton
                 projectId={projectId}
                 planId={readyPlan.id}
               />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Upload and process a plan first.
-              </p>
             )}
           </CardContent>
         </Card>
