@@ -12,5 +12,10 @@ export function getResend(): Resend {
   return resendInstance;
 }
 
+// Default sender must be on a domain VERIFIED in the Resend account that owns
+// RESEND_API_KEY. The live `mmcbuild` Resend account verifies the `app.` subdomain
+// only — the bare apex (`mmcbuild.com.au`) is NOT verified, so sending from it is
+// silently rejected by Resend. Keep this default aligned with the Supabase Auth
+// SMTP sender (`noreply@app.mmcbuild.com.au`). See memory: project_auth_email_smtp_500.
 export const FROM_EMAIL =
-  process.env.RESEND_FROM_EMAIL || "MMC Build <noreply@mmcbuild.com.au>";
+  process.env.RESEND_FROM_EMAIL || "MMC Build <noreply@app.mmcbuild.com.au>";
