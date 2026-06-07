@@ -161,6 +161,12 @@ export async function resetPassword(formData: FormData) {
 
 export async function signOut() {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  // Local scope: sign out THIS device only, clearing the local session +
+  // cookies without a network round-trip to revoke every session. The default
+  // global scope calls the GoTrue /logout endpoint, which can hang or fail
+  // (notably with migrated sessions) and leave the user stuck "signed in".
+  // "Sign out everywhere" is a separate, deliberate action (Settings), not the
+  // sidebar button.
+  await supabase.auth.signOut({ scope: "local" });
   redirect("/login");
 }
