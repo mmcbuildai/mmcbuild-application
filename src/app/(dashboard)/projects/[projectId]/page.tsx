@@ -83,7 +83,10 @@ export default async function ProjectOverviewPage({
       getProjectContributors(projectId),
     ]);
     readiness = {
-      hasPlans: draftPlans.some((p: { status: string }) => p.status === "ready"),
+      hasPlans: draftPlans.some(
+        (p: { status: string }) =>
+          p.status === "ready" || p.status === "manual_review",
+      ),
       hasQuestionnaire: !!draftQuestionnaire?.completed,
       hasCertifications: draftCerts.length > 0,
       hasTeam: draftContributors.length > 0,

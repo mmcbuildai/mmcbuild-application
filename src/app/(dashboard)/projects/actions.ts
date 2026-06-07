@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { db } from "@/lib/supabase/db";
 import { revalidatePath } from "next/cache";
 import { deriveSiteIntel } from "@/lib/site-intel";
 import { getStaticMapUrl } from "@/lib/services/mapbox";
@@ -256,16 +257,42 @@ export async function activateProject(projectId: string) {
     return { error: "Project is already active" };
   }
 
-  // Check readiness: at least one plan with status "ready"
-  const { data: readyPlans } = await admin
+  // Check readiness: at least one plan that finished processing into a usable
+  // state. "ready" (fully ingested) and "manual_review" (geometry extracted,
+  // deep embed deferred) both make the project usable for setup — the heavy 3D
+  // / optimisation work happens later in the Build stage. Plans still in flight
+  // ("uploading"/"processing") or genuinely failed ("error") don't qualify.
+  const { data: usablePlans } = await admin
     .from("plans")
     .select("id")
     .eq("project_id", projectId)
-    .eq("status", "ready")
+    .in("status", ["ready", "manual_review"] as const)
     .limit(1);
 
-  if (!readyPlans || readyPlans.length === 0) {
-    return { error: "At least one processed plan is required before activation" };
+  if (!usablePlans || usablePlans.length === 0) {
+    // Give a specific reason instead of a generic "a processed plan is required"
+    // when the user can see they uploaded one (it may have failed or still be
+    // processing).
+    const { data: anyPlans } = await admin
+      .from("plans")
+      .select("status")
+      .eq("project_id", projectId);
+    const statuses = (anyPlans ?? []).map((p) => (p as { status: string }).status);
+    if (statuses.length === 0) {
+      return { error: "Upload a building plan before activating." };
+    }
+    if (statuses.some((s) => s === "uploading" || s === "processing")) {
+      return {
+        error:
+          "Your plan is still processing. Wait for it to finish, then activate.",
+      };
+    }
+    return {
+      error:
+        "Your uploaded plan didn't finish processing successfully (status: " +
+        statuses.join(", ") +
+        "). Re-upload or fix it on the Documents tab, then activate.",
+    };
   }
 
   // Check readiness: questionnaire completed
@@ -560,6 +587,40 @@ export async function registerPlan(
         "The file uploaded, but processing could not be started. Please retry from the plan list.",
       planId,
     };
+  }
+
+  // Eager spatial extraction. Run the same robust extractor the 3D/Build stage
+  // uses (run-test-3d-extraction) NOW, so the SpatialLayout is cached in
+  // test_3d_jobs (keyed org_id + storage_path) and reused — without a second
+  // extraction — by both the project-page 3D preview and Design Optimisation
+  // (its reuse-project-page-layout step). The 3D isn't rendered at this stage;
+  // we only pre-compute and cache. Best-effort: a failure here must never fail
+  // the upload — the Comply embed path (plan/uploaded) still runs.
+  try {
+    const { data: extractJob } = await db()
+      .from("test_3d_jobs")
+      .insert({
+        user_id: user.id,
+        org_id: profile.org_id,
+        storage_path: filePath,
+        file_name: fileName,
+        status: "queued",
+      })
+      .select("id")
+      .single();
+
+    if (extractJob) {
+      await inngest.send({
+        name: "test3d/extract.requested",
+        data: {
+          jobId: (extractJob as { id: string }).id,
+          storagePath: filePath,
+          fileName,
+        },
+      });
+    }
+  } catch (e) {
+    console.error("[registerPlan] eager test-3d extraction enqueue failed:", e);
   }
 
   return { success: true, planId };

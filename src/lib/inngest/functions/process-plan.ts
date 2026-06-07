@@ -147,12 +147,27 @@ export const processPlan = inngest.createFunction(
           // Drive the embedding pipeline through ingestPlan with kind=pdf and
           // a text-only payload synthesised from the DXF. parsePdf isn't run
           // for this path; ingestPlan only chunks/embeds the text we provide.
-          return await ingestPlanFromText({
-            orgId: plan.org_id,
-            planId: plan.id,
-            text: searchableText,
-            pageCount: 1,
-          });
+          //
+          // The embed is a Comply-search enhancement, not a prerequisite for
+          // project setup. A failure here must NOT kill the plan (it previously
+          // threw → onFailure → status "error", blocking activation even though
+          // the geometry extracted fine). Keep the file + extracted layers and
+          // fall back to manual_review so the plan stays usable. The error is
+          // logged so the embed root-cause can be fixed (SCRUM-272 follow-up).
+          try {
+            return await ingestPlanFromText({
+              orgId: plan.org_id,
+              planId: plan.id,
+              text: searchableText,
+              pageCount: 1,
+            });
+          } catch (embedErr) {
+            console.error(
+              `[processPlan] DWG embed failed for ${plan.id}; keeping as manual_review:`,
+              embedErr,
+            );
+            return { pageCount: 1, chunkCount: 0, manualReview: true };
+          }
         }
 
         // DXF parse failed — keep the file but flag it.
