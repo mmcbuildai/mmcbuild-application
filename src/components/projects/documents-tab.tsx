@@ -8,6 +8,7 @@ interface Plan {
   status: string;
   file_size_bytes: number;
   page_count: number | null;
+  error_message?: string | null;
 }
 
 interface ExistingCert {

@@ -689,6 +689,7 @@ export async function getProjectPlans(projectId: string) {
     status: string;
     created_at: string;
     file_kind?: string | null;
+    error_message?: string | null;
     extracted_layers?: {
       layers?: Array<{ name: string; entityCount: number }>;
       derived?: {

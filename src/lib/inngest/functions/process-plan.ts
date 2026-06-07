@@ -138,7 +138,12 @@ export const processPlan = inngest.createFunction(
             console.warn(
               `[processPlan] DWG conversion failed for ${plan.id}: ${conv.error}. Falling back to manual_review.`,
             );
-            return { pageCount: 0, chunkCount: 0, manualReview: true };
+            return {
+              pageCount: 0,
+              chunkCount: 0,
+              manualReview: true,
+              errorMessage: `DWG → DXF conversion failed: ${conv.error}`,
+            };
           }
 
           const { extractLayersFromDxf, dxfToSearchableText } = await import(
@@ -162,7 +167,12 @@ export const processPlan = inngest.createFunction(
           }
 
           // DXF parse failed — keep the file but flag it.
-          return { pageCount: 0, chunkCount: 0, manualReview: true };
+          return {
+            pageCount: 0,
+            chunkCount: 0,
+            manualReview: true,
+            errorMessage: "Couldn't read CAD layers from the converted DXF.",
+          };
         }
 
         // RVT / SKP / DOC / DOCX → convert to PDF via CloudConvert, then run
@@ -171,7 +181,12 @@ export const processPlan = inngest.createFunction(
         if (requiresPdfConversion(kind)) {
           const inputFormat = cloudConvertInputFormat(kind, plan.file_name);
           if (!inputFormat) {
-            return { pageCount: 0, chunkCount: 0, manualReview: true };
+            return {
+              pageCount: 0,
+              chunkCount: 0,
+              manualReview: true,
+              errorMessage: `Unsupported file type for conversion: ${kind}`,
+            };
           }
           const { convertViaCloudConvert } = await import(
             "@/lib/plans/dwg-converter"
@@ -186,7 +201,12 @@ export const processPlan = inngest.createFunction(
             console.warn(
               `[processPlan] ${kind} conversion failed for ${plan.id}: ${conv.error}. Falling back to manual_review.`,
             );
-            return { pageCount: 0, chunkCount: 0, manualReview: true };
+            return {
+              pageCount: 0,
+              chunkCount: 0,
+              manualReview: true,
+              errorMessage: `${kind} → PDF conversion failed: ${conv.error}`,
+            };
           }
           return await ingestPlan(
             plan.org_id,
@@ -205,11 +225,18 @@ export const processPlan = inngest.createFunction(
           plan.file_name,
         );
       } catch (ingestErr) {
+        const reason =
+          ingestErr instanceof Error ? ingestErr.message : String(ingestErr);
         console.error(
           `[processPlan] ingest failed for ${plan.id} (kind=${kind}); keeping file as manual_review:`,
           ingestErr,
         );
-        return { pageCount: 0, chunkCount: 0, manualReview: true };
+        return {
+          pageCount: 0,
+          chunkCount: 0,
+          manualReview: true,
+          errorMessage: `Processing failed: ${reason}`,
+        };
       }
     });
 
@@ -224,6 +251,23 @@ export const processPlan = inngest.createFunction(
           page_count: result.pageCount,
         } as never)
         .eq("id", plan.id);
+
+      // Record WHY a plan landed in manual_review (cleared on success) so the
+      // reason shows on the plan card instead of only in function logs.
+      // Best-effort + separate from the status write: pre-migration (no
+      // error_message column) this errors silently and never fails the run.
+      const errorMessage =
+        (result as { errorMessage?: string }).errorMessage ?? null;
+      const { error: msgErr } = await admin
+        .from("plans")
+        .update({ error_message: errorMessage } as never)
+        .eq("id", plan.id);
+      if (msgErr) {
+        console.warn(
+          `[processPlan] could not record error_message for ${plan.id} (column may be missing):`,
+          msgErr.message,
+        );
+      }
     });
 
     return {

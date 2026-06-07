@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Trash2, Loader2, RotateCw } from "lucide-react";
+import { FileText, Trash2, Loader2, RotateCw, AlertTriangle } from "lucide-react";
 import { deletePlan, retryPlanProcessing } from "@/app/(dashboard)/projects/actions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useStatusPolling } from "@/hooks/use-status-polling";
@@ -16,6 +16,7 @@ interface Plan {
   file_size_bytes: number;
   page_count: number | null;
   file_kind?: string | null;
+  error_message?: string | null;
   extracted_layers?: {
     layers?: Array<{ name: string; entityCount: number }>;
     derived?: {
@@ -147,6 +148,21 @@ export function PlanList({ plans }: { plans: Plan[] }) {
                   </Button>
                 </div>
               </div>
+              {plan.error_message && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      Couldn&apos;t reconstruct this plan in 3D
+                    </p>
+                    <p className="mt-0.5 break-words">{plan.error_message}</p>
+                    <p className="mt-1 text-amber-800">
+                      Fix the issue and re-upload, or delete this file and try a
+                      different one.
+                    </p>
+                  </div>
+                </div>
+              )}
               {hasLayerData && layerSummary && (
                 <LayerSummaryBlock summary={layerSummary} />
               )}
