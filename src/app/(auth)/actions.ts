@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureMembership } from "@/lib/auth/membership";
 import { redirect } from "next/navigation";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -53,6 +54,10 @@ export async function signUp(formData: FormData) {
         full_name: fullName || email.split("@")[0],
         email,
         persona: "builder",
+      });
+      // Source-of-truth membership + active org for the new owner.
+      await ensureMembership(admin, data.user.id, org.id as string, "owner", "internal", {
+        setActive: true,
       });
     }
 

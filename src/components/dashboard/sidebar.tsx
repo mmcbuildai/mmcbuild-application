@@ -22,6 +22,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
+import { OrgSwitcher } from "./org-switcher";
 import { Button } from "@/components/ui/button";
 import { isRunLimited, TRIAL_RUN_LIMIT } from "@/lib/persona-access";
 import {
@@ -180,6 +181,8 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
             )}
           </div>
         )}
+
+        <OrgSwitcher />
 
         <div className="border-t border-white/10 px-3 py-2 space-y-0.5">
           {bottomNav.map((item) => {

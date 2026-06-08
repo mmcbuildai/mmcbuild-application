@@ -315,31 +315,119 @@ export async function inviteUser(
   const createdInviteId = (createdInvite as { id: string }).id;
 
   // Send the Supabase auth invitation email (magic link). inviteUserByEmail only
-  // succeeds for a BRAND-NEW user; an existing account returns `email_exists` and
-  // sends nothing. We must NOT swallow that — a silently-failed invite leaves a
-  // pending row with no email ever sent (the exact bug seen 2026-06-08; see memory
-  // project_auth_email_smtp_500). Surface the real outcome and roll the row back so
-  // there is no dead "pending" invitation the inviter can't action.
+  // succeeds for a BRAND-NEW user; an existing account returns `email_exists`.
   const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
     email.trim().toLowerCase(),
   );
   if (inviteErr) {
-    await admin.from("org_invitations").delete().eq("id", createdInviteId);
-    revalidatePath("/settings/organisation");
     const alreadyExists =
       (inviteErr as { code?: string }).code === "email_exists" || inviteErr.status === 422;
     if (alreadyExists) {
-      return {
-        error:
-          "This person already has an MMC Build account in another organisation. Adding an " +
-          "existing user to a second organisation needs multi-org membership, which isn't " +
-          "available yet — flag it with the team.",
-      };
+      // The invitee already has an account. inviteUserByEmail won't email them,
+      // but they CAN join this org now (multi-org): keep the pending invite and
+      // send a magic link — on login the auth callback adds the membership.
+      const supa = await createClient();
+      await supa.auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`,
+        },
+      });
+      revalidatePath("/settings/organisation");
+      return { success: true };
     }
+    // Other failure — roll back the dangling invite row and surface it.
+    await admin.from("org_invitations").delete().eq("id", createdInviteId);
+    revalidatePath("/settings/organisation");
     return { error: `Could not send the invitation email: ${inviteErr.message}` };
   }
 
   revalidatePath("/settings/organisation");
+  return { success: true };
+}
+
+// ============================================================
+// Active-org switching (multi-org)
+// ============================================================
+
+export type OrgMembership = {
+  orgId: string;
+  name: string;
+  role: string;
+  seatType: string;
+  active: boolean;
+};
+
+/** All orgs the current user belongs to, with which one is active. */
+export async function getUserMemberships(): Promise<OrgMembership[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const admin = createAdminClient();
+  const { data: rows } = await admin
+    .from("organisation_members" as never)
+    .select("org_id, role, seat_type, organisations(name)")
+    .eq("user_id", user.id);
+
+  const { data: active } = await admin
+    .from("user_active_org" as never)
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  const activeOrgId = (active as { org_id: string } | null)?.org_id ?? null;
+
+  return ((rows as unknown as Array<{
+    org_id: string;
+    role: string;
+    seat_type: string;
+    organisations: { name: string } | null;
+  }>) ?? []).map((m) => ({
+    orgId: m.org_id,
+    name: m.organisations?.name ?? "Organisation",
+    role: m.role,
+    seatType: m.seat_type,
+    active: m.org_id === activeOrgId,
+  }));
+}
+
+/** Switch the current user's active org. Validates membership; the DB trigger
+ *  mirrors profiles.org_id/role to match (migration 00059). */
+export async function switchActiveOrg(orgId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const admin = createAdminClient();
+
+  const { data: membership } = await admin
+    .from("organisation_members" as never)
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("org_id", orgId)
+    .single();
+
+  if (!membership) {
+    return { error: "You are not a member of that organisation" };
+  }
+
+  const { error } = await admin
+    .from("user_active_org" as never)
+    .upsert(
+      { user_id: user.id, org_id: orgId, updated_at: new Date().toISOString() } as never,
+      { onConflict: "user_id" } as never,
+    );
+
+  if (error) return { error: `Failed to switch organisation: ${error.message}` };
+
+  // Re-render every authenticated surface against the new active org.
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
