@@ -1,10 +1,11 @@
 import { inngest } from "../client";
 import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { buildRegistrationReceivedEmail } from "@/lib/email/templates/registration-received";
 
 export const notifyNewProfessional = inngest.createFunction(
   {
     id: "notify-new-professional",
-    name: "Notify Karen of New MMC Direct Registration",
+    name: "MMC Direct registration — confirm owner + notify Karen",
     retries: 2,
   },
   { event: "direct/professional.registered" },
@@ -42,20 +43,54 @@ export const notifyNewProfessional = inngest.createFunction(
       </p>
     `;
 
-    const to = process.env.KAREN_EMAIL || "karen.engel@mmcbuild.com.au";
+    // 1. Owner-facing confirmation (SCRUM-247) — the person Karen invited gets
+    //    a branded "we've received your registration" email, not just Karen.
+    //    This is the one Karen relies on, so a failure throws → Inngest retries.
+    let ownerEmailId: string | undefined;
+    if (contactEmail) {
+      const ownerResult = await resend.emails.send({
+        from: FROM_EMAIL,
+        to: [contactEmail],
+        subject: "We've received your MMC Direct registration",
+        html: buildRegistrationReceivedEmail({ contactName, companyName }),
+      });
+      if (ownerResult.error) {
+        console.error(
+          "[notify-new-professional] owner confirmation failed:",
+          ownerResult.error,
+        );
+        throw new Error(
+          `Owner confirmation email failed: ${ownerResult.error.message}`,
+        );
+      }
+      ownerEmailId = ownerResult.data?.id;
+    } else {
+      console.warn(
+        "[notify-new-professional] no contactEmail on event — skipped owner confirmation",
+      );
+    }
 
+    // 2. Internal approval notification to Karen. Best-effort: log on failure
+    //    but don't throw, so a Karen-side hiccup can't trigger a retry that
+    //    re-sends the owner a duplicate confirmation.
+    const to = process.env.KAREN_EMAIL || "karen.engel@mmcbuild.com.au";
     const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: [to],
       subject: `New Business Registration: ${companyName} - Approval Needed`,
       html,
     });
-
     if (result.error) {
-      console.error("[notify-new-professional] Failed to send email:", result.error);
-      throw new Error(`Failed to send email: ${result.error.message}`);
+      console.error(
+        "[notify-new-professional] Karen notification failed:",
+        result.error,
+      );
     }
 
-    return { success: true, emailId: result.data?.id };
+    return {
+      success: true,
+      ownerEmailId,
+      karenEmailId: result.data?.id,
+    };
   }
 );
