@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -157,13 +158,17 @@ export function HelpChat() {
                 }`}
               >
                 <span
-                  className={`inline-block px-3 py-2 rounded-lg max-w-[85%] ${
+                  className={`inline-block px-3 py-2 rounded-lg max-w-[85%] text-left ${
                     msg.role === "user"
                       ? "bg-amber-600 text-white"
-                      : "bg-muted"
+                      : "bg-muted [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:my-0.5 [&_strong]:font-semibold [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_a]:underline [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold"
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === "assistant" ? (
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  ) : (
+                    msg.content
+                  )}
                 </span>
               </div>
             ))}

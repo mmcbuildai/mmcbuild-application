@@ -62,10 +62,11 @@ export function DaeDownloadButton({
         ) : (
           <Box className="mr-2 h-4 w-4" />
         )}
-        Download 3D model
+        Export 3D model (.dae)
       </Button>
       <span className="text-[11px] text-muted-foreground">
-        Preview quality · opens in SketchUp / Revit / Rhino
+        Downloads a .dae file to open in SketchUp / Revit / Rhino — not viewable
+        in the browser
       </span>
       {error && <span className="text-[11px] text-red-600">{error}</span>}
     </div>

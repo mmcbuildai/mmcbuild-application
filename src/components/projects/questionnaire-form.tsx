@@ -34,11 +34,12 @@ const BUILDING_TYPOLOGIES = [
   "Duplex",
   "Townhouse",
   "Apartment",
+  "Co-living / Boarding house",
   "Hotel",
   "Mixed use",
   "Commercial",
 ];
-const BUILDING_CLASSES = ["Class 1a", "Class 1b", "Class 10a", "Class 10b"];
+const BUILDING_CLASSES = ["Class 1a", "Class 1b", "Class 2", "Class 3", "Class 10a", "Class 10b"];
 const CONSTRUCTION_TYPES = ["Type A", "Type B", "Type C"];
 const CLIMATE_ZONES = [1, 2, 3, 4, 5, 6, 7, 8];
 const BAL_RATINGS = ["N/A", "BAL-LOW", "BAL-12.5", "BAL-19", "BAL-29", "BAL-40", "BAL-FZ"];
@@ -52,7 +53,7 @@ const ROOF_MATERIALS = ["Concrete tile", "Terracotta tile", "Metal (Colorbond)",
 const WALL_CLADDINGS = ["Brick veneer", "Double brick", "Fibre cement", "Timber weatherboard", "Metal cladding", "Rendered foam", "Autoclaved aerated concrete"];
 const DPC_TYPES = ["Polyethylene membrane", "Bituminous membrane", "Chemical DPC", "Not specified"];
 
-const GARAGE_LOCATIONS = ["Attached", "Detached", "Integrated/under main roof", "N/A"];
+const GARAGE_LOCATIONS = ["Attached", "Detached", "Integrated/under main roof", "Basement car park", "N/A"];
 const SMOKE_ALARM_TYPES = ["Photoelectric (hardwired interconnected)", "Photoelectric (battery)", "Ionisation", "Combined photo/ion"];
 
 const ENERGY_PATHWAYS = ["DTS (Deemed-to-Satisfy)", "NatHERS", "JV3 (Verification)"];

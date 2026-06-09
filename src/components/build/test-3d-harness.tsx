@@ -195,7 +195,7 @@ export function Test3DHarness() {
       >
         <div>
           <label className="block text-sm font-medium mb-1">
-            Plan file (PDF, PNG, JPG, RVT, SKP, DWG, DOC, DOCX — max 50&nbsp;MB)
+            Plan file (PDF, PNG, JPG, RVT, SKP, DWG, DOC, DOCX — max 32&nbsp;MB; compress larger PDFs)
           </label>
           <input
             type="file"

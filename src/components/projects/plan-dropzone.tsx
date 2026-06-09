@@ -175,8 +175,13 @@ export function PlanDropzone({ projectId }: PlanDropzoneProps) {
             <p className="text-sm font-medium">
               Drag and drop your building plan here
             </p>
-            <p className="mb-3 text-xs text-muted-foreground">
+            <p className="mb-1 text-xs text-muted-foreground">
               or click to browse — PDF, JPG, PNG, WebP, DWG, RVT, SKP, DOC, DOCX (max 50MB)
+            </p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Plans process best under 32MB. Larger PDFs are compressed
+              automatically where possible — if a big plan won&apos;t render in
+              3D, compress or flatten the PDF and re-upload.
             </p>
             <Button variant="outline" size="sm" asChild>
               <label className="cursor-pointer">
