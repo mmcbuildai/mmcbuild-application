@@ -114,9 +114,16 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
       {/* Data Sources summary */}
       {sourceCounts.length > 0 && (
         <div className="rounded-lg border bg-white p-4">
-          <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-1">
             Data Sources
           </h3>
+          <p className="mb-3 text-xs text-muted-foreground">
+            <span className="font-medium text-green-700">Green</span> = rate from
+            a named supplier / reference.{" "}
+            <span className="font-medium text-amber-700">Amber</span> = AI-generated
+            estimate with no named source — indicative only; cross-check against
+            your own supplier pricing.
+          </p>
           <div className="flex flex-wrap gap-3">
             {sourceCounts.map(([name, count]) => {
               const isDb = name !== "AI Estimated";
@@ -160,9 +167,11 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
         <p className="text-xs text-yellow-800">
           <strong>Disclaimer:</strong> These are AI-generated advisory cost estimates
           only. They do NOT constitute a formal quantity surveyor report or fixed-price
-          quotation. All estimates must be reviewed by a qualified quantity surveyor.
-          Actual costs will vary based on site conditions, market conditions, and
-          detailed specification. Region: {estimate.region ?? "NSW"}.
+          quotation. Rates marked &ldquo;AI Estimated&rdquo; have no named supplier
+          source — <strong>cross-check them against your own supplier pricing</strong>.
+          All estimates must be reviewed by a qualified quantity surveyor. Actual costs
+          will vary based on site conditions, market conditions, and detailed
+          specification. Region: {estimate.region ?? "NSW"}.
         </p>
       </div>
 
