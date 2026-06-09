@@ -27,6 +27,10 @@ import {
   type SectionExtraction,
   type ScheduleExtraction,
 } from "./extractor";
+import {
+  ANTHROPIC_PDF_MAX_BYTES,
+  planTooLargeMessage,
+} from "@/lib/plans/file-kind";
 import type { SpatialLayout, RoofForm } from "./types";
 
 /**
@@ -148,9 +152,33 @@ export async function extractFullHouse(
   options?: { floorPlanPageOverride?: number },
 ): Promise<FullHouseExtraction> {
   const t0 = Date.now();
+  // base64 inflates the raw bytes by ~4/3; recover the true file size so the
+  // guard and the user-facing message both report the real MB.
+  const decodedBytes = Math.floor((pdfBase64.length * 3) / 4);
   console.log(
-    `[extractFullHouse] start — pdf base64 length ${pdfBase64.length} chars (~${Math.round(pdfBase64.length / 1024 / 1024)} MB)`,
+    `[extractFullHouse] start — pdf base64 length ${pdfBase64.length} chars (~${Math.round(decodedBytes / 1024 / 1024)} MB)`,
   );
+
+  // Size guard. A file over Anthropic's 32 MB document ceiling can't be
+  // processed: it strains the worker (rasterising a render-heavy set) and the
+  // browser (the base64 round-trip), and the vision calls would be rejected.
+  // Fail fast with an actionable message instead of spinning for minutes and
+  // crashing the tab — the failure mode the Gladesville 36 MB plan hit.
+  if (decodedBytes > ANTHROPIC_PDF_MAX_BYTES) {
+    console.error(
+      `[extractFullHouse] rejected — ${Math.round(decodedBytes / 1024 / 1024)} MB exceeds ${ANTHROPIC_PDF_MAX_BYTES / 1024 / 1024} MB limit`,
+    );
+    return {
+      layout: null,
+      classifications: [],
+      floorPlanPage: null,
+      elevationsExtracted: [],
+      sectionExtracted: null,
+      scheduleExtracted: null,
+      totalPages: null,
+      error: planTooLargeMessage(decodedBytes),
+    };
+  }
 
   // 1. Parse source PDF once with pdf-lib. Used to (a) cap the classifier
   // input at the first CLASSIFIER_PAGE_CAP pages and (b) split per-page

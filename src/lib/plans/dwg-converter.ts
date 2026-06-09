@@ -96,37 +96,58 @@ export async function convertViaCloudConvert(
   uploadMimeType: string = "application/octet-stream",
   convertOptions: Record<string, unknown> = {},
 ): Promise<CloudConvertResult> {
-  const apiKey = process.env.CLOUDCONVERT_API_KEY;
-  if (!apiKey) {
-    return { error: "CLOUDCONVERT_API_KEY not configured" };
-  }
   if (sourceBuffer.length > MAX_DWG_BYTES) {
     return { error: `File exceeds ${MAX_DWG_BYTES / 1024 / 1024}MB limit` };
   }
 
-  // 1. Create a job: upload → convert → export-url
+  // Job graph: upload → convert → export-url. The middle "convert-file" task
+  // is the only part that differs from an optimise job (see runCloudConvertJob).
+  const result = await runCloudConvertJob(
+    {
+      "import-file": { operation: "import/upload" },
+      "convert-file": {
+        operation: "convert",
+        input: "import-file",
+        input_format: inputFormat,
+        output_format: outputFormat,
+        ...convertOptions,
+      },
+      "export-file": { operation: "export/url", input: "convert-file" },
+    },
+    sourceBuffer,
+    fileName,
+    uploadMimeType,
+  );
+  if ("error" in result) return result;
+  return { buffer: result.buffer, format: outputFormat };
+}
+
+/**
+ * Shared CloudConvert job runner: create job → upload via signed form → poll →
+ * download the export. Used by both convertViaCloudConvert and
+ * optimizePdfViaCloudConvert. The task graph MUST contain an "import-file"
+ * (import/upload) task and an "export-file" (export/url) task; the middle task
+ * is what each caller varies.
+ */
+async function runCloudConvertJob(
+  tasks: Record<string, unknown>,
+  sourceBuffer: Buffer,
+  fileName: string,
+  uploadMimeType: string,
+): Promise<{ buffer: Buffer } | { error: string }> {
+  const apiKey = process.env.CLOUDCONVERT_API_KEY;
+  if (!apiKey) {
+    return { error: "CLOUDCONVERT_API_KEY not configured" };
+  }
+
+  // 1. Create the job
   const jobResp = await fetch(`${CLOUDCONVERT_BASE}/jobs`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      tasks: {
-        "import-file": { operation: "import/upload" },
-        "convert-file": {
-          operation: "convert",
-          input: "import-file",
-          input_format: inputFormat,
-          output_format: outputFormat,
-          ...convertOptions,
-        },
-        "export-file": {
-          operation: "export/url",
-          input: "convert-file",
-        },
-      },
-    }),
+    body: JSON.stringify({ tasks }),
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
@@ -158,9 +179,9 @@ export async function convertViaCloudConvert(
   const uploadResp = await fetch(uploadForm.url, {
     method: "POST",
     body: form,
-    // 16MB DWG upload over slow link can otherwise hang past Vercel's
-    // 300s function timeout — abort cleanly at 60s so the caller can
-    // surface the failure and either retry or fall through.
+    // A large upload over a slow link can otherwise hang past Vercel's 300s
+    // function timeout — abort cleanly at 60s so the caller can surface the
+    // failure and either retry or fall through.
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
@@ -169,7 +190,7 @@ export async function convertViaCloudConvert(
     return { error: `Upload to CloudConvert failed: ${uploadResp.status} ${text.slice(0, 200)}` };
   }
 
-  // 3. Poll the job status until conversion finishes (or fails / times out)
+  // 3. Poll the job status until it finishes (or fails / times out)
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 
@@ -196,7 +217,7 @@ export async function convertViaCloudConvert(
       }
 
       const arrayBuffer = await fileResp.arrayBuffer();
-      return { buffer: Buffer.from(arrayBuffer), format: outputFormat };
+      return { buffer: Buffer.from(arrayBuffer) };
     }
 
     if (status.data.status === "error") {
@@ -206,6 +227,44 @@ export async function convertViaCloudConvert(
   }
 
   return { error: "CloudConvert job timed out" };
+}
+
+/**
+ * Compress/optimise a PDF via CloudConvert (image downsampling + structure
+ * cleanup). Architect plan sets are huge (~36 MB for Gladesville) because of
+ * embedded high-resolution renders/photos; an optimise pass collapses them
+ * well under Anthropic's 32 MB document ceiling so the 3D extractor can read
+ * them, WITHOUT asking the user to compress by hand. Runs server-side via
+ * CloudConvert (already a hard dependency) — no @napi-rs/canvas bundling risk.
+ * Returns an error RESULT (never throws) so the caller can fall back to the
+ * original file.
+ */
+export async function optimizePdfViaCloudConvert(
+  pdfBuffer: Buffer,
+  fileName: string = "plan.pdf",
+): Promise<CloudConvertResult> {
+  if (pdfBuffer.length > MAX_DWG_BYTES) {
+    return { error: `File exceeds ${MAX_DWG_BYTES / 1024 / 1024}MB limit` };
+  }
+  const result = await runCloudConvertJob(
+    {
+      "import-file": { operation: "import/upload" },
+      "optimize-file": {
+        operation: "optimize",
+        input: "import-file",
+        input_format: "pdf",
+        // "web" downsamples embedded images aggressively — the right profile
+        // for shrinking a render-heavy architect PDF for vision extraction.
+        profile: "web",
+      },
+      "export-file": { operation: "export/url", input: "optimize-file" },
+    },
+    pdfBuffer,
+    fileName,
+    "application/pdf",
+  );
+  if ("error" in result) return result;
+  return { buffer: result.buffer, format: "pdf" };
 }
 
 /**

@@ -16,12 +16,16 @@ import {
   detectPlanKind,
   contentTypeForKind,
   ACCEPTED_PLAN_ACCEPT_ATTR,
+  ANTHROPIC_PDF_MAX_BYTES,
+  planTooLargeMessage,
 } from "@/lib/plans/file-kind";
 
 type Phase = "idle" | "uploading" | "extracting";
 type ViewMode = "system-explorer" | "build-sequence" | "standard";
 
-const MAX_BYTES = 50 * 1024 * 1024;
+// 32 MB, matching Anthropic's document ceiling. The old 50 MB cap let through
+// files the extractor could never process (the Gladesville 36 MB plan).
+const MAX_BYTES = ANTHROPIC_PDF_MAX_BYTES;
 
 export function Test3DHarness() {
   const [file, setFile] = useState<File | null>(null);
@@ -46,7 +50,7 @@ export function Test3DHarness() {
     if (file.size > MAX_BYTES) {
       setResult({
         layout: null,
-        error: `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max is 50 MB.`,
+        error: planTooLargeMessage(file.size),
       });
       return;
     }

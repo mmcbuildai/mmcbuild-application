@@ -16,6 +16,8 @@ import {
   ExternalLink,
   Loader2,
   FlaskConical,
+  FolderKanban,
+  ArrowRight,
 } from "lucide-react";
 import { MODULES, type ModuleId } from "@/lib/stripe/plans";
 import { startTesting, submitFeedback, type BetaFeedbackRow } from "./actions";
@@ -373,8 +375,10 @@ function ModuleCard({
 /* ── Main dashboard ── */
 export function BetaDashboard({
   initialProgress,
+  hasProjects,
 }: {
   initialProgress: BetaFeedbackRow[];
+  hasProjects: boolean;
 }) {
   const [progress, setProgress] = useState(initialProgress);
 
@@ -483,17 +487,48 @@ export function BetaDashboard({
         </div>
       </div>
 
-      {/* Module cards */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {progress.map((p) => (
-          <ModuleCard
-            key={p.module_id}
-            moduleId={p.module_id}
-            progress={p}
-            onUpdate={handleUpdate}
-          />
-        ))}
-      </div>
+      {/* Project gate — testers need a project before any module does
+          anything (every module runs inside a project). Lead with a single
+          Projects CTA; the module test-cards only appear once a project
+          exists, mirroring the main dashboard. */}
+      {!hasProjects ? (
+        <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-blue-50 p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 p-3">
+                <FolderKanban className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-zinc-900">
+                  Create a project to start testing
+                </h2>
+                <p className="mt-0.5 text-sm text-zinc-600">
+                  Every module runs inside a project. Create your first one,
+                  then the Comply, Build and other module test-cards appear here.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/projects"
+              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
+            >
+              Start Here
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {progress.map((p) => (
+            <ModuleCard
+              key={p.module_id}
+              moduleId={p.module_id}
+              progress={p}
+              onUpdate={handleUpdate}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Completion message */}
       {completed === total && (

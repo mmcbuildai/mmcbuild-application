@@ -1,11 +1,18 @@
 /**
  * Site intelligence orchestrator.
- * Derives climate zone, wind region, and council/LGA from coordinates.
+ *
+ * Derives climate zone, wind region, BAL, council/LGA and zoning for a project
+ * site by calling the SHARED property-services service — NOT by downloading
+ * geospatial datasets into this app's own Supabase. The datasets (climate
+ * zones, wind regions, LGA boundaries) are a CAS-owned shared asset that lives
+ * once in property-services and is served via its `derive` endpoint; they are
+ * never copied into a client repo/Supabase. (This replaced the local
+ * `climate.ts`/`wind-region.ts`/`council.ts` geojson-bucket lookups, whose
+ * missing `climate_clean.geojson` object was the source of the
+ * "[climate] Failed to load GeoJSON" production error.)
  */
 
-import { deriveClimateZone } from "./climate";
-import { deriveWindRegion } from "./wind-region";
-import { deriveCouncil } from "./council";
+import { createPropertyServices } from "@/lib/services/property-services-sdk/client";
 
 export interface SiteIntelResult {
   climate_zone: number | null;
@@ -16,25 +23,82 @@ export interface SiteIntelResult {
   zoning: string | null;
 }
 
-export async function deriveSiteIntel(
-  lat: number,
-  lng: number
-): Promise<SiteIntelResult> {
-  const [climateZone, windResult, councilResult] = await Promise.all([
-    deriveClimateZone(lat, lng).catch(() => null),
-    deriveWindRegion(lat, lng).catch(() => ({ wind_region: null })),
-    deriveCouncil(lat, lng).catch(() => ({
-      council_name: null,
-      council_code: null,
-    })),
-  ]);
+export interface DeriveSiteIntelInput {
+  lat: number;
+  lng: number;
+  /** Required by property-services `derive`. Falls back to a lat/lng string. */
+  address: string;
+  suburb?: string | null;
+  state?: string | null;
+  postcode?: string | null;
+}
 
-  return {
-    climate_zone: climateZone,
-    wind_region: windResult.wind_region,
-    bal_rating: null, // Requires external dataset — future enrichment
-    council_name: councilResult.council_name,
-    council_code: councilResult.council_code,
-    zoning: null, // Requires external dataset — future enrichment
-  };
+const EMPTY: SiteIntelResult = {
+  climate_zone: null,
+  wind_region: null,
+  bal_rating: null,
+  council_name: null,
+  council_code: null,
+  zoning: null,
+};
+
+export async function deriveSiteIntel(
+  input: DeriveSiteIntelInput,
+): Promise<SiteIntelResult> {
+  // Prefer server-only credentials; fall back to the public ones the create
+  // dialog already uses. If property-services isn't configured, degrade to
+  // nulls (callers treat site intel as best-effort) rather than throwing.
+  const supabaseUrl =
+    process.env.PROPERTY_SERVICES_URL ??
+    process.env.NEXT_PUBLIC_PROPERTY_SERVICES_URL;
+  const apiKey =
+    process.env.PROPERTY_SERVICES_API_KEY ??
+    process.env.NEXT_PUBLIC_PROPERTY_SERVICES_API_KEY;
+
+  if (!supabaseUrl || !apiKey) {
+    console.error(
+      "[deriveSiteIntel] property-services not configured — returning empty site intel",
+    );
+    return EMPTY;
+  }
+
+  const address =
+    input.address?.trim() || `${input.lat}, ${input.lng}`;
+
+  try {
+    const client = createPropertyServices({
+      supabaseUrl,
+      apiKey,
+      product: "mmcbuild",
+    });
+    const res = await client.derive({
+      address,
+      lat: input.lat,
+      lng: input.lng,
+      suburb: input.suburb ?? undefined,
+      state: input.state ?? undefined,
+      postcode: input.postcode ?? undefined,
+    });
+
+    const profile = res.data;
+    if (!res.success || !profile) {
+      console.error(
+        "[deriveSiteIntel] property-services derive returned no profile:",
+        res.error,
+      );
+      return EMPTY;
+    }
+
+    return {
+      climate_zone: profile.environment.climateZoneNumber,
+      wind_region: profile.environment.windRegion,
+      bal_rating: profile.environment.bal,
+      council_name: profile.metadata.lgaName,
+      council_code: profile.metadata.lgaCode,
+      zoning: profile.zoning?.name ?? null,
+    };
+  } catch (e) {
+    console.error("[deriveSiteIntel] property-services derive failed:", e);
+    return EMPTY;
+  }
 }

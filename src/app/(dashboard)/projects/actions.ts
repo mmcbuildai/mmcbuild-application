@@ -53,8 +53,20 @@ export async function createProject(formData: FormData) {
     .select("id")
     .single();
 
-  if (error || !project)
+  if (error || !project) {
+    // 23505 = unique_violation. The unique_project_name_per_org constraint was
+    // surfacing as a raw 500 ("duplicate key value violates…"); turn it into a
+    // message the user can act on instead of a server error.
+    if (
+      error?.code === "23505" ||
+      error?.message?.includes("unique_project_name_per_org")
+    ) {
+      throw new Error(
+        `A project named "${name.trim()}" already exists. Please choose a different name.`,
+      );
+    }
     throw new Error(`Failed to create project: ${error?.message}`);
+  }
 
   // Derive site intel if we have geocoded coordinates
   const lat = latStr ? parseFloat(latStr) : null;
@@ -62,7 +74,14 @@ export async function createProject(formData: FormData) {
 
   if (lat != null && lng != null && isFinite(lat) && isFinite(lng)) {
     try {
-      const intel = await deriveSiteIntel(lat, lng);
+      const intel = await deriveSiteIntel({
+        lat,
+        lng,
+        address: address ?? "",
+        suburb,
+        state,
+        postcode,
+      });
       const staticMapUrl = getStaticMapUrl(lat, lng);
 
       await admin.from("project_site_intel").insert({
@@ -458,7 +477,7 @@ export async function rederiveSiteIntel(projectId: string) {
 
   const { data: existing } = await admin
     .from("project_site_intel")
-    .select("latitude, longitude")
+    .select("latitude, longitude, formatted_address, suburb, state, postcode")
     .eq("project_id", projectId)
     .single();
 
@@ -468,7 +487,14 @@ export async function rederiveSiteIntel(projectId: string) {
 
   const lat = existing.latitude;
   const lng = existing.longitude;
-  const intel = await deriveSiteIntel(lat, lng);
+  const intel = await deriveSiteIntel({
+    lat,
+    lng,
+    address: existing.formatted_address ?? "",
+    suburb: existing.suburb,
+    state: existing.state,
+    postcode: existing.postcode,
+  });
   const staticMapUrl = getStaticMapUrl(lat, lng);
 
   const { error } = await admin

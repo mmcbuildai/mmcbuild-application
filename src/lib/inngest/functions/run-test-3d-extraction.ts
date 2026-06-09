@@ -7,7 +7,10 @@ import {
   requiresPdfConversion,
   type PlanFileKind,
 } from "@/lib/plans/file-kind";
-import { convertViaCloudConvert } from "@/lib/plans/dwg-converter";
+import {
+  convertViaCloudConvert,
+  optimizePdfViaCloudConvert,
+} from "@/lib/plans/dwg-converter";
 import { extractSpatialLayoutFromDxf } from "@/lib/plans/dxf-extractor";
 import { extractFullHouse } from "@/lib/build/spatial/full-house-extractor";
 import { extractSpatialLayout } from "@/lib/build/spatial/extractor";
@@ -45,6 +48,26 @@ export const runTest3DExtractionFn = inngest.createFunction(
     id: "run-test-3d-extraction",
     name: "Run Test-3D Extraction",
     retries: 0,
+    // Terminal-status guarantee. The handler only calls markError() for the
+    // failure paths it catches itself. If a step throws an uncaught error, or
+    // Vercel kills the invocation when extract-full-house exceeds the function
+    // maxDuration, the function fails WITHOUT the job row ever leaving
+    // status='processing' — and the client poller then spins forever (the
+    // exact "ran for minutes then the app died" symptom). onFailure runs once
+    // retries are exhausted (retries: 0 → after the first failure, including a
+    // timeout kill) and writes the row to status='error' so every job reaches
+    // a terminal state no matter how the worker dies.
+    onFailure: async ({ error, event }) => {
+      const jobId = event?.data?.event?.data?.jobId as string | undefined;
+      if (jobId) {
+        await markError(jobId, `Extraction failed: ${error.message}`);
+      }
+      console.error(
+        "[run-test-3d-extraction] onFailure — job marked error:",
+        jobId,
+        error.message,
+      );
+    },
   },
   { event: "test3d/extract.requested" },
   async ({ event, step }) => {
@@ -143,9 +166,19 @@ export const runTest3DExtractionFn = inngest.createFunction(
       return { jobId, status: "error" };
     }
 
+    // Downscale large PDFs before extraction. Architect sets run ~36MB (mostly
+    // embedded hi-res renders) — over Anthropic's 32MB document ceiling and
+    // heavy on worker memory. A CloudConvert optimise pass collapses them well
+    // under the limit so they extract instead of hitting the size guard. Only
+    // runs above the threshold (cost/latency), and falls back to the original
+    // path on any failure.
+    const optimisedPath = await step.run("optimise-large-pdf", async () => {
+      return await optimiseLargePdfStep(conv.pdfPath, jobId);
+    });
+
     const result = await step.run("extract-full-house", async () => {
       return await extractFromPdfPath(
-        conv.pdfPath,
+        optimisedPath,
         kind,
         conv.convertedFrom,
         pageInput,
@@ -284,6 +317,61 @@ async function convertToPdfStep(
   }
 
   return { pdfPath: intermediatePath, convertedFrom: kind };
+}
+
+// PDFs larger than this get a CloudConvert optimise pass before extraction.
+// Below it, the optimise cost/latency isn't worth it; above it we're heading
+// toward Anthropic's 32MB document ceiling and the worker-memory danger zone.
+const OPTIMISE_PDF_THRESHOLD_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Downscale-large-PDF step. If the PDF exceeds the threshold, run a
+ * CloudConvert optimise pass and swap in the smaller file; otherwise (or on
+ * any failure / no size win) return the original path unchanged. Best-effort:
+ * the size guard in extractFullHouse is the backstop if optimise can't get it
+ * under the limit.
+ */
+async function optimiseLargePdfStep(
+  pdfPath: string,
+  jobId: string,
+): Promise<string> {
+  const buf = await downloadFromBucket(pdfPath);
+  if (!buf) return pdfPath; // download failure surfaces in the extract step
+  if (buf.length <= OPTIMISE_PDF_THRESHOLD_BYTES) return pdfPath;
+
+  console.log(
+    `[run-test-3d-extraction] PDF is ${Math.round(buf.length / 1024 / 1024)}MB — running CloudConvert optimise`,
+  );
+  const optimised = await optimizePdfViaCloudConvert(buf, "plan.pdf");
+  if ("error" in optimised) {
+    console.error(
+      "[run-test-3d-extraction] optimise failed, using original:",
+      optimised.error,
+    );
+    return pdfPath;
+  }
+  if (optimised.buffer.length >= buf.length) return pdfPath; // no win
+
+  const orgPrefix = pdfPath.split("/")[0] || "shared";
+  const optimisedPath = `${orgPrefix}/test-3d/optimised/${jobId}.pdf`;
+  const admin = createAdminClient();
+  const { error } = await admin.storage
+    .from("plan-uploads")
+    .upload(optimisedPath, optimised.buffer, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+  if (error) {
+    console.error(
+      "[run-test-3d-extraction] optimised upload failed, using original:",
+      error.message,
+    );
+    return pdfPath;
+  }
+  console.log(
+    `[run-test-3d-extraction] optimised ${Math.round(buf.length / 1024 / 1024)}MB → ${Math.round(optimised.buffer.length / 1024 / 1024)}MB`,
+  );
+  return optimisedPath;
 }
 
 /**

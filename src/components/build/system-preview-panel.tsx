@@ -15,6 +15,14 @@ import type { SpatialLayout } from "@/lib/build/spatial";
 type Phase = "idle" | "working" | "ready" | "error";
 type ViewMode = "build-sequence" | "system-explorer" | "plan-comparison";
 
+// Hard ceiling on the poll loop. Without it, a job stuck at status='processing'
+// (e.g. a worker killed mid-step) makes the panel re-poll every 2.5s forever —
+// the browser tab eventually dies after spinning for minutes. Matches the
+// /build/test-3d harness cap (10 min) so a genuinely slow DWG → PDF → vision
+// extraction still has room to finish, but a hung job always resolves to an
+// error the user can act on instead of an infinite spinner.
+const MAX_POLL_MS = 10 * 60 * 1000;
+
 const PREVIEW_VIEWS: Array<{ key: ViewMode; label: string; Icon: typeof Box }> = [
   { key: "build-sequence", label: "Build Sequence", Icon: PlayCircle },
   { key: "system-explorer", label: "Compare Systems", Icon: Layers },
@@ -69,14 +77,26 @@ export function SystemPreviewPanel({
   );
 
   const poll = useCallback((jobId: string) => {
+    const deadline = Date.now() + MAX_POLL_MS;
     const tick = async () => {
+      if (Date.now() > deadline) {
+        setError(
+          "The preview is taking longer than expected and timed out. The job may still be processing in the background — refresh this page in a minute, or try again.",
+        );
+        setPhase("error");
+        return;
+      }
       const status = await getTest3DStatus(jobId);
       if (status.status === "done") {
         if (status.result.layout) {
           markReady(status.result.layout);
         } else {
+          // Prefer the extractor's specific reason (e.g. the file-too-large
+          // guard) over the generic fallback — otherwise an actionable
+          // message is silently replaced with "no readable floor plan".
           setError(
-            "We couldn't reconstruct a 3D model from this plan — no readable floor plan / wall geometry was found.",
+            status.result.error ||
+              "We couldn't reconstruct a 3D model from this plan — no readable floor plan / wall geometry was found.",
           );
           setPhase("error");
         }

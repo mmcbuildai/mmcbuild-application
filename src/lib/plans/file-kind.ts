@@ -32,6 +32,29 @@ export const ACCEPTED_PLAN_ACCEPT_ATTR =
   "application/msword," +
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+/**
+ * Hard ceiling on the PDF the 3D extractor will accept. Anthropic's document
+ * API caps a single PDF at 32 MB / 100 pages, and a file near that size is
+ * also what strains the worker (rasterising a render-heavy architect set) and
+ * the browser (a 36 MB plan round-trips as ~48 MB of base64). 32 MB is the
+ * line because it's the provider's documented ceiling — we cannot raise it.
+ * Guarded both client-side (fail before upload) and server-side (the universal
+ * backstop in extractFullHouse, which also covers the project-preview path
+ * that never touches the client guard).
+ */
+export const ANTHROPIC_PDF_MAX_BYTES = 32 * 1024 * 1024;
+
+/** Friendly, actionable message for an over-limit plan file. */
+export function planTooLargeMessage(bytes: number): string {
+  const mb = (bytes / 1024 / 1024).toFixed(1);
+  return (
+    `This plan is ${mb} MB, over the 32 MB limit for 3D reconstruction. ` +
+    `Architect sets are usually this large because of embedded high-resolution ` +
+    `renders or photos. Please compress / flatten the PDF to under 32 MB, or ` +
+    `upload just the floor-plan sheet, and try again.`
+  );
+}
+
 export function detectPlanKind(
   fileName: string,
   mimeType: string | null | undefined,

@@ -26,6 +26,11 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const geocodedRef = useRef<GeocodedAddress | null>(null);
+  // Hard re-entry guard. `disabled={loading}` stops most double-clicks, but a
+  // fast double-submit (or Enter) can fire twice before React re-renders the
+  // disabled state — which created a project then hit the unique-name 500 on
+  // the second insert. A ref blocks the second call synchronously.
+  const submittingRef = useRef(false);
   const router = useRouter();
 
   const property = usePropertyOnboarding({
@@ -49,6 +54,9 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
   }
 
   async function handleSubmit(formData: FormData) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     const geo = geocodedRef.current;
     if (geo) {
       formData.set("address", geo.formatted_address);
@@ -74,6 +82,7 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
       console.error("[CreateProjectDialog] createProject failed:", err);
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   }
 
