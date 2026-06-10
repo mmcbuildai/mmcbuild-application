@@ -70,7 +70,7 @@ interface WallSeg {
 }
 
 function externalWallSegs(layout: SpatialLayout, wallHeight: number): WallSeg[] {
-  return layout.walls
+  const real = layout.walls
     .filter((w) => w.type === "external")
     .map((w, i) => {
       const len = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y);
@@ -86,6 +86,25 @@ function externalWallSegs(layout: SpatialLayout, wallHeight: number): WallSeg[] 
       };
     })
     .filter((s) => s.len > 0.3);
+
+  if (real.length >= 3) return real;
+
+  // Fallback: the extraction returned no/too-few external walls (the common
+  // "data but no geometry" case), so the wall-based methodologies would build
+  // nothing while the stepper says walls are going up. Synthesise the footprint
+  // perimeter from the bounds so there is always a wall outline to build up,
+  // matching the labelled sequence.
+  const w =
+    layout.bounds?.width && layout.bounds.width > 0.5 ? layout.bounds.width : 12;
+  const d =
+    layout.bounds?.depth && layout.bounds.depth > 0.5 ? layout.bounds.depth : 10;
+  const th = 0.12;
+  return [
+    { id: 0, cx: w / 2, cz: 0, len: w, angle: 0, height: wallHeight, thickness: th },
+    { id: 1, cx: w / 2, cz: d, len: w, angle: 0, height: wallHeight, thickness: th },
+    { id: 2, cx: 0, cz: d / 2, len: d, angle: Math.PI / 2, height: wallHeight, thickness: th },
+    { id: 3, cx: w, cz: d / 2, len: d, angle: Math.PI / 2, height: wallHeight, thickness: th },
+  ];
 }
 
 // ----------------------------------------------------------------------------
