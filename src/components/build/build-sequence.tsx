@@ -3,17 +3,20 @@
 /**
  * Multi-system build-sequence storyboard.
  *
- * Shows the *build process as an action* for each construction system, on the
- * same extracted footprint:
- *   - Volumetric  — finished modules craned onto the slab in sequence
- *   - Panelised   — flat-pack wall panels tilted up on the footings
- *   - Printed     — concrete walls extruded layer-by-layer under a gantry
- *   - Traditional — brick veneer over a timber frame (frame first, then skin)
- *                   OR double-brick / blockwork (courses stacked up)
+ * Shows each construction methodology as its real, ordered build PROCESS — a
+ * labelled numbered stepper that drives a coordinated 3D build-up on the same
+ * extracted footprint. Each named construction stage visibly builds in order
+ * (site → slab → frame/walls/modules → roof → finish), methodology by
+ * methodology:
+ *   - Traditional (brick veneer) — slab → timber frame → roof → brick skin
+ *   - Traditional (double brick)  — slab → masonry courses → roof
+ *   - Panelised  — slab+stubs → panels tilted up → cassettes/roof
+ *   - Volumetric — slab+stubs → modules craned in → stitch → roof
+ *   - 3D-printed — slab+gantry → walls printed → lintels → roof
  *
- * Shared spine per system: site set-out → slab/footings → [system assembly] →
- * roof/stitch → finish. Pick the system (and Traditional wall type) with the
- * selector; Play / scrub the timeline.
+ * The stepper is the source of truth for the sequence; the 3D scene renders
+ * each stage from the step the timeline is currently in. Pick the system (and
+ * Traditional wall type) with the selector; Play / scrub the timeline.
  *
  * Mounted on the per-project Design Optimisation Report (via BuildExplorer3D)
  * and on the /build/test-3d harness ("Build Sequence" tab).
@@ -21,11 +24,8 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import {
-  OrbitControls,
-  PerspectiveCamera,
-  ContactShadows,
-} from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera, ContactShadows } from "@react-three/drei";
+import { Check } from "lucide-react";
 import * as THREE from "three";
 import {
   computeModulePlacements,
@@ -89,91 +89,103 @@ function externalWallSegs(layout: SpatialLayout, wallHeight: number): WallSeg[] 
 }
 
 // ----------------------------------------------------------------------------
-// Phase model
+// Step model — the ordered, named construction stages per methodology.
+// `stage` tells the 3D scene which element set to drive for that step.
 // ----------------------------------------------------------------------------
 
-interface PhaseDef {
-  id: string;
+type StageKind =
+  | "site"
+  | "slab"
+  | "frame"
+  | "panels"
+  | "modules"
+  | "walls"
+  | "print"
+  | "stitch"
+  | "roof"
+  | "lockup"
+  | "finish";
+
+interface StepDef {
   label: string;
-  w: number;
+  weight: number;
+  stage: StageKind;
 }
-interface PhaseWindow extends PhaseDef {
+interface StepWindow extends StepDef {
   index: number;
   start: number;
   end: number;
 }
 
-function phaseDefsFor(system: MMCSystem, variant: TraditionalVariant): PhaseDef[] {
-  const site: PhaseDef = { id: "site", label: "Site prep & set-out", w: 1 };
-  const finish: PhaseDef = { id: "finish", label: "External finish", w: 1 };
-
+function stepDefsFor(system: MMCSystem, variant: TraditionalVariant): StepDef[] {
   if (system === "volumetric")
     return [
-      site,
-      { id: "slab", label: "Slab & service stubs", w: 1 },
-      { id: "setup", label: "Crane set-up & delivery", w: 0.6 },
-      { id: "assemble", label: "Crane in modules", w: 1.5 },
-      { id: "roof", label: "Stitch & weatherproof", w: 1 },
-      finish,
+      { label: "Site prep & set-out", weight: 1, stage: "site" },
+      { label: "Footings & slab + service stubs", weight: 1, stage: "slab" },
+      { label: "Modules craned & set in sequence", weight: 1.6, stage: "modules" },
+      { label: "Modules stitched & weatherproofed", weight: 0.9, stage: "stitch" },
+      { label: "Roof / parapet finish", weight: 1, stage: "roof" },
+      { label: "Site connections & external finish", weight: 1, stage: "finish" },
     ];
   if (system === "panelised")
     return [
-      site,
-      { id: "slab", label: "Footings & slab", w: 1 },
-      { id: "setup", label: "Panel delivery", w: 0.6 },
-      { id: "assemble", label: "Tilt up wall panels", w: 1.5 },
-      { id: "roof", label: "Roof & seal joints", w: 1 },
-      finish,
+      { label: "Site prep & set-out", weight: 1, stage: "site" },
+      { label: "Footings & slab + service stubs", weight: 1, stage: "slab" },
+      { label: "Wall panels tilted into place", weight: 1.6, stage: "panels" },
+      { label: "Floor / roof cassettes installed", weight: 1, stage: "roof" },
+      { label: "Panel joints sealed, roof cover", weight: 0.8, stage: "lockup" },
+      { label: "Fit-out", weight: 1, stage: "finish" },
     ];
   if (system === "printed")
     return [
-      site,
-      { id: "slab", label: "Slab", w: 1 },
-      { id: "setup", label: "Printer gantry set-up", w: 0.6 },
-      { id: "assemble", label: "Print walls layer by layer", w: 1.8 },
-      { id: "roof", label: "Roof & finishing", w: 1 },
-      finish,
+      { label: "Site prep & set-out", weight: 1, stage: "site" },
+      { label: "Slab + printer gantry set-up", weight: 1, stage: "slab" },
+      { label: "Walls printed layer-by-layer", weight: 1.8, stage: "print" },
+      { label: "Openings formed, lintels placed", weight: 0.7, stage: "lockup" },
+      { label: "Roof structure & cover", weight: 1, stage: "roof" },
+      { label: "Render / seal & fit-out", weight: 1, stage: "finish" },
     ];
-  // traditional
   if (variant === "masonry")
     return [
-      site,
-      { id: "slab", label: "Footings", w: 1 },
-      { id: "assemble", label: "Lay block courses", w: 1.8 },
-      { id: "roof", label: "Roof", w: 1 },
-      finish,
+      { label: "Site prep & set-out", weight: 1, stage: "site" },
+      { label: "Footings & slab", weight: 1, stage: "slab" },
+      { label: "Masonry walls laid course-by-course", weight: 1.8, stage: "walls" },
+      { label: "Roof structure & cover", weight: 1, stage: "roof" },
+      { label: "Lock-up", weight: 0.7, stage: "lockup" },
+      { label: "Fit-out", weight: 1, stage: "finish" },
     ];
-  // traditional brick veneer over timber frame
+  // traditional brick veneer over timber frame (AU practice: frame → roof → brick)
   return [
-    site,
-    { id: "slab", label: "Slab", w: 1 },
-    { id: "frame", label: "Erect timber frame", w: 1.2 },
-    { id: "assemble", label: "Lay brick veneer", w: 1.4 },
-    { id: "roof", label: "Roof", w: 1 },
-    finish,
+    { label: "Site prep & set-out", weight: 1, stage: "site" },
+    { label: "Footings & slab", weight: 1, stage: "slab" },
+    { label: "Timber wall frames erected", weight: 1.2, stage: "frame" },
+    { label: "Roof trusses & roof cover", weight: 1, stage: "roof" },
+    { label: "Brick veneer skin laid", weight: 1.3, stage: "walls" },
+    { label: "Windows / doors — lock-up", weight: 0.7, stage: "lockup" },
+    { label: "Services rough-in & fit-out", weight: 1, stage: "finish" },
   ];
 }
 
-function buildPhases(defs: PhaseDef[]): PhaseWindow[] {
-  const total = defs.reduce((s, d) => s + d.w, 0);
+function buildSteps(defs: StepDef[]): StepWindow[] {
+  const total = defs.reduce((s, d) => s + d.weight, 0);
   let acc = 0;
   return defs.map((d, i) => {
     const start = acc / total;
-    acc += d.w;
+    acc += d.weight;
     return { ...d, index: i, start, end: acc / total };
   });
 }
 
-function win(phases: PhaseWindow[], id: string) {
-  return phases.find((p) => p.id === id);
+function stageWin(steps: StepWindow[], stage: StageKind) {
+  return steps.find((s) => s.stage === stage);
 }
-function localT(phases: PhaseWindow[], progress: number, id: string): number {
-  const w = win(phases, id);
+function stageLocalT(steps: StepWindow[], progress: number, stage: StageKind): number {
+  const w = stageWin(steps, stage);
   if (!w) return 0;
   return clamp01((progress - w.start) / (w.end - w.start));
 }
-function reached(phases: PhaseWindow[], progress: number, id: string): boolean {
-  const w = win(phases, id);
+function stageReached(steps: StepWindow[], progress: number, stage: StageKind): boolean {
+  const w = stageWin(steps, stage);
   return w ? progress >= w.start : false;
 }
 
@@ -181,15 +193,15 @@ function reached(phases: PhaseWindow[], progress: number, id: string): boolean {
 // Animated element primitives
 // ----------------------------------------------------------------------------
 
-/** Volumetric module — craned down from above. */
+/** Volumetric module — craned down from above, easing onto the slab. */
 function ModuleBox({ placement, t }: { placement: ModulePlacement; t: number }) {
   const skinMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
         color: COLORS.moduleSkin,
         roughness: 0.6,
-        // No env map (Environment removed for offline reliability), so keep
-        // metalness at 0 — metallic surfaces with no environment render dark.
+        // No env map (Environment removed for offline reliability) → keep
+        // metalness 0; metallic surfaces with no environment render dark.
         metalness: 0,
         transparent: true,
         opacity: 0.6,
@@ -203,8 +215,6 @@ function ModuleBox({ placement, t }: { placement: ModulePlacement; t: number }) 
   const edges = useMemo(() => new THREE.EdgesGeometry(geo), [geo]);
   if (t <= 0) return null;
   const ease = easeOutCubic(t);
-  // Gentler descent (×3 not ×6) plus a fade-in so each module eases down onto
-  // the slab instead of popping in at full opacity high above mid-sequence.
   const remaining = (1 - ease) * placement.boxH * 3;
   const active = t > 0 && t < 1;
   const appear = clamp01(t * 2);
@@ -249,7 +259,6 @@ function RisePanel({
         <boxGeometry args={[width, seg.height, seg.thickness + 0.02]} />
         <meshStandardMaterial color={COLORS.panel} roughness={0.75} />
       </mesh>
-      {/* panel seam edges */}
       <lineSegments>
         <edgesGeometry
           args={[new THREE.BoxGeometry(width, seg.height, seg.thickness + 0.02)]}
@@ -260,7 +269,7 @@ function RisePanel({
   );
 }
 
-/** A wall that grows upward from its base (printed / masonry). */
+/** A wall that grows upward from its base (printed / masonry / brick). */
 function GrowWall({
   seg,
   t,
@@ -312,7 +321,6 @@ function FrameWall({ seg, t }: { seg: WallSeg; t: number }) {
           </mesh>
         );
       })}
-      {/* top plate */}
       <mesh position={[0, h, 0]} material={mat}>
         <boxGeometry args={[seg.len, 0.06, seg.thickness]} />
       </mesh>
@@ -327,7 +335,7 @@ function useMemoTimber() {
 }
 
 // ----------------------------------------------------------------------------
-// Scene
+// Scene — renders each stage from where the timeline currently is.
 // ----------------------------------------------------------------------------
 
 function Scene({
@@ -335,18 +343,15 @@ function Scene({
   system,
   variant,
   progress,
-  phases,
+  steps,
 }: {
   layout: SpatialLayout;
   system: MMCSystem;
   variant: TraditionalVariant;
   progress: number;
-  phases: PhaseWindow[];
+  steps: StepWindow[];
 }) {
-  // Guard degenerate bounds. If the extractor returned a layout with zero/near-
-  // zero bounds, every dimension below collapses to 0 (camera at the origin,
-  // ground 0×0, modules size 0) and the whole scene renders invisible while the
-  // timeline keeps moving. Fall back to a sane footprint so something always shows.
+  // Guard degenerate bounds so a zero-sized layout doesn't collapse the scene.
   const rawWidth = layout.bounds?.width ?? 0;
   const rawDepth = layout.bounds?.depth ?? 0;
   const width = rawWidth > 0.5 ? rawWidth : 12;
@@ -364,33 +369,39 @@ function Scene({
     [layout, wallHeight],
   );
 
-  const slabShown = reached(phases, progress, "slab");
-  const slabT = easeOutCubic(localT(phases, progress, "slab"));
+  const slabShown = stageReached(steps, progress, "slab");
+  const slabT = easeOutCubic(stageLocalT(steps, progress, "slab"));
   const outlineT = 1 - slabT;
-  const assembleT = localT(phases, progress, "assemble");
-  const frameT = localT(phases, progress, "frame");
-  const setupT = easeOutCubic(localT(phases, progress, "setup"));
-  const roofShown = reached(phases, progress, "roof");
-  const roofT = easeOutCubic(localT(phases, progress, "roof"));
-  const finishT = easeOutCubic(localT(phases, progress, "finish"));
+  const frameT = easeOutCubic(stageLocalT(steps, progress, "frame"));
+  const wallsT = easeOutCubic(stageLocalT(steps, progress, "walls"));
+  const panelsT = stageLocalT(steps, progress, "panels");
+  const modulesT = stageLocalT(steps, progress, "modules");
+  const printT = easeOutCubic(stageLocalT(steps, progress, "print"));
+  const roofShown = stageReached(steps, progress, "roof");
+  const roofT = easeOutCubic(stageLocalT(steps, progress, "roof"));
+  const finishT = easeOutCubic(stageLocalT(steps, progress, "finish"));
 
   const groundColor = useMemo(
     () => new THREE.Color("#e8e4dc").lerp(new THREE.Color("#cfe3c4"), finishT),
     [finishT],
   );
 
-  // Per-element stagger within the assemble phase
-  const elemT = (i: number, count: number) =>
-    clamp01(assembleT * count - i);
+  // Per-element stagger within a stage (modules / panels rise one after another).
+  const elemT = (i: number, count: number, stageT: number) =>
+    clamp01(stageT * count - i);
+
+  // Walls have started once their grow stage has any progress.
+  const wallsStarted =
+    wallsT > 0 || printT > 0 || panelsT > 0 || modulesT > 0 || frameT > 0;
 
   const showCrane =
     system === "volumetric" &&
-    reached(phases, progress, "setup") &&
-    !reached(phases, progress, "finish");
+    stageReached(steps, progress, "modules") &&
+    !stageReached(steps, progress, "roof");
   const showPrinter =
     system === "printed" &&
-    reached(phases, progress, "setup") &&
-    !reached(phases, progress, "roof");
+    stageReached(steps, progress, "print") &&
+    !stageReached(steps, progress, "roof");
 
   return (
     <Canvas shadows dpr={[1, 1.5]} gl={{ antialias: true }}>
@@ -408,11 +419,8 @@ function Scene({
           maxDistance={camDist * 3}
           target={[0, maxDim * 0.12, 0]}
         />
-        {/* Lights only — no <Environment> HDR. The drei environment preset
-            fetches an HDRI from a third-party CDN, which guest/co-working
-            networks (e.g. Fishburners) block or throttle; held inside the single
-            Suspense it blanked the whole scene. Ambient is raised to compensate
-            for the lost image-based fill so the render stays bright. */}
+        {/* Lights only — no <Environment> HDR (its CDN fetch is blocked on
+            guest/co-working networks and blanked the whole scene). */}
         <ambientLight intensity={0.65} />
         <directionalLight
           position={[maxDim * 1.2, maxDim * 2, maxDim * 0.6]}
@@ -437,16 +445,13 @@ function Scene({
         {/* Ground */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[maxDim * 3.5, maxDim * 3.5]} />
-          <meshStandardMaterial
-            color={`#${groundColor.getHexString()}`}
-            roughness={1}
-          />
+          <meshStandardMaterial color={`#${groundColor.getHexString()}`} roughness={1} />
         </mesh>
 
         {/* Everything in layout space, centred */}
         <group position={[-width / 2, 0, -depth / 2]}>
-          {/* Set-out tape (fades as slab arrives) */}
-          {!reached(phases, progress, "assemble") && outlineT > 0.01 && (
+          {/* Set-out tape (fades as the slab arrives) */}
+          {!wallsStarted && outlineT > 0.01 && (
             <group>
               {[
                 { x: width / 2, z: 0, w: width, d: 0.08 },
@@ -475,7 +480,7 @@ function Scene({
             </mesh>
           )}
 
-          {/* Service stubs (volumetric + panelised) */}
+          {/* Service stubs (volumetric + panelised) — fade in with the slab */}
           {slabShown &&
             (system === "volumetric" || system === "panelised") &&
             placements.map((p, i) => (
@@ -488,47 +493,54 @@ function Scene({
           {/* ---- System assembly ---- */}
           {system === "volumetric" &&
             placements.map((p, i) => (
-              <ModuleBox key={`mod-${i}`} placement={p} t={elemT(i, placements.length)} />
+              <ModuleBox
+                key={`mod-${i}`}
+                placement={p}
+                t={elemT(i, placements.length, modulesT)}
+              />
             ))}
 
           {system === "panelised" &&
-            segs.flatMap((seg) => {
-              const n = Math.max(1, Math.round(seg.len / 2.4));
-              const pw = seg.len / n;
-              return Array.from({ length: n }, (_, k) => ({
-                seg,
-                offset: (k + 0.5) * pw - seg.len / 2,
-                width: pw - 0.04,
-                key: `${seg.id}-${k}`,
-              }));
-            }).map((panel, idx, arr) => (
-              <RisePanel
-                key={panel.key}
-                seg={panel.seg}
-                offset={panel.offset}
-                width={panel.width}
-                t={elemT(idx, arr.length)}
-              />
-            ))}
+            segs
+              .flatMap((seg) => {
+                const n = Math.max(1, Math.round(seg.len / 2.4));
+                const pw = seg.len / n;
+                return Array.from({ length: n }, (_, k) => ({
+                  seg,
+                  offset: (k + 0.5) * pw - seg.len / 2,
+                  width: pw - 0.04,
+                  key: `${seg.id}-${k}`,
+                }));
+              })
+              .map((panel, idx, arr) => (
+                <RisePanel
+                  key={panel.key}
+                  seg={panel.seg}
+                  offset={panel.offset}
+                  width={panel.width}
+                  t={elemT(idx, arr.length, panelsT)}
+                />
+              ))}
 
           {system === "printed" &&
             segs.map((seg) => (
               <GrowWall
                 key={`pr-${seg.id}`}
                 seg={seg}
-                t={assembleT}
+                t={printT}
                 color={COLORS.concrete}
                 courseColor={COLORS.concreteRidge}
                 coursePitch={0.18}
               />
             ))}
 
-          {system === "traditional" && variant === "masonry" &&
+          {system === "traditional" &&
+            variant === "masonry" &&
             segs.map((seg) => (
               <GrowWall
                 key={`ma-${seg.id}`}
                 seg={seg}
-                t={assembleT}
+                t={wallsT}
                 color={COLORS.masonryBlock}
                 courseColor={COLORS.masonryCourse}
                 coursePitch={0.2}
@@ -544,15 +556,14 @@ function Scene({
                 <GrowWall
                   key={`bv-${seg.id}`}
                   seg={seg}
-                  t={assembleT}
+                  t={wallsT}
                   color={COLORS.veneerBrick}
                 />
               ))}
             </>
           )}
 
-          {/* Roof (all systems) — lowers into place onto the walls instead of
-              the whole slab appearing at once. */}
+          {/* Roof (all systems) — lowers into place onto the walls. */}
           {roofShown && (
             <mesh
               position={[
@@ -574,14 +585,14 @@ function Scene({
           )}
 
           {/* Finish: entry deck */}
-          {reached(phases, progress, "finish") && (
+          {stageReached(steps, progress, "finish") && (
             <mesh position={[width / 2, 0.1, depth + 0.7]}>
               <boxGeometry args={[Math.min(2.4, width * 0.5), 0.2, 1.2]} />
               <meshStandardMaterial color={COLORS.deck} roughness={0.8} transparent opacity={finishT} />
             </mesh>
           )}
 
-          {/* Crane (volumetric) — fades in over the set-up phase. */}
+          {/* Crane (volumetric) — fades in while modules are being set. */}
           {showCrane && (
             <group position={[width + 1.6, 0, depth * 0.5]}>
               <mesh position={[0, wallHeight * 1.8, 0]}>
@@ -591,7 +602,7 @@ function Scene({
                   metalness={0}
                   roughness={0.6}
                   transparent
-                  opacity={setupT}
+                  opacity={clamp01(modulesT * 3)}
                 />
               </mesh>
               <mesh position={[-width * 0.4, wallHeight * 3.4, 0]}>
@@ -601,19 +612,18 @@ function Scene({
                   metalness={0}
                   roughness={0.6}
                   transparent
-                  opacity={setupT}
+                  opacity={clamp01(modulesT * 3)}
                 />
               </mesh>
             </group>
           )}
 
-          {/* Printer gantry (printed) — fades in over set-up, then rises with
-              the print so it never just pops into the middle of the wall. */}
+          {/* Printer gantry (printed) — rises with the print. */}
           {showPrinter && (
             <group
               position={[
                 width / 2,
-                0.2 + wallHeight * easeOutCubic(assembleT) + 0.4,
+                0.2 + wallHeight * easeOutCubic(printT) + 0.4,
                 depth / 2,
               ]}
             >
@@ -624,7 +634,7 @@ function Scene({
                   metalness={0}
                   roughness={0.5}
                   transparent
-                  opacity={setupT}
+                  opacity={clamp01(printT * 4)}
                 />
               </mesh>
               <mesh rotation={[0, Math.PI / 2, 0]}>
@@ -634,7 +644,7 @@ function Scene({
                   metalness={0}
                   roughness={0.5}
                   transparent
-                  opacity={setupT}
+                  opacity={clamp01(printT * 4)}
                 />
               </mesh>
             </group>
@@ -657,11 +667,11 @@ const SYSTEM_OPTIONS: { id: MMCSystem; label: string }[] = [
 ];
 
 export function BuildSequence({ layout }: { layout: SpatialLayout }) {
-  const [system, setSystem] = useState<MMCSystem>("volumetric");
+  const [system, setSystem] = useState<MMCSystem>("traditional");
   const [variant, setVariant] = useState<TraditionalVariant>("brick-veneer");
 
-  const phases = useMemo(
-    () => buildPhases(phaseDefsFor(system, variant)),
+  const steps = useMemo(
+    () => buildSteps(stepDefsFor(system, variant)),
     [system, variant],
   );
 
@@ -670,15 +680,14 @@ export function BuildSequence({ layout }: { layout: SpatialLayout }) {
   const progressRef = useRef(0);
   const lastTsRef = useRef<number | null>(null);
 
-  const durationMs = Math.max(9000, phases.length * 1700);
+  // ~2.2s per named step so each stage is readable.
+  const durationMs = Math.max(12000, steps.length * 2200);
 
   const setProgressBoth = (v: number) => {
     progressRef.current = v;
     setProgress(v);
   };
 
-  // Restart the timeline when switching system/variant (done in the handlers,
-  // not an effect, to avoid synchronous setState-in-effect).
   const restart = () => {
     lastTsRef.current = null;
     setProgressBoth(0);
@@ -716,20 +725,23 @@ export function BuildSequence({ layout }: { layout: SpatialLayout }) {
     return () => cancelAnimationFrame(raf);
   }, [playing, durationMs]);
 
-  const current = phases.find((p) => progress < p.end) ?? phases[phases.length - 1];
+  const currentIndex = (() => {
+    const i = steps.findIndex((s) => progress < s.end);
+    return i === -1 ? steps.length - 1 : i;
+  })();
   const atEnd = progress >= 1;
 
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
         <p className="font-medium">
-          Build sequence — watch each system go up as a process
+          Build sequence — watch each system go up step by step
         </p>
         <p className="mt-1">
           Same footprint, built five ways. Pick a system below; Traditional has a
-          brick-veneer / double-brick toggle. Set-out → slab/footings →
-          assembly (modules craned · panels tilted up · concrete printed · frame
-          + brick · block courses) → roof → finish. Orbit, Play, or scrub.
+          brick-veneer / double-brick toggle. The numbered steps are the real
+          construction sequence for that method — Play or scrub to watch each
+          stage build in order.
         </p>
       </div>
 
@@ -776,41 +788,67 @@ export function BuildSequence({ layout }: { layout: SpatialLayout }) {
         )}
       </div>
 
-      <div className="h-[480px] overflow-hidden rounded-lg border bg-gradient-to-b from-sky-100 to-white">
-        <Scene
-          layout={layout}
-          system={system}
-          variant={variant}
-          progress={progress}
-          phases={phases}
-        />
-      </div>
+      {/* 3D + stepper */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_280px]">
+        <div className="h-[420px] overflow-hidden rounded-lg border bg-gradient-to-b from-sky-100 to-white lg:h-[480px]">
+          <Scene
+            layout={layout}
+            system={system}
+            variant={variant}
+            progress={progress}
+            steps={steps}
+          />
+        </div>
 
-      {/* Phase label + segmented timeline */}
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium text-zinc-700">
-          Phase {current.index + 1} / {phases.length} —{" "}
-          <span className="text-amber-700">{current.label}</span>
-        </p>
-        <div className="flex gap-1">
-          {phases.map((p) => {
-            const fill = clamp01((progress - p.start) / (p.end - p.start));
+        {/* Numbered construction-stage stepper (the sequence source of truth) */}
+        <ol className="flex flex-col gap-1.5 rounded-lg border bg-white p-3">
+          {steps.map((s) => {
+            const status =
+              s.index < currentIndex
+                ? "done"
+                : s.index === currentIndex
+                  ? "active"
+                  : "todo";
+            const fill = clamp01((progress - s.start) / (s.end - s.start));
             return (
-              <div
-                key={p.id}
-                className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-200"
-                title={p.label}
-              >
-                <div
-                  className="h-full rounded-full bg-amber-500 transition-[width] duration-100"
-                  style={{ width: `${fill * 100}%` }}
-                />
-              </div>
+              <li key={`${s.stage}-${s.index}`} className="flex items-start gap-2.5">
+                <span
+                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                    status === "done"
+                      ? "bg-teal-600 text-white"
+                      : status === "active"
+                        ? "bg-amber-500 text-white"
+                        : "bg-zinc-200 text-zinc-500"
+                  }`}
+                >
+                  {status === "done" ? <Check className="h-3.5 w-3.5" /> : s.index + 1}
+                </span>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p
+                    className={`text-xs leading-snug ${
+                      status === "todo"
+                        ? "text-zinc-500"
+                        : "font-medium text-zinc-900"
+                    }`}
+                  >
+                    {s.label}
+                  </p>
+                  {status === "active" && (
+                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-200">
+                      <div
+                        className="h-full rounded-full bg-amber-500 transition-[width] duration-100"
+                        style={{ width: `${fill * 100}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </li>
             );
           })}
-        </div>
+        </ol>
       </div>
 
+      {/* Controls */}
       <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-zinc-50 px-4 py-3 text-sm">
         <button
           type="button"
