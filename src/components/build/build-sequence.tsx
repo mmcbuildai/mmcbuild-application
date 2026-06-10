@@ -188,7 +188,9 @@ function ModuleBox({ placement, t }: { placement: ModulePlacement; t: number }) 
       new THREE.MeshStandardMaterial({
         color: COLORS.moduleSkin,
         roughness: 0.6,
-        metalness: 0.15,
+        // No env map (Environment removed for offline reliability), so keep
+        // metalness at 0 — metallic surfaces with no environment render dark.
+        metalness: 0,
         transparent: true,
         opacity: 0.6,
       }),
@@ -201,13 +203,21 @@ function ModuleBox({ placement, t }: { placement: ModulePlacement; t: number }) 
   const edges = useMemo(() => new THREE.EdgesGeometry(geo), [geo]);
   if (t <= 0) return null;
   const ease = easeOutCubic(t);
-  const remaining = (1 - ease) * placement.boxH * 6;
+  // Gentler descent (×3 not ×6) plus a fade-in so each module eases down onto
+  // the slab instead of popping in at full opacity high above mid-sequence.
+  const remaining = (1 - ease) * placement.boxH * 3;
   const active = t > 0 && t < 1;
+  const appear = clamp01(t * 2);
+  skinMat.opacity = 0.6 * appear;
   return (
     <group position={[placement.cx, placement.boxH / 2 + remaining, placement.cz]}>
       <mesh geometry={geo} material={skinMat} castShadow />
       <lineSegments geometry={edges}>
-        <lineBasicMaterial color={active ? "#ffffff" : COLORS.moduleEdge} />
+        <lineBasicMaterial
+          color={active ? "#ffffff" : COLORS.moduleEdge}
+          transparent
+          opacity={appear}
+        />
       </lineSegments>
     </group>
   );
@@ -359,6 +369,7 @@ function Scene({
   const outlineT = 1 - slabT;
   const assembleT = localT(phases, progress, "assemble");
   const frameT = localT(phases, progress, "frame");
+  const setupT = easeOutCubic(localT(phases, progress, "setup"));
   const roofShown = reached(phases, progress, "roof");
   const roofT = easeOutCubic(localT(phases, progress, "roof"));
   const finishT = easeOutCubic(localT(phases, progress, "finish"));
@@ -470,7 +481,7 @@ function Scene({
             placements.map((p, i) => (
               <mesh key={`stub-${i}`} position={[p.cx, 0.15, p.cz]}>
                 <cylinderGeometry args={[0.06, 0.06, 0.3, 8]} />
-                <meshStandardMaterial color="#2b6cb0" />
+                <meshStandardMaterial color="#2b6cb0" transparent opacity={slabT} />
               </mesh>
             ))}
 
@@ -540,14 +551,22 @@ function Scene({
             </>
           )}
 
-          {/* Roof (all systems) */}
+          {/* Roof (all systems) — lowers into place onto the walls instead of
+              the whole slab appearing at once. */}
           {roofShown && (
-            <mesh position={[width / 2, wallHeight + 0.2, depth / 2]} castShadow>
+            <mesh
+              position={[
+                width / 2,
+                wallHeight + 0.2 + (1 - roofT) * wallHeight * 0.9,
+                depth / 2,
+              ]}
+              castShadow
+            >
               <boxGeometry args={[width + 0.3, 0.14, depth + 0.3]} />
               <meshStandardMaterial
                 color={COLORS.roof}
                 roughness={0.7}
-                metalness={0.2}
+                metalness={0}
                 transparent
                 opacity={roofT}
               />
@@ -562,21 +581,34 @@ function Scene({
             </mesh>
           )}
 
-          {/* Crane (volumetric) */}
+          {/* Crane (volumetric) — fades in over the set-up phase. */}
           {showCrane && (
             <group position={[width + 1.6, 0, depth * 0.5]}>
               <mesh position={[0, wallHeight * 1.8, 0]}>
                 <boxGeometry args={[0.22, wallHeight * 3.6, 0.22]} />
-                <meshStandardMaterial color="#555c63" metalness={0.3} roughness={0.6} />
+                <meshStandardMaterial
+                  color="#555c63"
+                  metalness={0}
+                  roughness={0.6}
+                  transparent
+                  opacity={setupT}
+                />
               </mesh>
               <mesh position={[-width * 0.4, wallHeight * 3.4, 0]}>
                 <boxGeometry args={[width * 0.9, 0.16, 0.16]} />
-                <meshStandardMaterial color="#555c63" metalness={0.3} roughness={0.6} />
+                <meshStandardMaterial
+                  color="#555c63"
+                  metalness={0}
+                  roughness={0.6}
+                  transparent
+                  opacity={setupT}
+                />
               </mesh>
             </group>
           )}
 
-          {/* Printer gantry (printed) — rises with the print */}
+          {/* Printer gantry (printed) — fades in over set-up, then rises with
+              the print so it never just pops into the middle of the wall. */}
           {showPrinter && (
             <group
               position={[
@@ -587,11 +619,23 @@ function Scene({
             >
               <mesh>
                 <boxGeometry args={[width + 0.8, 0.12, 0.12]} />
-                <meshStandardMaterial color="#445" metalness={0.4} roughness={0.5} />
+                <meshStandardMaterial
+                  color="#445"
+                  metalness={0}
+                  roughness={0.5}
+                  transparent
+                  opacity={setupT}
+                />
               </mesh>
               <mesh rotation={[0, Math.PI / 2, 0]}>
                 <boxGeometry args={[depth + 0.8, 0.12, 0.12]} />
-                <meshStandardMaterial color="#445" metalness={0.4} roughness={0.5} />
+                <meshStandardMaterial
+                  color="#445"
+                  metalness={0}
+                  roughness={0.5}
+                  transparent
+                  opacity={setupT}
+                />
               </mesh>
             </group>
           )}
