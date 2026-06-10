@@ -21,6 +21,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { renderAllPdfPages } from "./pdf-to-image";
 import { extractJson } from "@/lib/ai/extract-json";
+import { detectAiProviderUnavailable } from "@/lib/ai/provider-errors";
 
 const MAX_PAGES_TO_CLASSIFY = 15;
 const CLASSIFIER_SCALE = 1.0;
@@ -127,6 +128,11 @@ export async function findFloorPlanPage(
         };
       }
     } catch (err) {
+      // A provider outage (billing/key/rate-limit) will fail every page
+      // identically — don't grind through all 15 pretending each is "not a
+      // floor plan". Propagate so the caller can report the real reason.
+      const outage = detectAiProviderUnavailable(err);
+      if (outage) throw outage;
       console.error(
         `[page-classifier] page ${pageNumber} classify failed:`,
         err,
@@ -251,6 +257,12 @@ export async function classifyAllPagesNative(
     }
     return parsed;
   } catch (err) {
+    // Surface a provider outage (billing/key/rate-limit) as a thrown error so
+    // the orchestrator can report "AI service unavailable" instead of masking
+    // it as an empty classification → "no readable floor plan". Genuine
+    // failures (parse, no-content) still degrade to [] as before.
+    const outage = detectAiProviderUnavailable(err);
+    if (outage) throw outage;
     console.error("[classifyAllPagesNative] failed:", err);
     return [];
   }

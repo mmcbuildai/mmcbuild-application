@@ -14,6 +14,7 @@ import {
 import { extractSpatialLayoutFromDxf } from "@/lib/plans/dxf-extractor";
 import { extractFullHouse } from "@/lib/build/spatial/full-house-extractor";
 import { extractSpatialLayout } from "@/lib/build/spatial/extractor";
+import { aiUnavailableUserMessage } from "@/lib/ai/provider-errors";
 import type { Test3DResult } from "@/lib/build/test-3d-runner";
 
 /**
@@ -60,7 +61,14 @@ export const runTest3DExtractionFn = inngest.createFunction(
     onFailure: async ({ error, event }) => {
       const jobId = event?.data?.event?.data?.jobId as string | undefined;
       if (jobId) {
-        await markError(jobId, `Extraction failed: ${error.message}`);
+        // If the hard failure was a provider outage (billing / key / rate
+        // limit), write the honest user-facing message instead of a raw
+        // "Extraction failed: 400 ... credit balance is too low" string.
+        const outageMessage = aiUnavailableUserMessage(error);
+        await markError(
+          jobId,
+          outageMessage ?? `Extraction failed: ${error.message}`,
+        );
       }
       console.error(
         "[run-test-3d-extraction] onFailure — job marked error:",
@@ -429,11 +437,15 @@ async function extractFromPdfPath(
     };
   } catch (err) {
     console.error("[run-test-3d-extraction] extract-full-house threw:", err);
+    // Prefer an honest "AI service unavailable" message over a raw provider
+    // error string when the cause is an outage (billing / key / rate limit).
+    const outageMessage = aiUnavailableUserMessage(err);
     return {
       layout: null,
       kind,
       convertedFrom,
-      error: err instanceof Error ? err.message : String(err),
+      error:
+        outageMessage ?? (err instanceof Error ? err.message : String(err)),
     };
   }
 }

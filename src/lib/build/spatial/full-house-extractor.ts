@@ -31,6 +31,7 @@ import {
   ANTHROPIC_PDF_MAX_BYTES,
   planTooLargeMessage,
 } from "@/lib/plans/file-kind";
+import { detectAiProviderUnavailable } from "@/lib/ai/provider-errors";
 import type { SpatialLayout, RoofForm } from "./types";
 
 /**
@@ -209,7 +210,29 @@ export async function extractFullHouse(
     pdfBase64,
     CLASSIFIER_PAGE_CAP,
   );
-  const classifications = await classifyAllPagesNative(classifierPdfBase64);
+  let classifications: PageTypeClassification[];
+  try {
+    classifications = await classifyAllPagesNative(classifierPdfBase64);
+  } catch (err) {
+    // The classifier is the first AI call in the chain, so a provider outage
+    // (billing exhausted / revoked key / rate limit) surfaces here. Report it
+    // honestly rather than letting it masquerade as "no readable floor plan".
+    const outage = detectAiProviderUnavailable(err);
+    if (!outage) throw err;
+    console.error(
+      `[extractFullHouse] AI provider unavailable during classification: ${outage.message}`,
+    );
+    return {
+      layout: null,
+      classifications: [],
+      floorPlanPage: null,
+      elevationsExtracted: [],
+      sectionExtracted: null,
+      scheduleExtracted: null,
+      totalPages: sourcePageCount,
+      error: outage.userMessage,
+    };
+  }
   console.log(
     `[extractFullHouse] classifier returned ${classifications.length} pages at +${Date.now() - t0}ms`,
   );
@@ -340,6 +363,25 @@ export async function extractFullHouse(
   const floorPlanResult =
     settled[0].status === "fulfilled" ? settled[0].value : null;
   if (settled[0].status === "rejected") {
+    // If the primary extractor failed because the provider is down (billing /
+    // key / rate limit), report that — don't fall through to the decomposer
+    // and ultimately "no readable floor plan", which hides the real cause.
+    const outage = detectAiProviderUnavailable(settled[0].reason);
+    if (outage) {
+      console.error(
+        `[extractFullHouse] AI provider unavailable during floor-plan extraction: ${outage.message}`,
+      );
+      return {
+        layout: null,
+        classifications,
+        floorPlanPage,
+        elevationsExtracted: [],
+        sectionExtracted: null,
+        scheduleExtracted: null,
+        totalPages: sourcePageCount,
+        error: outage.userMessage,
+      };
+    }
     console.error("[extractFullHouse] floor plan rejected:", settled[0].reason);
   }
 
