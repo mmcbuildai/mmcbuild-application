@@ -18,19 +18,33 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Dismiss the gate locally the instant the server confirms acceptance, rather
+  // than waiting for router.refresh() to re-render the parent layout and flip
+  // needsTerms — that round-trip didn't reliably close the modal in production
+  // (the popup "just sat there" after "I accept"). Acceptance is already
+  // persisted by acceptTerms() before we set this, so hiding is safe.
+  const [accepted, setAccepted] = useState(false);
 
-  if (!needsTerms) return null;
+  if (!needsTerms || accepted) return null;
 
   async function handleAccept() {
     setBusy(true);
     setError(null);
-    const res = await acceptTerms();
-    if ("error" in res) {
-      setError(res.error);
+    try {
+      const res = await acceptTerms();
+      if (res && "error" in res) {
+        setError(res.error);
+        setBusy(false);
+        return;
+      }
+      setAccepted(true); // close immediately on confirmed success
+      router.refresh(); // sync server state for subsequent navigations
+    } catch {
+      // A thrown server action (network / 500) must not leave the button stuck
+      // on "Saving…" with no feedback.
+      setError("Couldn't save your acceptance — please try again.");
       setBusy(false);
-      return;
     }
-    router.refresh();
   }
 
   return (

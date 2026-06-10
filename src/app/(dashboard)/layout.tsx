@@ -39,12 +39,26 @@ export default async function DashboardLayout({
   const profile = profileRes.data;
   const runCount = usageRes.data?.run_count ?? 0;
 
-  // T&C gate (SCRUM-281). Read terms acceptance defensively: if the
-  // terms_accepted_at column isn't present yet (migration 00060 not applied),
-  // the query returns an error and we fail OPEN (no gate) rather than break the
-  // app. Once the column exists, a null value means the user must accept.
+  // T&C gate (SCRUM-281). Protects against the PUBLIC — general users, invitees,
+  // and suppliers who sign up — NOT our own operators. Platform operators (our
+  // staff, listed in ADMIN_EMAILS) are exempt; everyone else accepts once.
+  //
+  // NOTE: org role (owner/admin) is deliberately NOT the exemption signal — a
+  // supplier who self-signs-up becomes the OWNER of their own org, and they are
+  // exactly who the gate must cover. Operator identity is an email allowlist.
+  //
+  // Read terms acceptance defensively: if the terms_accepted_at column isn't
+  // present yet (migration 00060 not applied) the query errors and we fail OPEN
+  // (no gate). Once the column exists, a null value means the user must accept.
+  const operatorEmails = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const isOperator =
+    !!user.email && operatorEmails.includes(user.email.toLowerCase());
+
   let needsTerms = false;
-  if (user) {
+  if (!isOperator) {
     const { data: termsRow, error: termsErr } = await admin
       .from("profiles")
       .select("terms_accepted_at")
