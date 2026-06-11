@@ -198,7 +198,7 @@ export async function extractFloorPlanFromPdf(
     const anthropic = getClient();
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 10000,
       thinking: {
         type: "enabled",
@@ -348,7 +348,7 @@ export async function extractSpatialLayout(
     const anthropic = getClient();
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 8192,
       system: SPATIAL_EXTRACTION_PROMPT + contextBlock,
       messages: [
@@ -667,7 +667,7 @@ export function extractElevation(
     pageNumber,
     ELEVATION_PROMPT,
     {
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       maxTokens: 8000,
       thinkingBudget: 4000,
     },

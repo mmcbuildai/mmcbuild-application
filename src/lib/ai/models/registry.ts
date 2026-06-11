@@ -52,7 +52,7 @@ export const MODEL_REGISTRY: Record<string, ModelDefinition> = {
   "claude-sonnet-4": {
     id: "claude-sonnet-4",
     provider: "anthropic",
-    modelId: "claude-sonnet-4-20250514",
+    modelId: "claude-sonnet-4-6",
     capabilities: ["chat", "tool_use", "json_mode"],
     contextWindow: 200000,
     maxOutput: 8192,
