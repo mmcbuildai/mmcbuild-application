@@ -40,14 +40,12 @@
  */
 
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
 import { extractJson } from "@/lib/ai/extract-json";
 import { rasterizePdfToPng } from "@/lib/plans/dwg-converter";
+import { callVisionModel } from "./vision-call";
 import type { SpatialLayout } from "./types";
 
-const BBOX_DETECTOR_MODEL = "claude-sonnet-4-6";
-const EXTRACTOR_MODEL = "claude-sonnet-4-6";
 const PAD_PCT = 2;
 // 450 DPI on a typical ~800pt-wide CloudConvert page → ~5000px raster. At 300
 // DPI (~3300px) the per-tile detail was too low and the verify-extract pass
@@ -66,13 +64,6 @@ const CANDIDATE_CHUNK_SIZE = 5;
 const MIN_VIABLE_WALLS = 4;
 const MIN_VIABLE_ROOMS = 1;
 
-let client: Anthropic | null = null;
-function getClient(): Anthropic {
-  if (!client) {
-    client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-  }
-  return client;
-}
 
 export interface DrawingRegion {
   type:
@@ -244,7 +235,6 @@ async function cropRasterToBbox(
 export async function decomposeSheetAndExtractFloorPlan(
   pdfBuffer: Buffer,
 ): Promise<SheetDecompositionResult> {
-  const anthropic = getClient();
   const attempts: SheetDecompositionResult["attempts"] = [];
 
   // 1. Rasterise the PDF to a high-resolution PNG (Vercel-safe, server-side).
@@ -280,34 +270,22 @@ export async function decomposeSheetAndExtractFloorPlan(
   let drawings: DrawingRegion[] = [];
   try {
     const detectJpeg = await sharp(rasterBuf).jpeg({ quality: 85 }).toBuffer();
-    const resp = await anthropic.messages.create({
-      model: BBOX_DETECTOR_MODEL,
-      max_tokens: 6000,
-      thinking: { type: "enabled", budget_tokens: 4096 },
+    // Routed through callVisionModel → Claude first, GPT-4o fallback (SCRUM-290).
+    const resp = await callVisionModel("plan_vision", {
       system: BBOX_PROMPT,
       messages: [
         {
           role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: "image/jpeg",
-                data: detectJpeg.toString("base64"),
-              },
-            },
-            {
-              type: "text",
-              text: "Identify all drawing tiles in this image. Be conservative on floor_plan_*. Return ONLY JSON.",
-            },
-          ],
+          content:
+            "Identify all drawing tiles in this image. Be conservative on floor_plan_*. Return ONLY JSON.",
         },
       ],
+      images: [{ data: detectJpeg, mimeType: "image/jpeg" }],
+      thinkingBudget: 4096,
+      maxTokens: 6000,
     });
-    const text = resp.content.find((b) => b.type === "text");
-    if (text && text.type === "text") {
-      const parsed = extractJson<{ drawings: DrawingRegion[] }>(text.text);
+    if (resp.text) {
+      const parsed = extractJson<{ drawings: DrawingRegion[] }>(resp.text);
       drawings = parsed?.drawings || [];
     }
   } catch (err) {
@@ -379,32 +357,22 @@ export async function decomposeSheetAndExtractFloorPlan(
     }
 
     try {
-      const resp = await anthropic.messages.create({
-        model: EXTRACTOR_MODEL,
-        max_tokens: 8192,
+      // Routed through callVisionModel → Claude first, GPT-4o fallback (SCRUM-290).
+      const resp = await callVisionModel("plan_vision", {
         system: VERIFY_EXTRACT_PROMPT,
         messages: [
           {
             role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: "image/jpeg",
-                  data: croppedBase64,
-                },
-              },
-              {
-                type: "text",
-                text: "Verify floor plan + extract, or return not_a_floor_plan error. ONLY JSON.",
-              },
-            ],
+            content:
+              "Verify floor plan + extract, or return not_a_floor_plan error. ONLY JSON.",
           },
         ],
+        images: [
+          { data: Buffer.from(croppedBase64, "base64"), mimeType: "image/jpeg" },
+        ],
+        maxTokens: 8192,
       });
-      const text = resp.content.find((b) => b.type === "text");
-      if (!text || text.type !== "text") {
+      if (!resp.text) {
         return {
           attempt: {
             candidate: pick,
@@ -416,7 +384,7 @@ export async function decomposeSheetAndExtractFloorPlan(
       const parsed = extractJson<
         | { error: string; detected: string }
         | (SpatialLayout & { error?: undefined })
-      >(text.text);
+      >(resp.text);
 
       if (!parsed) {
         return {

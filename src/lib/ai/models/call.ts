@@ -37,6 +37,27 @@ export interface ModelCallOptions {
    * expect (Anthropic: base64 source block; OpenAI: data URL).
    */
   images?: { data: Buffer; mimeType: string }[];
+  /**
+   * A PDF document to attach to the first user message (vision tasks like plan
+   * extraction). Anthropic reads PDFs natively (a `document` content block).
+   * OpenAI's chat API CANNOT read PDFs — so for an OpenAI model this requires
+   * `rasterizePdf` to turn pages into images; if it's absent the OpenAI provider
+   * throws a clear error rather than silently dropping the document.
+   */
+  pdf?: { data: Buffer };
+  /**
+   * Provider-neutral PDF→image rasteriser, injected by the caller (the AI layer
+   * deliberately has no dependency on the plans/CloudConvert module). Only used
+   * by providers that can't read PDFs natively (OpenAI). The caller bakes in any
+   * page cap / DPI / page-hint logic and returns the page images in order.
+   */
+  rasterizePdf?: (pdf: Buffer) => Promise<{ data: Buffer; mimeType: string }[]>;
+  /**
+   * Extended-thinking budget (tokens). Anthropic enables interleaved thinking;
+   * max_tokens is raised above the budget if needed. Ignored by providers
+   * without an equivalent (OpenAI) — the fallback runs without thinking.
+   */
+  thinkingBudget?: number;
   // For embeddings
   input?: string | string[];
   dimensions?: number;

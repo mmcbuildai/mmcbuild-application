@@ -25,6 +25,7 @@ export type AIFunction =
   | "reconciliation"
   | "training_content"
   | "plan_vision"
+  | "plan_page_classify"
   | "cert_metadata"
   | "assistant"
   | "marketplace_parse";

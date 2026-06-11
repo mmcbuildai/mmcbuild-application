@@ -18,27 +18,15 @@
  */
 
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { renderAllPdfPages } from "./pdf-to-image";
 import { extractJson } from "@/lib/ai/extract-json";
 import { detectAiProviderUnavailable } from "@/lib/ai/provider-errors";
+import { callVisionModel } from "./vision-call";
 
 const MAX_PAGES_TO_CLASSIFY = 15;
 const CLASSIFIER_SCALE = 1.0;
-const CLASSIFIER_MODEL = "claude-haiku-4-5-20251001";
-// Multi-class native classifier — Haiku 4.5 is fast enough to label a
-// 15-page PDF in ~10s. Sonnet on the same task takes ~30-40s, which
-// pushed the orchestrator past Vercel's edge connection-close window
-// for large plan sets.
-const MULTICLASS_MODEL = "claude-haiku-4-5-20251001";
-
-let client: Anthropic | null = null;
-function getClient(): Anthropic {
-  if (!client) {
-    client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-  }
-  return client;
-}
+// Model tier + Claude→OpenAI fallback now come from the "plan_page_classify"
+// routing chain (claude-haiku-4.5 → gpt-4o-mini), not a hardcoded model id.
 
 const CLASSIFIER_PROMPT = `You are looking at one page from a multi-page architectural plan set.
 
@@ -86,38 +74,22 @@ export async function findFloorPlanPage(
     return { pageNumber: null, classifications: [], totalPagesRendered: 0 };
   }
 
-  const anthropic = getClient();
   const classifications: PageClassification[] = [];
 
   for (let i = 0; i < pages.length; i++) {
     const pageNumber = i + 1;
     try {
-      const response = await anthropic.messages.create({
-        model: CLASSIFIER_MODEL,
-        max_tokens: 5,
+      // Routed through callVisionModel → Haiku first, gpt-4o-mini fallback
+      // (SCRUM-290). Image classify is provider-neutral (no rasterise needed).
+      const result = await callVisionModel("plan_page_classify", {
         system: CLASSIFIER_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: "image/png",
-                  data: pages[i],
-                },
-              },
-              { type: "text", text: "Floor plan? Respond YES or NO." },
-            ],
-          },
+        messages: [{ role: "user", content: "Floor plan? Respond YES or NO." }],
+        images: [
+          { data: Buffer.from(pages[i], "base64"), mimeType: "image/png" },
         ],
+        maxTokens: 5,
       });
-      const textBlock = response.content.find((b) => b.type === "text");
-      const verdict =
-        textBlock && textBlock.type === "text"
-          ? textBlock.text.trim().toUpperCase()
-          : "NO";
+      const verdict = (result.text ?? "").trim().toUpperCase();
       const isFloorPlan = verdict.startsWith("YES");
       classifications.push({ pageNumber, isFloorPlan });
       if (isFloorPlan) {
@@ -216,41 +188,28 @@ Return ONLY the JSON array — no preamble, no markdown fences.`;
 export async function classifyAllPagesNative(
   pdfBase64: string,
 ): Promise<PageTypeClassification[]> {
-  const anthropic = getClient();
-
   try {
-    const response = await anthropic.messages.create({
-      model: MULTICLASS_MODEL,
-      max_tokens: 8000,
+    // Routed through callVisionModel → Haiku first, gpt-4o-mini fallback
+    // (SCRUM-290). On the OpenAI leg the PDF is rasterised (capped pages).
+    const result = await callVisionModel("plan_page_classify", {
       system: MULTICLASS_PROMPT,
       messages: [
         {
           role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: pdfBase64,
-              },
-            },
-            {
-              type: "text",
-              text: "Classify every page of this PDF. Return ONLY the JSON array.",
-            },
-          ],
+          content:
+            "Classify every page of this PDF. Return ONLY the JSON array.",
         },
       ],
+      pdf: { data: Buffer.from(pdfBase64, "base64") },
+      maxTokens: 8000,
     });
 
-    const textBlock = response.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
+    if (!result.text) {
       console.error("[classifyAllPagesNative] no text content");
       return [];
     }
 
-    const parsed = extractJson<PageTypeClassification[]>(textBlock.text);
+    const parsed = extractJson<PageTypeClassification[]>(result.text);
     if (!Array.isArray(parsed)) {
       console.error("[classifyAllPagesNative] parsed result is not array");
       return [];

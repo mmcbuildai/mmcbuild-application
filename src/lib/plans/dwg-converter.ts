@@ -170,7 +170,7 @@ export async function convertViaCloudConvert(
     uploadMimeType,
   );
   if ("error" in result) return result;
-  return { buffer: result.buffer, format: outputFormat };
+  return { buffer: result.buffers[0], format: outputFormat };
 }
 
 /**
@@ -185,7 +185,7 @@ async function runCloudConvertJob(
   sourceBuffer: Buffer,
   fileName: string,
   uploadMimeType: string,
-): Promise<{ buffer: Buffer } | { error: string }> {
+): Promise<{ buffers: Buffer[] } | { error: string }> {
   const apiKey = process.env.CLOUDCONVERT_API_KEY;
   if (!apiKey) {
     return { error: "CLOUDCONVERT_API_KEY not configured" };
@@ -260,20 +260,26 @@ async function runCloudConvertJob(
 
     if (status.data.status === "finished") {
       const exportTask = status.data.tasks.find((t) => t.name === "export-file");
-      const fileUrl = exportTask?.result?.files?.[0]?.url;
-      if (!fileUrl) {
+      const files = exportTask?.result?.files ?? [];
+      if (files.length === 0) {
         return { error: "CloudConvert finished without an export URL" };
       }
 
-      const fileResp = await fetch(fileUrl, {
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-      if (!fileResp.ok) {
-        return { error: `Converted file download failed: ${fileResp.status}` };
+      // Download every export file. A multi-page PDF→PNG job yields one file
+      // per page (used by rasterizePdfPages for the OpenAI vision fallback);
+      // single-output jobs (dwg→dxf/pdf, optimise) return a 1-element array and
+      // their callers take buffers[0].
+      const buffers: Buffer[] = [];
+      for (const f of files) {
+        const fileResp = await fetch(f.url, {
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        });
+        if (!fileResp.ok) {
+          return { error: `Converted file download failed: ${fileResp.status}` };
+        }
+        buffers.push(Buffer.from(await fileResp.arrayBuffer()));
       }
-
-      const arrayBuffer = await fileResp.arrayBuffer();
-      return { buffer: Buffer.from(arrayBuffer) };
+      return { buffers };
     }
 
     if (status.data.status === "error") {
@@ -320,7 +326,7 @@ export async function optimizePdfViaCloudConvert(
     "application/pdf",
   );
   if ("error" in result) return result;
-  return { buffer: result.buffer, format: "pdf" };
+  return { buffer: result.buffers[0], format: "pdf" };
 }
 
 /**
@@ -351,5 +357,49 @@ export async function rasterizePdfToPng(
     "png",
     "application/pdf",
     { pixel_density: pixelDensity, pages: "1" },
+  );
+}
+
+/**
+ * Rasterise multiple PDF pages to PNG in a SINGLE CloudConvert job. Used by the
+ * OpenAI vision fallback (SCRUM-290): GPT-4o can't read PDFs, so when Claude is
+ * unavailable we turn the plan into page images for it. One job emits one PNG
+ * per page (downloaded via runCloudConvertJob's multi-file path).
+ *
+ * Page scope (the D2 decision): if `pageHint` is given, rasterise just that
+ * page; otherwise the first `maxPages` (default 12) — bounded cost, covers the
+ * floor plan in virtually every residential set. The caller logs when a set is
+ * truncated (no silent cap).
+ *
+ * @returns the page PNG buffers in page order, or an error RESULT (never throws).
+ */
+export async function rasterizePdfPages(
+  pdfBuffer: Buffer,
+  opts: { maxPages?: number; pixelDensity?: number; pageHint?: number } = {},
+): Promise<{ buffers: Buffer[] } | { error: string }> {
+  if (pdfBuffer.length > MAX_DWG_BYTES) {
+    return { error: `File exceeds ${MAX_DWG_BYTES / 1024 / 1024}MB limit` };
+  }
+  const pixelDensity = opts.pixelDensity ?? 200;
+  const pages =
+    opts.pageHint && opts.pageHint > 0
+      ? String(opts.pageHint)
+      : `1-${opts.maxPages ?? 12}`;
+  return runCloudConvertJob(
+    {
+      "import-file": { operation: "import/upload" },
+      "convert-file": {
+        operation: "convert",
+        input: "import-file",
+        input_format: "pdf",
+        output_format: "png",
+        pages,
+        pixel_density: pixelDensity,
+      },
+      "export-file": { operation: "export/url", input: "convert-file" },
+    },
+    pdfBuffer,
+    "plan.pdf",
+    "application/pdf",
   );
 }

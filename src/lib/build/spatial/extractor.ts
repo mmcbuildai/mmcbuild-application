@@ -11,8 +11,9 @@
  * requires multi-part message content which the current router doesn't support.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import { extractJson, ModelNonJsonResponseError } from "@/lib/ai/extract-json";
+import { callVisionModel } from "./vision-call";
+import type { AIFunction } from "@/lib/ai/models/registry";
 import {
   MIN_READABLE_PLAN_BYTES,
   NO_READABLE_PLAN_MESSAGE,
@@ -62,15 +63,6 @@ GUIDELINES:
 - If you cannot determine exact coordinates, provide your best estimate and lower the confidence score
 - Room types: living, bedroom, bathroom, kitchen, laundry, garage, hallway, entry, study, dining, ensuite, wir (walk-in-robe), pantry, alfresco, porch
 - Wall materials if identifiable: timber_frame, brick_veneer, double_brick, hebel, sip_panel, clt, steel_frame`;
-
-let client: Anthropic | null = null;
-
-function getClient(): Anthropic {
-  if (!client) {
-    client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-  }
-  return client;
-}
 
 const PDF_NATIVE_EXTRACTION_PROMPT = `You are an architectural plan analyser. You are looking at a PDF building plan set that may have many pages (cover sheet, site plan, floor plans, elevations, sections, schedules, etc.).
 
@@ -195,41 +187,27 @@ export async function extractFloorPlanFromPdf(
     : "Find the primary floor plan page in this PDF and extract its spatial layout. Return only the JSON structure.";
 
   try {
-    const anthropic = getClient();
-
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 10000,
-      thinking: {
-        type: "enabled",
-        budget_tokens: 4000,
-      },
+    // Routed through callVisionModel → Claude first, GPT-4o fallback when
+    // Claude is unavailable (SCRUM-290). Anthropic reads the PDF natively; the
+    // GPT-4o leg rasterises pages (capped/​hinted) via the injected rasteriser.
+    const result = await callVisionModel("plan_vision", {
       system: PDF_NATIVE_EXTRACTION_PROMPT + contextBlock,
       messages: [
         {
           role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: pdfBase64,
-              },
-            },
-            {
-              type: "text",
-              text:
-                userText +
-                "\n\nUse extended thinking to walk through the five-pass checklist before writing the JSON. The final assistant message must contain ONLY the JSON object — no preamble, no markdown fences. Start with { and end with }.",
-            },
-          ],
+          content:
+            userText +
+            "\n\nUse extended thinking to walk through the five-pass checklist before writing the JSON. The final assistant message must contain ONLY the JSON object — no preamble, no markdown fences. Start with { and end with }.",
         },
       ],
+      pdf: { data: Buffer.from(pdfBase64, "base64") },
+      pdfPageHint: options?.pageHint,
+      thinkingBudget: 4000,
+      maxTokens: 10000,
     });
 
-    const textBlock = response.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
+    const fullText = result.text;
+    if (!fullText) {
       return {
         layout: null,
         detectedPage: null,
@@ -237,8 +215,6 @@ export async function extractFloorPlanFromPdf(
         error: "Model returned no text content",
       };
     }
-
-    const fullText = textBlock.text;
 
     type PdfExtractionShape = {
       detectedPage: number | null;
@@ -345,42 +321,27 @@ export async function extractSpatialLayout(
     : "";
 
   try {
-    const anthropic = getClient();
-
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8192,
+    // Routed through callVisionModel → Claude first, GPT-4o fallback (SCRUM-290).
+    // Image vision is provider-neutral (no rasterise needed).
+    const result = await callVisionModel("plan_vision", {
       system: SPATIAL_EXTRACTION_PROMPT + contextBlock,
       messages: [
         {
           role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mediaType,
-                data: imageBase64,
-              },
-            },
-            {
-              type: "text",
-              text: "Extract all spatial elements from this floor plan. Return only the JSON structure.",
-            },
-          ],
+          content:
+            "Extract all spatial elements from this floor plan. Return only the JSON structure.",
         },
       ],
+      images: [{ data: Buffer.from(imageBase64, "base64"), mimeType: mediaType }],
+      maxTokens: 8192,
     });
 
-    // Extract text from response
-    const textBlock = response.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") {
+    // Parse the JSON response — handle markdown code fences
+    let jsonStr = (result.text ?? "").trim();
+    if (!jsonStr) {
       console.error("Spatial extraction: no text response");
       return null;
     }
-
-    // Parse the JSON response — handle markdown code fences
-    let jsonStr = textBlock.text.trim();
     if (jsonStr.startsWith("```")) {
       jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     }
@@ -572,8 +533,9 @@ export type ScheduleExtraction = {
 };
 
 type PagePartialConfig = {
-  /** Anthropic model id. Defaults to Haiku 4.5. */
-  model?: string;
+  /** Router function → model tier + Claude→OpenAI fallback chain. Defaults to
+   *  the cheap classifier tier (plan_page_classify: haiku → gpt-4o-mini). */
+  fn?: AIFunction;
   /** Output token cap. Defaults to 4000. */
   maxTokens?: number;
   /** Optional extended-thinking budget (also raises max_tokens to fit). */
@@ -596,11 +558,8 @@ async function extractPagePartial<T>(
   systemPrompt: string,
   config: PagePartialConfig = {},
 ): Promise<T | null> {
-  const model = config.model ?? "claude-haiku-4-5-20251001";
+  const fn = config.fn ?? "plan_page_classify";
   const maxTokens = config.maxTokens ?? 4000;
-  const thinking = config.thinkingBudget
-    ? { type: "enabled" as const, budget_tokens: config.thinkingBudget }
-    : undefined;
 
   // Input guard — skip the model call when the per-page PDF is empty/unreadable
   // (e.g. a failed pdf-lib page split returned a near-zero-byte document).
@@ -613,36 +572,23 @@ async function extractPagePartial<T>(
   }
 
   try {
-    const anthropic = getClient();
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: maxTokens,
-      ...(thinking ? { thinking } : {}),
+    // Single-page PDF → routed through callVisionModel (Claude→GPT-4o fallback,
+    // SCRUM-290). pdfPageHint=1 because the orchestrator already split this to
+    // one page, so the OpenAI leg rasterises just that page.
+    const result = await callVisionModel(fn, {
       system: systemPrompt,
       messages: [
         {
           role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: pdfBase64,
-              },
-            },
-            {
-              type: "text",
-              text: `This PDF contains the architectural page to analyse (originally page ${pageNumber} of the source set). Return ONLY the JSON object — no preamble, no markdown fences.`,
-            },
-          ],
+          content: `This PDF contains the architectural page to analyse (originally page ${pageNumber} of the source set). Return ONLY the JSON object — no preamble, no markdown fences.`,
         },
       ],
+      pdf: { data: Buffer.from(pdfBase64, "base64") },
+      pdfPageHint: 1,
+      maxTokens,
+      ...(config.thinkingBudget ? { thinkingBudget: config.thinkingBudget } : {}),
     });
-
-    const textBlock = response.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") return null;
-    return extractJson<T>(textBlock.text);
+    return result.text ? extractJson<T>(result.text) : null;
   } catch (err) {
     console.error("[extractPagePartial] failed:", err);
     return null;
@@ -667,7 +613,7 @@ export function extractElevation(
     pageNumber,
     ELEVATION_PROMPT,
     {
-      model: "claude-sonnet-4-6",
+      fn: "plan_vision",
       maxTokens: 8000,
       thinkingBudget: 4000,
     },

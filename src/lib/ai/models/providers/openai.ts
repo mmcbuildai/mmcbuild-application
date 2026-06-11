@@ -23,7 +23,25 @@ export async function callOpenAI(
 
   const baseMessages = options.messages ?? [];
   const firstUserIdx = baseMessages.findIndex((m) => m.role === "user");
-  const hasImages = options.images && options.images.length > 0;
+
+  // OpenAI's chat API can't read PDFs. If the caller attached one, rasterise it
+  // to page images via the injected rasteriser (the AI layer has no dependency
+  // on the plans/CloudConvert module). Absent rasteriser = a hard, clear error
+  // rather than silently dropping the document and "extracting" from nothing.
+  const visionImages: { data: Buffer; mimeType: string }[] = [
+    ...(options.images ?? []),
+  ];
+  if (options.pdf) {
+    if (!options.rasterizePdf) {
+      throw new Error(
+        "OpenAI model received a PDF but no rasterizePdf was provided. " +
+          "OpenAI cannot read PDFs natively; the caller must inject a rasteriser.",
+      );
+    }
+    const pdfImages = await options.rasterizePdf(options.pdf.data);
+    visionImages.push(...pdfImages);
+  }
+  const hasImages = visionImages.length > 0;
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = baseMessages.map(
     (m, idx) => {
@@ -31,7 +49,7 @@ export async function callOpenAI(
         const parts: OpenAI.Chat.ChatCompletionContentPart[] = [
           { type: "text", text: m.content },
         ];
-        for (const img of options.images!) {
+        for (const img of visionImages) {
           parts.push({
             type: "image_url",
             image_url: {

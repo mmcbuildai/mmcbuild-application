@@ -21,6 +21,10 @@ const ROUTING_TABLE: Record<AIFunction, string[]> = {
   reconciliation: ["claude-sonnet-4", "gpt-4o"],
   training_content: ["claude-sonnet-4", "gpt-4o", "claude-haiku-4.5"],
   plan_vision: ["claude-sonnet-4", "gpt-4o"],
+  // Page classification (which sheet is the floor plan etc.) — Haiku-tier,
+  // falls back to gpt-4o-mini. Separate from plan_vision so the cheap classifier
+  // doesn't fall back onto the premium Sonnet/gpt-4o vision tier.
+  plan_page_classify: ["claude-haiku-4.5", "gpt-4o-mini"],
   cert_metadata: ["claude-haiku-4.5", "claude-sonnet-4", "gpt-4o-mini"],
   assistant: ["claude-haiku-4.5", "gpt-4o-mini", "claude-sonnet-4"],
   // Marketplace instant-estimate query parser — classification only, never

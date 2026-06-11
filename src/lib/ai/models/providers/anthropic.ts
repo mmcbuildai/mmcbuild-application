@@ -35,14 +35,27 @@ export async function callAnthropic(
     const isFirstUser = m.role === "user" && idx === firstUserIdx;
     const hasPrefix = isFirstUser && options.cacheUserPrefix;
     const hasImages = isFirstUser && options.images && options.images.length > 0;
+    const hasPdf = isFirstUser && options.pdf;
 
-    if (hasPrefix || hasImages) {
+    if (hasPrefix || hasImages || hasPdf) {
       const blocks: Anthropic.ContentBlockParam[] = [];
       if (hasPrefix) {
         blocks.push({
           type: "text",
           text: options.cacheUserPrefix!,
           cache_control: { type: "ephemeral" },
+        });
+      }
+      if (hasPdf) {
+        // Anthropic reads PDFs natively — attach as a document block before the
+        // question text so the model sees the whole (multi-page) plan.
+        blocks.push({
+          type: "document",
+          source: {
+            type: "base64",
+            media_type: "application/pdf",
+            data: options.pdf!.data.toString("base64"),
+          },
         });
       }
       if (hasImages) {
@@ -73,6 +86,15 @@ export async function callAnthropic(
     max_tokens: options.maxTokens ?? model.maxOutput,
     messages: messages as Anthropic.MessageCreateParams["messages"],
   };
+
+  // Extended thinking. max_tokens MUST exceed the thinking budget (the budget is
+  // spent before any visible output), so raise the ceiling if the caller's
+  // max_tokens doesn't leave room for a real answer on top of the budget.
+  if (options.thinkingBudget && options.thinkingBudget > 0) {
+    params.thinking = { type: "enabled", budget_tokens: options.thinkingBudget };
+    const minOutput = options.thinkingBudget + 4096;
+    if (params.max_tokens < minOutput) params.max_tokens = minOutput;
+  }
 
   if (systemPrompt) {
     params.system = systemPrompt;
