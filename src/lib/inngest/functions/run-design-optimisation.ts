@@ -58,19 +58,11 @@ export const runDesignOptimisation = inngest.createFunction(
       return await retrievePlanChunks(check.org_id, check.plan_id);
     });
 
-    if (!planContent) {
-      await step.run("update-status-error-no-content", async () => {
-        const admin = createAdminClient();
-        await admin
-          .from("design_checks")
-          .update({
-            status: "error",
-            summary: "No plan content found. Ensure the plan has been processed.",
-          } as never)
-          .eq("id", check.id);
-      });
-      return { checkId: check.id, error: "No plan content" };
-    }
+    // NOTE: a null planContent is NOT a hard failure on its own. DWG / CAD
+    // plans render in 3D but usually have no extractable text layer, so the RAG
+    // retriever returns nothing. The real dead-end check is the both-missing
+    // guard after the layout load below. (TH01, 2026-06-11: a DWG that rendered
+    // fine in Build failed optimisation with a bogus "No plan content".)
 
     // 3b. Spatial layout for the 3D viewer + COLLADA export.
     //
@@ -119,6 +111,25 @@ export const runDesignOptimisation = inngest.createFunction(
     // optimisation still runs text-only with spatial_layout left null.
     const spatialLayout = cachedLayout;
 
+    // 3b-guard. Only dead-end when there is NOTHING to analyse — no text AND no
+    // geometry. A DWG that rendered in 3D has a layout but usually no text
+    // chunks (vector CAD has no text layer); analyse from the layout + selected
+    // systems in that case rather than erroring. (Karen/TH01, 2026-06-11.)
+    if (!planContent && !spatialLayout) {
+      await step.run("update-status-error-no-input", async () => {
+        const admin = createAdminClient();
+        await admin
+          .from("design_checks")
+          .update({
+            status: "error",
+            summary:
+              'We couldn\'t read anything analysable from this plan — no extractable text and no 3D geometry. Re-run "See your design built in the 4 MMC systems" to generate the 3D model first, then try the optimisation again.',
+          } as never)
+          .eq("id", check.id);
+      });
+      return { checkId: check.id, error: "No analysable input (no text, no layout)" };
+    }
+
     // 3c. Load selected construction systems
     const selectedSystems = await step.run("load-selected-systems", async () => {
       const { data } = await db()
@@ -147,9 +158,16 @@ export const runDesignOptimisation = inngest.createFunction(
           })
         : null;
 
+      // planContent is null for a DWG/CAD plan with no text layer — fall back
+      // to a layout-driven instruction so the analysis still runs on the
+      // geometry + selected systems rather than dead-ending.
+      const effectiveContent =
+        planContent ??
+        "No text specification could be extracted from this plan (e.g. a CAD/DWG drawing with no text layer). Analyse the design using the spatial layout below and the selected MMC construction systems.";
+
       const result = await callModel("design_primary", {
         system: OPTIMISATION_SYSTEM_PROMPT + systemsContext,
-        messages: [{ role: "user", content: OPTIMISATION_USER_PROMPT(planContent, spatialLayoutJson) }],
+        messages: [{ role: "user", content: OPTIMISATION_USER_PROMPT(effectiveContent, spatialLayoutJson) }],
         maxTokens: 4096,
         orgId: check.org_id,
         checkId: check.id,

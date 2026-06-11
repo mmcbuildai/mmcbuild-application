@@ -9,23 +9,34 @@ import { getDesignReport } from "@/app/(dashboard)/build/actions";
 interface OptimisationProgressProps {
   checkId: string;
   initialStatus: string;
+  /** The reason text stored on the check (design_checks.summary). On an error
+   *  this carries the REAL cause — surface it instead of a generic message. */
+  initialSummary?: string | null;
 }
 
 export function OptimisationProgress({
   checkId,
   initialStatus,
+  initialSummary,
 }: OptimisationProgressProps) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
-  const startTimeRef = useRef(Date.now());
+  const [errorReason, setErrorReason] = useState<string | null>(
+    initialSummary ?? null,
+  );
+  // Lazy-init the start time in an effect, not during render (Date.now() is
+  // impure — calling it in render violates react-hooks/purity).
+  const startTimeRef = useRef<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   // Elapsed time ticker
   useEffect(() => {
     if (status === "completed" || status === "error") return;
+    if (startTimeRef.current === null) startTimeRef.current = Date.now();
 
     const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      const start = startTimeRef.current ?? Date.now();
+      setElapsed(Math.floor((Date.now() - start) / 1000));
     }, 1000);
 
     return () => clearInterval(timer);
@@ -38,13 +49,14 @@ export function OptimisationProgress({
     const interval = setInterval(async () => {
       const result = await getDesignReport(checkId);
       if (result.check) {
-        const c = result.check as { status: string };
+        const c = result.check as { status: string; summary: string | null };
         setStatus(c.status);
 
         if (c.status === "completed") {
           clearInterval(interval);
           router.refresh();
         } else if (c.status === "error") {
+          setErrorReason(c.summary ?? null);
           clearInterval(interval);
         }
       }
@@ -92,7 +104,7 @@ export function OptimisationProgress({
             <div>
               <p className="text-sm font-medium">Error</p>
               <p className="text-xs text-muted-foreground">
-                Something went wrong. Please try again.
+                {errorReason || "Something went wrong. Please try again."}
               </p>
             </div>
           </div>

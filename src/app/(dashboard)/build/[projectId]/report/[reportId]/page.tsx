@@ -70,6 +70,7 @@ export default async function ReportPage({
         <OptimisationProgress
           checkId={reportId}
           initialStatus={check.status}
+          initialSummary={check.summary}
         />
       )}
     </div>
