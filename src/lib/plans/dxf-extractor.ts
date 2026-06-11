@@ -9,6 +9,45 @@
 import DxfParser from "dxf-parser";
 import type { SpatialLayout, Wall } from "@/lib/build/spatial/types";
 
+/**
+ * Hard ceiling on the DXF text we will feed to dxf-parser's synchronous
+ * parseSync. A DWG → DXF conversion of a dense multi-sheet "technical" set can
+ * yield a very large DXF (DXF is verbose text, often several times the DWG);
+ * parseSync then materialises EVERY entity as a JS object and the in-memory
+ * object graph balloons to many times the text size — enough to exceed the
+ * Vercel function's default (~1.7 GB) memory and KILL the invocation. That kill
+ * surfaces as a generic Next.js 500 HTML page, NOT a catchable throw, so the
+ * caller's try/catch → manual_review fallback never runs and the plan is left
+ * stuck in "error". Karen's "TH01 Terraces 01 … technical-01.dwg" (36.9 MB DWG)
+ * hit exactly this on 2026-06-11 (~252 s, OOM under the 300 s maxDuration).
+ *
+ * Above this size we skip parseSync entirely and return null so the caller can
+ * degrade to manual_review with the file still stored + usable. Conservative
+ * first cut tuned for the default function memory; raise it in tandem with a
+ * function-memory bump (and pair with an entity-count cap) as larger valid
+ * files surface. The actual DXF size is logged on every skip so the threshold
+ * can be calibrated from real plans rather than guessed again.
+ */
+export const MAX_DXF_PARSE_BYTES = 60 * 1024 * 1024; // 60 MB
+
+/** True when a DXF buffer is too large to parse in-memory without risking OOM. */
+export function dxfTooLargeToParse(bytes: number): boolean {
+  return bytes > MAX_DXF_PARSE_BYTES;
+}
+
+/**
+ * Friendly, actionable message when a DXF is too large to parse for CAD-layer
+ * text extraction (the Comply search-ingestion path). Note this is NOT the 3D
+ * render — the 3D extractor falls back from the DXF path to a DWG → PDF →
+ * vision route on its own, so a too-large DWG can still render in 3D even when
+ * this layer-text step is skipped.
+ */
+export const DXF_TOO_LARGE_MESSAGE =
+  "This CAD file is too large or complex for automatic CAD-layer extraction. " +
+  "The file has been stored and flagged for manual review. (3D reconstruction " +
+  "is attempted separately.) For full automatic processing, upload a single " +
+  "floor-plan sheet or a PDF export of it.";
+
 export interface LayerSummary {
   /** Layer name as defined in the CAD file (e.g. "Walls", "A-WALL", "Doors"). */
   name: string;
@@ -78,6 +117,17 @@ const ROOM_LABEL_RE =
   /^(bed(?:room)?|bath(?:room)?|kitchen|living|dining|study|office|laundry|wc|toilet|garage|hall|entry|pantry|ensuite|robe|wir|family|rumpus|theatre|alfresco|porch|deck|stair|landing|void)/i;
 
 export function extractLayersFromDxf(dxfBuffer: Buffer): ExtractedLayers | null {
+  // Size guard BEFORE toString/parseSync — a giant DXF would OOM-kill the whole
+  // Vercel invocation (uncatchable), defeating the caller's manual_review
+  // fallback. Skip and let the caller degrade gracefully. See MAX_DXF_PARSE_BYTES.
+  if (dxfTooLargeToParse(dxfBuffer.length)) {
+    console.error(
+      `[dxf-extractor] DXF ${(dxfBuffer.length / 1024 / 1024).toFixed(1)}MB exceeds ` +
+        `${MAX_DXF_PARSE_BYTES / 1024 / 1024}MB parse cap — skipping parseSync to avoid OOM`,
+    );
+    return null;
+  }
+
   const parser = new DxfParser();
   const text = dxfBuffer.toString("utf-8");
 
@@ -269,6 +319,17 @@ interface RawSegment {
 export function extractSpatialLayoutFromDxf(
   dxfBuffer: Buffer,
 ): SpatialLayout | null {
+  // Same OOM guard as extractLayersFromDxf — the 3D (test-3d) path parses the
+  // DXF here. A too-large DXF returns null so the runner falls through cleanly
+  // rather than crashing the invocation. See MAX_DXF_PARSE_BYTES.
+  if (dxfTooLargeToParse(dxfBuffer.length)) {
+    console.error(
+      `[extractSpatialLayoutFromDxf] DXF ${(dxfBuffer.length / 1024 / 1024).toFixed(1)}MB exceeds ` +
+        `${MAX_DXF_PARSE_BYTES / 1024 / 1024}MB parse cap — skipping parseSync to avoid OOM`,
+    );
+    return null;
+  }
+
   const parser = new DxfParser();
   const text = dxfBuffer.toString("utf-8");
 

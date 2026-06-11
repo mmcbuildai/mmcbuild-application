@@ -23,18 +23,15 @@ To check your Jira tasks, you'll need to access Jira directly. If you'd like, I 
 
 ## ⚠️ REPO CHECK — RUN AT SESSION START (NON-NEGOTIABLE)
 
-Before doing ANY work in this repo, alert the user to confirm they are in the
-correct repo:
+The canonical repo is **`mmcbuildai/mmcbuild-application`** (this one) — the
+repo Vercel deploys from. Confirmed by Dennis on 2026-06-11: **we will always
+work in this canonical repo from now on.** Surface the repo identity at the top
+of every session, but no longer block on confirmation — this clone is correct.
 
-> "Repo check: you're in **mmcbuild-prod** (GitHub `dennissolver/mmc-market`) —
-> the canonical repo Vercel deploys from. Confirm this is where you want to work
-> before I make changes."
-
-There are two local clones of this project: `mmcbuild` (legacy) and
-`mmcbuild-prod` (canonical = the `mmc-market` repo Vercel deploys). On
-2026-05-23 a full session was done in the legacy `mmcbuild` by mistake and had
-to be copied across. Surface the repo identity at the top of every session and
-get confirmation before editing or committing. **This repo is the right one.**
+Historical note: earlier sessions juggled `mmcbuild` (legacy) and a
+`mmcbuild-prod` clone of the old `dennissolver/mmc-market` repo, and on
+2026-05-23 a session ran in the wrong clone by mistake. That ambiguity is now
+resolved — `mmcbuildai/mmcbuild-application` is the single source of truth.
 
 # MMC Build — Project Instructions
 

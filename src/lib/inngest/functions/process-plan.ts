@@ -146,9 +146,32 @@ export const processPlan = inngest.createFunction(
             };
           }
 
-          const { extractLayersFromDxf, dxfToSearchableText } = await import(
-            "@/lib/plans/dxf-extractor"
-          );
+          const {
+            extractLayersFromDxf,
+            dxfToSearchableText,
+            dxfTooLargeToParse,
+            DXF_TOO_LARGE_MESSAGE,
+          } = await import("@/lib/plans/dxf-extractor");
+
+          // Bail BEFORE the memory-heavy parse on an oversized DXF. parseSync on
+          // a giant DXF OOM-kills the whole invocation (an uncatchable 500 HTML
+          // page, not a throw), which would skip this very try/catch and strand
+          // the plan in "error". Storing it as manual_review keeps the file
+          // usable and tells the user exactly what to do. (Karen, 2026-06-11.)
+          if (dxfTooLargeToParse(conv.buffer.length)) {
+            console.warn(
+              `[processPlan] DXF for ${plan.id} is ` +
+                `${(conv.buffer.length / 1024 / 1024).toFixed(1)}MB — over the parse ` +
+                `cap; storing as manual_review without parsing.`,
+            );
+            return {
+              pageCount: 0,
+              chunkCount: 0,
+              manualReview: true,
+              errorMessage: DXF_TOO_LARGE_MESSAGE,
+            };
+          }
+
           const extracted = extractLayersFromDxf(conv.buffer);
 
           if (extracted) {
