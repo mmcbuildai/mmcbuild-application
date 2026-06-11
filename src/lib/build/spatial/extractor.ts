@@ -12,7 +12,12 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { extractJson } from "@/lib/ai/extract-json";
+import { extractJson, ModelNonJsonResponseError } from "@/lib/ai/extract-json";
+import {
+  MIN_READABLE_PLAN_BYTES,
+  NO_READABLE_PLAN_MESSAGE,
+  decodedBase64Bytes,
+} from "@/lib/plans/file-kind";
 import type {
   SpatialLayout,
   Roof,
@@ -164,6 +169,23 @@ export async function extractFloorPlanFromPdf(
   pdfBase64: string,
   options?: { pageHint?: number; context?: string },
 ): Promise<PdfFloorPlanExtraction> {
+  // Input guard — never send the model a blank/near-empty document. An empty
+  // payload makes Claude reply with prose ("please upload the plan"), which the
+  // JSON parser then reports as an opaque "Failed to extract JSON". Fail fast
+  // with the real reason, before any messages.create.
+  const decodedBytes = decodedBase64Bytes(pdfBase64);
+  if (decodedBytes < MIN_READABLE_PLAN_BYTES) {
+    console.error(
+      `[extractFloorPlanFromPdf] empty/near-empty plan input (${decodedBytes} bytes) — skipping model call`,
+    );
+    return {
+      layout: null,
+      detectedPage: null,
+      totalPages: null,
+      error: NO_READABLE_PLAN_MESSAGE,
+    };
+  }
+
   const contextBlock = options?.context
     ? `\n\nADDITIONAL CONTEXT FROM QUESTIONNAIRE:\n${options.context}`
     : "";
@@ -239,6 +261,17 @@ export async function extractFloorPlanFromPdf(
         "[extractFloorPlanFromPdf] JSON parse failed. Response preview:",
         fullText.slice(0, 500),
       );
+      // Branch on the typed error so the persisted reason reflects the REAL
+      // cause — a model refusal/empty response (a content failure) vs genuinely
+      // malformed JSON — rather than a generic "non-JSON response" for both.
+      if (parseErr instanceof ModelNonJsonResponseError) {
+        return {
+          layout: null,
+          detectedPage: null,
+          totalPages: null,
+          error: parseErr.userMessage,
+        };
+      }
       return {
         layout: null,
         detectedPage: null,
@@ -296,6 +329,17 @@ export async function extractSpatialLayout(
   mediaType: "image/png" | "image/jpeg" = "image/png",
   context?: string
 ): Promise<SpatialLayout | null> {
+  // Input guard — a blank/near-empty image makes the model ask for the plan
+  // instead of returning JSON. Fail fast (null is this function's existing
+  // failure shape) before any messages.create.
+  const decodedBytes = decodedBase64Bytes(imageBase64);
+  if (decodedBytes < MIN_READABLE_PLAN_BYTES) {
+    console.error(
+      `[extractSpatialLayout] empty/near-empty image input (${decodedBytes} bytes) — skipping model call`,
+    );
+    return null;
+  }
+
   const contextBlock = context
     ? `\n\nADDITIONAL CONTEXT FROM QUESTIONNAIRE:\n${context}`
     : "";
@@ -557,6 +601,16 @@ async function extractPagePartial<T>(
   const thinking = config.thinkingBudget
     ? { type: "enabled" as const, budget_tokens: config.thinkingBudget }
     : undefined;
+
+  // Input guard — skip the model call when the per-page PDF is empty/unreadable
+  // (e.g. a failed pdf-lib page split returned a near-zero-byte document).
+  const decodedBytes = decodedBase64Bytes(pdfBase64);
+  if (decodedBytes < MIN_READABLE_PLAN_BYTES) {
+    console.error(
+      `[extractPagePartial] empty/near-empty page input (${decodedBytes} bytes, page ${pageNumber}) — skipping model call`,
+    );
+    return null;
+  }
 
   try {
     const anthropic = getClient();

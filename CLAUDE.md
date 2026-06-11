@@ -100,6 +100,35 @@ ALL AI calls MUST go through `callModel()` from `src/lib/ai/models/router.ts`.
 Never call Anthropic or OpenAI SDK directly from routes or server actions.
 The router handles model fallback, usage tracking, and cost estimation.
 
+Never send a model a blank/near-empty document or image. Validate input bytes
+BEFORE any `messages.create`; if the decoded payload is empty or below
+`MIN_READABLE_PLAN_BYTES` (`src/lib/plans/file-kind.ts`), fail fast with a
+structured `No readable plan provided` error and do NOT call the model. A blank
+document makes Claude correctly ask for the plan, and that prose then surfaces
+downstream as a misleading "Failed to extract JSON" / "no readable floor plan".
+The spatial extractors (`src/lib/build/spatial/extractor.ts`,
+`full-house-extractor.ts`) guard this via `decodedBase64Bytes()`.
+
+### AI Output Handling
+Treat a model **refusal/prose** response as an **input/content failure**, not a
+parse bug. `extractJson` (`src/lib/ai/extract-json.ts`) throws a typed
+`ModelNonJsonResponseError` carrying `reason` (`refusal` / `empty` /
+`unparseable`) and a neutral, end-user-safe `userMessage`; callers branch on the
+typed error so the persisted/displayed message reflects the REAL cause instead
+of a generic "non-JSON response". This is the content-layer instance of the
+`provider-errors.ts` philosophy (the 2026-06-10 Karen incident): never mask a
+real cause behind a generic downstream error.
+
+A job reporting `done`/`completed` is **not** proof of success. Verify real
+output (e.g. an extraction must yield non-zero walls/rooms — not just a layout
+shape) before treating a run as resolved. "Status done" with empty geometry is
+the exact symptom Karen reported.
+
+> These guards are the local instance of the platform-wide **Diagnostic
+> Integrity** standard (R16–R22) — evidence-before-diagnosis, honest-error, and
+> ground-truth verification — kept consistent with `provider-errors.ts` so the
+> repo doc and the global guardrails agree.
+
 ### Database Access
 - Use the shared `db()` helper at `src/lib/supabase/db.ts` for tables not in
   generated types

@@ -29,6 +29,8 @@ import {
 } from "./extractor";
 import {
   ANTHROPIC_PDF_MAX_BYTES,
+  MIN_READABLE_PLAN_BYTES,
+  NO_READABLE_PLAN_MESSAGE,
   planTooLargeMessage,
 } from "@/lib/plans/file-kind";
 import { detectAiProviderUnavailable } from "@/lib/ai/provider-errors";
@@ -159,6 +161,28 @@ export async function extractFullHouse(
   console.log(
     `[extractFullHouse] start — pdf base64 length ${pdfBase64.length} chars (~${Math.round(decodedBytes / 1024 / 1024)} MB)`,
   );
+
+  // Empty-input guard. Fail fast before page classification (the first AI call)
+  // when no usable plan reached us — an empty upload, a failed conversion, or a
+  // page-split that produced a near-zero-byte document. Sending the classifier a
+  // blank PDF makes the model ask for the plan, which then surfaces downstream
+  // as a misleading "no readable floor plan". This is the lower bound of the
+  // same size scale as the 32 MB ceiling below.
+  if (decodedBytes < MIN_READABLE_PLAN_BYTES) {
+    console.error(
+      `[extractFullHouse] rejected — ${decodedBytes} bytes is below the ${MIN_READABLE_PLAN_BYTES}-byte readable minimum`,
+    );
+    return {
+      layout: null,
+      classifications: [],
+      floorPlanPage: null,
+      elevationsExtracted: [],
+      sectionExtracted: null,
+      scheduleExtracted: null,
+      totalPages: null,
+      error: NO_READABLE_PLAN_MESSAGE,
+    };
+  }
 
   // Size guard. A file over Anthropic's 32 MB document ceiling can't be
   // processed: it strains the worker (rasterising a render-heavy set) and the

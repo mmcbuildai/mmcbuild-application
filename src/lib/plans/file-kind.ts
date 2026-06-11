@@ -55,6 +55,30 @@ export function planTooLargeMessage(bytes: number): string {
   );
 }
 
+/**
+ * Floor below which a base64 plan payload is treated as empty/unreadable. A
+ * real PDF or image plan is tens of KB at minimum; anything under ~1 KB is an
+ * empty upload, a failed conversion, or a blank page-split — never a plan the
+ * model can read. Guarded BEFORE any `messages.create` so we never hand Claude
+ * a blank document: it correctly responds asking for the plan, and that prose
+ * then surfaces as a misleading "Failed to extract JSON". The opposite end of
+ * the same scale as ANTHROPIC_PDF_MAX_BYTES — too-empty as well as too-big is a
+ * fail-fast, not a model call.
+ */
+export const MIN_READABLE_PLAN_BYTES = 1024;
+
+/** Decoded byte length of a base64 string (base64 inflates raw bytes by ~4/3). */
+export function decodedBase64Bytes(base64: string): number {
+  if (!base64) return 0;
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+/** Actionable message for an empty / unreadable plan upload. */
+export const NO_READABLE_PLAN_MESSAGE =
+  "No readable plan provided — the uploaded file produced no extractable " +
+  "content. Please re-upload a clear plan file and try again.";
+
 export function detectPlanKind(
   fileName: string,
   mimeType: string | null | undefined,
