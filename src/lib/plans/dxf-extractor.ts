@@ -35,11 +35,18 @@ export function dxfTooLargeToParse(bytes: number): boolean {
   return bytes > MAX_DXF_PARSE_BYTES;
 }
 
-/** Friendly, actionable message for a CAD file too large for automatic extraction. */
+/**
+ * Friendly, actionable message when a DXF is too large to parse for CAD-layer
+ * text extraction (the Comply search-ingestion path). Note this is NOT the 3D
+ * render — the 3D extractor falls back from the DXF path to a DWG → PDF →
+ * vision route on its own, so a too-large DWG can still render in 3D even when
+ * this layer-text step is skipped.
+ */
 export const DXF_TOO_LARGE_MESSAGE =
-  "This CAD file is too large or complex for automatic 3D extraction. The file " +
-  "has been stored and flagged for manual review — or you can upload a single " +
-  "floor-plan sheet (or a PDF export of it) for automatic processing.";
+  "This CAD file is too large or complex for automatic CAD-layer extraction. " +
+  "The file has been stored and flagged for manual review. (3D reconstruction " +
+  "is attempted separately.) For full automatic processing, upload a single " +
+  "floor-plan sheet or a PDF export of it.";
 
 export interface LayerSummary {
   /** Layer name as defined in the CAD file (e.g. "Walls", "A-WALL", "Doors"). */
