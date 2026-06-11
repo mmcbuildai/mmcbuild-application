@@ -76,6 +76,7 @@ export default async function CostReportPage({
         <EstimationProgress
           estimateId={reportId}
           initialStatus={estimate.status}
+          initialSummary={estimate.summary}
         />
       )}
     </div>

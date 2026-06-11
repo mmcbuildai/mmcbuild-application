@@ -36,6 +36,34 @@ export const runComplianceCheck = inngest.createFunction(
     id: "run-compliance-check",
     name: "Run Compliance Check",
     retries: 1,
+    // Without this, a thrown step error left the check stuck at "processing"
+    // forever (the UI spins, never showing why). Record the REAL reason on the
+    // check so the user sees the cause (Diagnostic Integrity) and the UI shows
+    // the error state. Mirrors process-plan's onFailure. (2026-06-11)
+    onFailure: async ({ error, event }) => {
+      const admin = createAdminClient();
+      const { projectId, planId } = event.data.event.data;
+      if (!projectId || !planId) return;
+      const { data: check } = await admin
+        .from("compliance_checks")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("plan_id", planId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (check) {
+        await admin
+          .from("compliance_checks")
+          .update({
+            status: "error",
+            summary: `Compliance check failed: ${error.message.slice(0, 500)}`,
+            progress_current: null,
+          } as never)
+          .eq("id", (check as { id: string }).id);
+      }
+      console.error(`[runComplianceCheck] Failed: ${error.message}`);
+    },
   },
   { event: "compliance/check.requested" },
   async ({ event, step }) => {

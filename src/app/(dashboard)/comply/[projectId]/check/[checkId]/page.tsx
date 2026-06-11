@@ -92,6 +92,7 @@ export default async function CheckPage({
           initialStatus={check.status}
           initialProgressCurrent={check.progress_current}
           initialProgressCompleted={check.progress_completed ?? []}
+          initialSummary={check.summary}
         />
       )}
     </div>

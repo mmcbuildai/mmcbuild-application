@@ -9,22 +9,33 @@ import { getCostReport } from "@/app/(dashboard)/quote/actions";
 interface EstimationProgressProps {
   estimateId: string;
   initialStatus: string;
+  /** cost_estimates.summary — carries the REAL reason on an error. Surface it
+   *  instead of a generic message (Diagnostic Integrity). */
+  initialSummary?: string | null;
 }
 
 export function EstimationProgress({
   estimateId,
   initialStatus,
+  initialSummary,
 }: EstimationProgressProps) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
-  const startTimeRef = useRef(Date.now());
+  const [errorReason, setErrorReason] = useState<string | null>(
+    initialSummary ?? null,
+  );
+  // Lazy-init the start time in an effect, not during render (Date.now() is
+  // impure — calling it in render violates react-hooks/purity).
+  const startTimeRef = useRef<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
     if (status === "completed" || status === "error") return;
+    if (startTimeRef.current === null) startTimeRef.current = Date.now();
 
     const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      const start = startTimeRef.current ?? Date.now();
+      setElapsed(Math.floor((Date.now() - start) / 1000));
     }, 1000);
 
     return () => clearInterval(timer);
@@ -36,13 +47,14 @@ export function EstimationProgress({
     const interval = setInterval(async () => {
       const result = await getCostReport(estimateId);
       if (result.estimate) {
-        const e = result.estimate as { status: string };
+        const e = result.estimate as { status: string; summary: string | null };
         setStatus(e.status);
 
         if (e.status === "completed") {
           clearInterval(interval);
           router.refresh();
         } else if (e.status === "error") {
+          setErrorReason(e.summary ?? null);
           clearInterval(interval);
         }
       }
@@ -90,7 +102,7 @@ export function EstimationProgress({
             <div>
               <p className="text-sm font-medium">Error</p>
               <p className="text-xs text-muted-foreground">
-                Something went wrong. Please try again.
+                {errorReason || "Something went wrong. Please try again."}
               </p>
             </div>
           </div>
