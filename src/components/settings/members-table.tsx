@@ -142,7 +142,7 @@ export function MembersTable({
                     <> (unlimited)</>
                   )}{" "}
                   on the {seatUsage.tier} plan. External and viewer
-                  collaborators don't consume seats.
+                  collaborators don&apos;t consume seats.
                 </p>
               )}
             </div>
@@ -254,6 +254,13 @@ function InviteDialog({
       if (result.error) {
         setError(result.error);
       } else {
+        const target = email.trim();
+        const existing = "existingAccount" in result && result.existingAccount;
+        toast.success(
+          existing
+            ? `${target} already has an MMC Build account — we've sent them a sign-in link to join this organisation. If it doesn't arrive, ask them to check their spam/junk folder.`
+            : `Invitation sent to ${target}. If it doesn't arrive, ask them to check their spam/junk folder.`,
+        );
         setEmail("");
         setRole("viewer");
         setSeatType("internal");
@@ -300,7 +307,7 @@ function InviteDialog({
           <DialogTitle>Invite Team Member</DialogTitle>
           <DialogDescription>
             Send a magic-link invitation. Internal seats consume your seat cap;
-            external collaborators and viewers don't.
+            external collaborators and viewers don&apos;t.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -552,7 +559,12 @@ function InvitationRow({ invitation }: { invitation: Invitation }) {
       if (result.error) {
         toast.error(result.error);
       } else {
-        toast.success("Invitation resent");
+        const existing = "existingAccount" in result && result.existingAccount;
+        toast.success(
+          existing
+            ? `Sign-in link re-sent to ${invitation.email} (existing account). Ask them to check spam/junk if it doesn't arrive.`
+            : `Invitation resent to ${invitation.email}. Ask them to check spam/junk if it doesn't arrive.`,
+        );
       }
       router.refresh();
     });
