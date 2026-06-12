@@ -8,7 +8,14 @@ import {
   Plus,
   Rocket,
   FolderKanban,
+  ShieldCheck,
+  Hammer,
+  Calculator,
+  Users,
+  GraduationCap,
+  Lock,
 } from "lucide-react";
+import { MODULES, ALL_MODULE_IDS, type ModuleId } from "@/lib/stripe/plans";
 import type { SubscriptionStatus } from "@/lib/stripe/subscription";
 
 const WORKFLOW_STEPS = [
@@ -18,6 +25,22 @@ const WORKFLOW_STEPS = [
   { num: 4, label: "Directory", desc: "Find MMC trades", color: "amber" },
   { num: 5, label: "Training", desc: "Upskill your team", color: "indigo" },
 ];
+
+const MODULE_ICONS: Record<ModuleId, typeof ShieldCheck> = {
+  comply: ShieldCheck,
+  build: Hammer,
+  quote: Calculator,
+  direct: Users,
+  train: GraduationCap,
+};
+
+const MODULE_GRADIENTS: Record<ModuleId, string> = {
+  comply: "from-blue-500 to-blue-600",
+  build: "from-teal-500 to-teal-600",
+  quote: "from-violet-500 to-violet-600",
+  direct: "from-amber-500 to-amber-600",
+  train: "from-indigo-500 to-indigo-600",
+};
 
 export function DashboardModules({
   status,
@@ -146,10 +169,9 @@ export function DashboardModules({
         </div>
       )}
 
-      {/* Primary action — a single Projects entry point. Replaces the old
-          5-module card grid: testers were confused by a wall of module
-          buttons when every module actually opens from inside a project.
-          One clear "Start Here" → /projects funnels them the right way. */}
+      {/* Primary action — a single Projects entry point. Leads the page so
+          users know to start with a project; every module opens from inside
+          one. The module grid below stays locked until a project exists. */}
       {hasProjects && (
         <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-blue-50 p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -177,6 +199,82 @@ export function DashboardModules({
           </div>
         </div>
       )}
+
+      {/* Module grid — the five MMC modules, always shown so users see what
+          they're working towards. Locked (greyed, non-actionable) until a
+          project exists; they unlock the moment one is created — the visible
+          cue that "start with a project" was the right first step. Each
+          module opens from inside a project, so a locked card routes to
+          /projects rather than dead-ending. */}
+      <div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Modules
+          </h2>
+          {!hasProjects && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+              <Lock className="h-3 w-3" />
+              Create a project to unlock
+            </span>
+          )}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {ALL_MODULE_IDS.map((id) => {
+            const mod = MODULES[id];
+            const Icon = MODULE_ICONS[id];
+            const cardBody = (
+              <>
+                <div className="flex items-start justify-between">
+                  <div
+                    className={`inline-flex rounded-xl p-3 ${
+                      hasProjects
+                        ? `bg-gradient-to-br ${MODULE_GRADIENTS[id]}`
+                        : "bg-slate-200"
+                    }`}
+                  >
+                    <Icon
+                      className={`h-6 w-6 ${
+                        hasProjects ? "text-white" : "text-slate-400"
+                      }`}
+                    />
+                  </div>
+                  {hasProjects ? (
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Lock className="h-4 w-4 text-slate-400" />
+                  )}
+                </div>
+                <div className="mt-3">
+                  <h3 className="font-semibold text-zinc-900">{mod.name}</h3>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {mod.tagline}
+                  </p>
+                </div>
+              </>
+            );
+            const base =
+              "block rounded-xl border p-5 transition-all";
+            return hasProjects ? (
+              <Link
+                key={id}
+                href={mod.href}
+                className={`${base} bg-card hover:border-teal-400 hover:shadow-sm`}
+              >
+                {cardBody}
+              </Link>
+            ) : (
+              <Link
+                key={id}
+                href="/projects"
+                aria-label={`${mod.name} — create a project to unlock`}
+                className={`${base} border-dashed bg-slate-50 opacity-70 hover:opacity-100`}
+              >
+                {cardBody}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Bundle upsell */}
       {!isExpired && status.activeModules.length < 5 && (

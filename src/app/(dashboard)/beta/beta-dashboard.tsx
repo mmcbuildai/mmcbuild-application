@@ -18,6 +18,7 @@ import {
   FlaskConical,
   FolderKanban,
   ArrowRight,
+  Lock,
 } from "lucide-react";
 import { MODULES, type ModuleId } from "@/lib/stripe/plans";
 import { startTesting, submitFeedback, type BetaFeedbackRow } from "./actions";
@@ -162,10 +163,12 @@ function ModuleCard({
   moduleId,
   progress,
   onUpdate,
+  locked,
 }: {
   moduleId: ModuleId;
   progress: BetaFeedbackRow;
   onUpdate: (updated: BetaFeedbackRow) => void;
+  locked: boolean;
 }) {
   const mod = MODULES[moduleId];
   const Icon = MODULE_ICONS[moduleId];
@@ -223,7 +226,11 @@ function ModuleCard({
 
   return (
     <div
-      className={`rounded-xl border-2 transition-all ${statusCfg.border} ${statusCfg.bg}`}
+      className={`rounded-xl border-2 transition-all ${
+        locked
+          ? "border-slate-200 bg-slate-50/60 opacity-75"
+          : `${statusCfg.border} ${statusCfg.bg}`
+      }`}
     >
       {/* Header */}
       <div className="p-5 pb-0">
@@ -239,15 +246,22 @@ function ModuleCard({
               <p className="text-xs text-muted-foreground">{mod.tagline}</p>
             </div>
           </div>
-          {/* Status badge */}
-          <div className="flex items-center gap-2">
-            <span className={`h-3 w-3 rounded-full ${statusCfg.dot}`} />
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusCfg.badge}`}
-            >
-              {statusCfg.label}
+          {/* Status badge — or a Locked chip when no project exists yet */}
+          {locked ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+              <Lock className="h-3 w-3" />
+              Locked
             </span>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className={`h-3 w-3 rounded-full ${statusCfg.dot}`} />
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusCfg.badge}`}
+              >
+                {statusCfg.label}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -336,7 +350,17 @@ function ModuleCard({
 
       {/* Actions */}
       <div className="px-5 pb-5 flex gap-2">
-        {progress.status === "not_started" && (
+        {locked && (
+          <Link
+            href="/projects"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-200 transition-colors"
+          >
+            <Lock className="h-4 w-4" />
+            Create a project to unlock
+          </Link>
+        )}
+
+        {!locked && progress.status === "not_started" && (
           <button
             onClick={handleStartTesting}
             disabled={isPending}
@@ -489,9 +513,10 @@ export function BetaDashboard({
 
       {/* Project gate — testers need a project before any module does
           anything (every module runs inside a project). Lead with a single
-          Projects CTA; the module test-cards only appear once a project
-          exists, mirroring the main dashboard. */}
-      {!hasProjects ? (
+          Projects CTA, but still show the module test-cards below in a locked
+          (greyed) state so testers can see what's coming; the cards unlock the
+          moment a project exists, mirroring the main dashboard. */}
+      {!hasProjects && (
         <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-blue-50 p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
@@ -503,8 +528,8 @@ export function BetaDashboard({
                   Create a project to start testing
                 </h2>
                 <p className="mt-0.5 text-sm text-zinc-600">
-                  Every module runs inside a project. Create your first one,
-                  then the Comply, Build and other module test-cards appear here.
+                  Every module runs inside a project. Create your first one and
+                  the module test-cards below unlock.
                 </p>
               </div>
             </div>
@@ -517,18 +542,19 @@ export function BetaDashboard({
             </Link>
           </div>
         </div>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          {progress.map((p) => (
-            <ModuleCard
-              key={p.module_id}
-              moduleId={p.module_id}
-              progress={p}
-              onUpdate={handleUpdate}
-            />
-          ))}
-        </div>
       )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {progress.map((p) => (
+          <ModuleCard
+            key={p.module_id}
+            moduleId={p.module_id}
+            progress={p}
+            onUpdate={handleUpdate}
+            locked={!hasProjects}
+          />
+        ))}
+      </div>
 
       {/* Completion message */}
       {completed === total && (
