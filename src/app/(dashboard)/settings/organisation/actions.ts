@@ -335,7 +335,9 @@ export async function inviteUser(
         },
       });
       revalidatePath("/settings/organisation");
-      return { success: true };
+      // Existing account: a SIGN-IN link was sent, not an invite. Flag it so the
+      // UI tells the admin what to expect (they were waiting for the wrong email).
+      return { success: true, existingAccount: true };
     }
     // Other failure — roll back the dangling invite row and surface it.
     await admin.from("org_invitations").delete().eq("id", createdInviteId);
@@ -344,7 +346,7 @@ export async function inviteUser(
   }
 
   revalidatePath("/settings/organisation");
-  return { success: true };
+  return { success: true, existingAccount: false };
 }
 
 // ============================================================
@@ -529,22 +531,29 @@ export async function resendInvitation(invitationId: string) {
 
   if (updateError) return { error: `Failed to resend: ${updateError.message}` };
 
-  // Re-send the auth invitation email. Surface a failure instead of swallowing it —
-  // an existing account returns `email_exists` and no email goes out.
+  // Re-send the auth email. inviteUserByEmail only emails brand-new accounts; an
+  // existing account returns `email_exists`. With multi-org membership available,
+  // an existing user CAN still join — send them a sign-in (magic) link instead,
+  // mirroring inviteUser, rather than erroring.
   const { error: resendErr } = await admin.auth.admin.inviteUserByEmail(inv.email);
   if (resendErr) {
     const alreadyExists =
       (resendErr as { code?: string }).code === "email_exists" || resendErr.status === 422;
     if (alreadyExists) {
-      return {
-        error:
-          "This person already has an MMC Build account, so an invitation email can't be sent. " +
-          "Adding an existing user to another organisation needs multi-org membership (not yet available).",
-      };
+      const supa = await createClient();
+      await supa.auth.signInWithOtp({
+        email: inv.email,
+        options: {
+          shouldCreateUser: false,
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`,
+        },
+      });
+      revalidatePath("/settings/organisation");
+      return { success: true, existingAccount: true };
     }
     return { error: `Could not resend the invitation email: ${resendErr.message}` };
   }
 
   revalidatePath("/settings/organisation");
-  return { success: true };
+  return { success: true, existingAccount: false };
 }
