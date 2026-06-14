@@ -1,0 +1,186 @@
+# SayFix Build (client-hosted) — installed by SayFix. Runs in THIS repo's Actions on YOUR credentials:
+#   * code writes use the automatic GITHUB_TOKEN (no SayFix-held token)
+#   * the LLM runs on your own ANTHROPIC_API_KEY secret (BYOK)
+#   * it authenticates back to SayFix with your SAYFIX_RUNNER_TOKEN secret (scoped to your jobs)
+# Required repo secrets: SAYFIX_RUNNER_TOKEN, ANTHROPIC_API_KEY.  Required repo variable: SAYFIX_BASE.
+# Required repo setting: "Allow GitHub Actions to create and approve pull requests" = ON.
+name: SayFix Build (client-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: SayFix actuation job id
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sayfix-build-${{ github.event.inputs.job_id }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      JOB_ID: ${{ github.event.inputs.job_id }}
+      SAYFIX_BASE: ${{ vars.SAYFIX_BASE }}
+      SAYFIX_RUNNER_TOKEN: ${{ secrets.SAYFIX_RUNNER_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+      BRANCH: sayfix/fix-${{ github.event.inputs.job_id }}-${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the work order from SayFix
+        run: |
+          set -e
+          curl -sSL -H "Authorization: Bearer $SAYFIX_RUNNER_TOKEN" \
+            "$SAYFIX_BASE/api/runner/jobs/$JOB_ID" -o job.json
+          node -e '
+            const fs=require("fs");
+            const j=JSON.parse(fs.readFileSync("job.json","utf8")).job;
+            if(!j){console.error("no job in response");process.exit(1);}
+            const r=j.repo||{};
+            fs.writeFileSync("_sayfix_work_order.md", j.scope_md||"(no work order)");
+            fs.appendFileSync(process.env.GITHUB_ENV, "PROTECTED_PATHS="+JSON.stringify(r.protected_paths||[])+"\n");
+          '
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Claude Code
+        run: npm i -g @anthropic-ai/claude-code
+
+      - name: Build the fixer prompt
+        run: |
+          cat > "$GITHUB_WORKSPACE/prompt.txt" <<'PROMPT'
+          You are SayFix's autonomous fixer for THIS repository.
+
+          Read ./_sayfix_work_order.md — it is the BINDING work order: a problem a non-technical user
+          reported, in plain language. Diagnose it in this repo and implement the smallest correct fix
+          that resolves it. You are running FULLY AUTONOMOUS — do ordinary work without asking; the PR
+          is the only human checkpoint.
+
+          HARD RULES (a PR violating these is rejected):
+            * NEVER edit a protected path (auth / payments / schema / compliance). The protected paths
+              for this repo are in the PROTECTED_PATHS env var. If the only correct fix touches one, do
+              NOT change it — write ./_sayfix_escalate.md explaining why, and STOP.
+            * NO FAKE / STUB fixes. The change must actually resolve the reported problem.
+            * KEEP IT COMPILING. The PR runs the project's typecheck; a fix that breaks the build fails.
+            * MIGRATIONS DO NOT AUTO-APPLY. If your fix adds a DB migration, keep it idempotent and write
+              ./_sayfix_migration_note.md naming the file(s) so the PR flags that a person must apply it.
+
+          When done: STOP. Do NOT git commit/push or open a PR — the workflow does that. Remove
+          ./_sayfix_work_order.md from the working tree before you finish so it isn't committed.
+          PROMPT
+          echo "--- prompt ---"; cat "$GITHUB_WORKSPACE/prompt.txt"
+
+      - name: Run Claude Code (headless, autonomous)
+        timeout-minutes: 20
+        run: |
+          claude -p "$(cat "$GITHUB_WORKSPACE/prompt.txt")" --dangerously-skip-permissions 2>&1 | tee agent-output.txt || true
+          echo "=== files after run ==="; git status --porcelain | head -50
+
+      - name: Detect escalation (protected-path refusal)
+        id: escalate
+        run: |
+          if [ -f _sayfix_escalate.md ]; then
+            echo "escalated=true" >> "$GITHUB_OUTPUT"
+            { echo "reason<<EOF"; cat _sayfix_escalate.md; echo "EOF"; } >> "$GITHUB_OUTPUT"
+            rm -f _sayfix_escalate.md
+          else
+            echo "escalated=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Typecheck gate (package-manager aware, self-fix up to 3x)
+        if: steps.escalate.outputs.escalated != 'true'
+        timeout-minutes: 20
+        run: |
+          set +e
+          if [ -f pnpm-lock.yaml ]; then PM=pnpm; corepack enable >/dev/null 2>&1 || true;
+          elif [ -f yarn.lock ]; then PM=yarn;
+          else PM=npm; fi
+          echo "package manager: $PM"
+          echo "::group::install"
+          case $PM in
+            pnpm) pnpm install --no-frozen-lockfile 2>&1 | tail -25 ;;
+            yarn) yarn install 2>&1 | tail -25 ;;
+            npm)  npm install --no-audit --no-fund --legacy-peer-deps 2>&1 | tail -25 ;;
+          esac
+          echo "::endgroup::"
+          MAX=3
+          for i in $(seq 1 $MAX); do
+            echo "::group::typecheck attempt $i/$MAX"
+            npx --yes tsc --noEmit > /tmp/tsc.log 2>&1; code=$?
+            tail -50 /tmp/tsc.log
+            echo "::endgroup::"
+            if [ $code -eq 0 ]; then echo "TYPECHECK PASSED (attempt $i)"; exit 0; fi
+            [ $i -ge $MAX ] && break
+            ERRS=$(grep -E "error TS|\.tsx?:[0-9]" /tmp/tsc.log | head -40)
+            claude -p "The project fails \`npx tsc --noEmit\`. Fix ALL of these TypeScript errors so it compiles cleanly. Change ONLY what is required; do not touch unrelated code. Errors:
+          $ERRS" --dangerously-skip-permissions 2>&1 | tail -15
+          done
+          echo "::error::typecheck still failing after $MAX attempts — refusing to open a PR over non-compiling code"
+          exit 1
+
+      - name: Commit + push + open PR (automatic GITHUB_TOKEN)
+        id: pr
+        if: steps.escalate.outputs.escalated != 'true'
+        run: |
+          set -e
+          rm -f _sayfix_work_order.md _sayfix_migration_note.md agent-output.txt job.json 2>/dev/null || true
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no_changes=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::agent produced no changes"; exit 0
+          fi
+          git commit -m "SayFix: fix for job $JOB_ID"
+          git push -u origin "$BRANCH"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          PR_URL=$(gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
+            --title "SayFix: fix for job $JOB_ID" \
+            --body "Automated SayFix fix for a problem a user reported. Review the diff and the preview your Vercel posts on this PR, then merge to go live.")
+          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "PR: $PR_URL"
+
+      - name: Report result to SayFix
+        if: always()
+        env:
+          ESCALATED: ${{ steps.escalate.outputs.escalated }}
+          ESCALATE_REASON: ${{ steps.escalate.outputs.reason }}
+          PR_URL: ${{ steps.pr.outputs.pr_url }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          NO_CHANGES: ${{ steps.pr.outputs.no_changes }}
+        run: |
+          PAYLOAD=$(node -e '
+            const e=process.env; let p;
+            if(e.ESCALATED==="true"){
+              p={ok:false,failure_kind:"fix_failed",error:"escalated (protected path / cannot self-serve): "+(e.ESCALATE_REASON||"").slice(0,500)};
+            } else if(e.NO_CHANGES==="true"){
+              p={ok:false,failure_kind:"fix_failed",error:"agent produced no changes"};
+            } else if(e.PR_URL){
+              p={ok:true,pr_url:e.PR_URL,preview_url:e.PR_URL,branch:process.env.BRANCH,head_sha:e.HEAD_SHA};
+            } else {
+              p={ok:false,failure_kind:"fix_failed",error:"build or PR step failed — see Actions log"};
+            }
+            p.runner_id="client-gha-"+(e.GITHUB_RUN_ID||"run");
+            process.stdout.write(JSON.stringify(p));
+          ')
+          echo "Reporting: $PAYLOAD"
+          curl -sS -X POST "$SAYFIX_BASE/api/runner/jobs/$JOB_ID/result" \
+            -H "Authorization: Bearer $SAYFIX_RUNNER_TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d "$PAYLOAD"
