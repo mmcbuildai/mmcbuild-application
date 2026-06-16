@@ -13,11 +13,63 @@ import type { DesignOptimisationResult } from "@/lib/ai/types";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 import { createReportVersion } from "@/lib/report-versions";
 
+/**
+ * Mark the in-flight design check as errored with the real failure reason.
+ *
+ * Extracted from the inline `onFailure` handler so the status write-back — the
+ * exact logic whose absence left a run stuck at "processing" (2026-06-16) — is
+ * unit-testable. Only touches a check still in `queued`/`processing`, so a later
+ * completed run for the same project/plan is never clobbered. (Diagnostic
+ * Integrity: surface the cause, don't hang.)
+ */
+export async function recordDesignOptimisationFailure(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string | undefined,
+  planId: string | undefined,
+  message: string
+): Promise<void> {
+  if (!projectId || !planId) return;
+  const { data: check } = await admin
+    .from("design_checks")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("plan_id", planId)
+    .in("status", ["queued", "processing"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+  if (!check) return;
+  await admin
+    .from("design_checks")
+    .update({
+      status: "error",
+      summary: `Design optimisation failed: ${message.slice(0, 500)}`,
+    } as never)
+    .eq("id", (check as { id: string }).id);
+}
+
 export const runDesignOptimisation = inngest.createFunction(
   {
     id: "run-design-optimisation",
     name: "Run Design Optimisation",
     retries: 1,
+    // Without this, a thrown step error (e.g. the model returning non-JSON, so
+    // extractJson throws ModelNonJsonResponseError) left the check stuck at
+    // "processing" forever — the UI spins and never shows why. Record the REAL
+    // reason on the check so the user sees the cause (Diagnostic Integrity) and
+    // the UI shows the error state. Mirrors run-compliance-check / process-plan.
+    // (2026-06-16: this function was missed in the 2026-06-11 onFailure sweep,
+    // which left a real run stuck at "processing".)
+    onFailure: async ({ error, event }) => {
+      const { projectId, planId } = event.data.event.data;
+      await recordDesignOptimisationFailure(
+        createAdminClient(),
+        projectId,
+        planId,
+        error.message
+      );
+      console.error(`[runDesignOptimisation] Failed: ${error.message}`);
+    },
   },
   { event: "design/optimisation.requested" },
   async ({ event, step }) => {
