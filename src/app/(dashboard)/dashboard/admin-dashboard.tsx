@@ -12,6 +12,7 @@ import {
   CreditCard,
   ArrowRight,
   FolderOpen,
+  FlaskConical,
 } from "lucide-react";
 
 const ADMIN_SECTIONS = [
@@ -71,6 +72,13 @@ const ADMIN_SECTIONS = [
         icon: BarChart3,
         href: "/settings/ai-performance",
         color: "from-pink-500 to-pink-600",
+      },
+      {
+        title: "Beta Activity",
+        description: "See which testers signed in, what modules they tested, their ratings and feedback, and real run counts.",
+        icon: FlaskConical,
+        href: "/admin/beta-activity",
+        color: "from-rose-500 to-rose-600",
       },
       {
         title: "R&D Tax Tracking",
