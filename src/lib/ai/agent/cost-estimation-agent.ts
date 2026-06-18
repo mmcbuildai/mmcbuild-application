@@ -223,15 +223,49 @@ ${categoryPrompt}`;
       system: COST_ESTIMATION_SYSTEM_PROMPT,
       messages,
       tools: AGENT_TOOLS,
-      maxTokens: 4096,
+      // 4096 truncated larger categories mid-JSON, which then failed to parse and
+      // dropped the whole category to 0 items (the empty-categories bug). 8192
+      // gives line-item-heavy categories room to finish.
+      maxTokens: 8192,
       orgId: agentContext.orgId,
       checkId: agentContext.estimateId,
     });
 
-    // If no tool calls, the agent is done
+    // If no tool calls, the agent is done.
     if (!response.toolCalls || response.toolCalls.length === 0) {
-      const result = safeExtractResult(response.text, category);
-      return { result, dependencies, iterations };
+      let parsed = tryExtractResult(response.text);
+      if (!parsed) {
+        // The model finished but didn't emit clean JSON (prose preamble like
+        // "Now I have everything I need…", markdown fences, or truncation) —
+        // the exact cause of empty categories in the logs. Force ONE raw-JSON-
+        // only retry with a larger budget before giving up empty.
+        const forced = await callModel("cost_primary", {
+          system: COST_ESTIMATION_SYSTEM_PROMPT,
+          messages: [
+            ...messages,
+            { role: "assistant", content: response.text || "" },
+            {
+              role: "user",
+              content:
+                "Output ONLY the final cost estimate as a single raw JSON object — no markdown code fences, and no commentary before or after the JSON.",
+            },
+          ],
+          maxTokens: 8192,
+          orgId: agentContext.orgId,
+          checkId: agentContext.estimateId,
+        });
+        parsed = tryExtractResult(forced.text);
+        if (!parsed) {
+          console.error(
+            `[CostAgent] "${category}" produced no parseable JSON after a forced retry`
+          );
+        }
+      }
+      return {
+        result: parsed ?? { category, line_items: [] },
+        dependencies,
+        iterations,
+      };
     }
 
     // Execute tool calls
@@ -254,7 +288,7 @@ ${categoryPrompt}`;
     });
     messages.push({
       role: "user",
-      content: `Tool results:\n\n${toolSummary}\n\nContinue your cost estimate. When ready, provide your final JSON response.`,
+      content: `Tool results:\n\n${toolSummary}\n\nContinue your cost estimate. When ready, respond with ONLY the final cost estimate as a single raw JSON object — no markdown code fences, and no commentary before or after.`,
     });
   }
 
@@ -265,10 +299,11 @@ ${categoryPrompt}`;
       ...messages,
       {
         role: "user",
-        content: "Maximum iterations reached. Provide your final cost estimate JSON now.",
+        content:
+          "Maximum iterations reached. Output ONLY your final cost estimate as a single raw JSON object now — no markdown code fences, and no commentary before or after.",
       },
     ],
-    maxTokens: 4096,
+    maxTokens: 8192,
     orgId: agentContext.orgId,
     checkId: agentContext.estimateId,
   });
@@ -290,6 +325,19 @@ function safeExtractResult(text: string, category: string): CostCategoryResult {
     );
     // Return empty result rather than crashing the entire pipeline
     return { category, line_items: [] };
+  }
+}
+
+/**
+ * Non-throwing extract: returns the parsed result, or null if the text can't be
+ * parsed as JSON. Used to decide whether a forced raw-JSON retry is worth doing
+ * before falling back to an empty category.
+ */
+function tryExtractResult(text: string): CostCategoryResult | null {
+  try {
+    return extractJson<CostCategoryResult>(text);
+  } catch {
+    return null;
   }
 }
 
