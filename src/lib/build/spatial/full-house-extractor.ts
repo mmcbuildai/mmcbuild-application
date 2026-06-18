@@ -52,7 +52,7 @@ import type { SpatialLayout, RoofForm, Wall, Room, Point2D } from "./types";
  * room edges (so a party wall is emitted once). Safe to always run — a complete
  * extraction simply yields no additions.
  */
-function backfillWallsFromRooms(existing: Wall[], rooms: Room[]): Wall[] {
+export function backfillWallsFromRooms(existing: Wall[], rooms: Room[]): Wall[] {
   if (rooms.length === 0) return existing;
 
   const TOL = 0.05; // metres — treat points within 5 cm as identical

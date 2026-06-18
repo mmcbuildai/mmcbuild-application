@@ -11,6 +11,7 @@ import {
 } from "@/lib/ai/prompts/optimisation-system";
 import type { DesignOptimisationResult } from "@/lib/ai/types";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
+import { backfillWallsFromRooms } from "@/lib/build/spatial/full-house-extractor";
 import { createReportVersion } from "@/lib/report-versions";
 
 /**
@@ -147,6 +148,14 @@ export const runDesignOptimisation = inngest.createFunction(
         (doneRow as { result?: { layout?: SpatialLayout | null } | null } | null)
           ?.result?.layout ?? null;
       if (layout) {
+        // The cached layout may predate the wall-backfill (or come from an
+        // extractor run that under-populated `walls`), leaving the .dae a thin
+        // shell. Backfill internal partitions from the room boundaries here too,
+        // so existing projects get the full 3D model without re-uploading.
+        layout.walls = backfillWallsFromRooms(
+          layout.walls ?? [],
+          layout.rooms ?? [],
+        );
         await db()
           .from("design_checks")
           .update({ spatial_layout: layout })
