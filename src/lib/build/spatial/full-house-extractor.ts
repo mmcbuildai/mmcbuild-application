@@ -631,6 +631,27 @@ export async function extractFullHouse(
     layout.roof = { form: "gable", pitch_deg: 22.5, eave_overhang_m: 0.5 };
   }
 
+  // Flat-roof sanity guard. A truly flat roof is rare in AU residential and is
+  // the most common roof mis-read (observed: a clearly pitched house extracted
+  // as "flat"). If the section drawing shows a ridge above the top plate, the
+  // roof is pitched by definition — override the flat reading to a conservative
+  // gable rather than render a flat box. (No section = nothing to contradict it,
+  // so a flat reading is left alone.)
+  if (layout.roof.form === "flat") {
+    const ridge = sectionResult?.ridge_height_above_top_plate_m;
+    if (typeof ridge === "number" && ridge > 0.3) {
+      layout.roof = {
+        ...layout.roof,
+        form: "gable",
+        pitch_deg:
+          layout.roof.pitch_deg && layout.roof.pitch_deg > 5
+            ? layout.roof.pitch_deg
+            : 22.5,
+      };
+      layout.notes = `${layout.notes ? `${layout.notes} ` : ""}[roof: "flat" reading overridden to gable — section shows a ${ridge.toFixed(1)}m ridge].`;
+    }
+  }
+
   // Wall height — average across elevations that reported one
   const heights = elevationsValid
     .map((e) => e.external_wall_height_m)
@@ -682,6 +703,29 @@ export async function extractFullHouse(
   if (confidences.length > 0) {
     layout.confidence =
       confidences.reduce((s, c) => s + c, 0) / confidences.length;
+  }
+
+  // Total-extraction-failure guard. After the floor-plan extractor, the sheet-
+  // decomposer fallback AND the room-boundary backfill, a layout with zero walls
+  // AND zero rooms means nothing was actually read. Don't ship an empty box that
+  // looks like a (broken) success — surface a clear extraction error so the
+  // caller shows "couldn't read this plan" instead of an empty 3D model.
+  if ((layout.walls?.length ?? 0) === 0 && (layout.rooms?.length ?? 0) === 0) {
+    console.error(
+      "[extractFullHouse] no walls and no rooms after all fallbacks — failing the extraction",
+    );
+    return {
+      layout: null,
+      classifications,
+      floorPlanPage,
+      elevationsExtracted: elevationsValid,
+      sectionExtracted: sectionResult,
+      scheduleExtracted: scheduleResult,
+      totalPages: floorPlanResult?.totalPages ?? sourcePageCount,
+      decomposer,
+      error:
+        "The plan couldn't be read — no walls or rooms were detected. Please re-upload a clearer floor plan.",
+    };
   }
 
   return {
