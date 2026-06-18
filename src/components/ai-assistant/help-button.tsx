@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import ReactMarkdown from "react-markdown";
 import { HelpCircle, Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,6 @@ const GREETING: Message = {
 };
 
 export function HelpButton() {
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [input, setInput] = useState("");
@@ -48,12 +47,15 @@ export function HelpButton() {
     setError(null);
 
     try {
-      const res = await fetch("/api/assistant/chat", {
+      // Use the knowledge-base-backed (RAG) help endpoint — same backend the
+      // floating widget used — so the static assistant gives the richer,
+      // knowledge-grounded answers, rendered as markdown below.
+      const res = await fetch("/api/help-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pathname,
-          messages: next.filter((m) => m !== GREETING),
+          message: trimmed,
+          history: messages.filter((m) => m !== GREETING),
         }),
       });
 
@@ -62,8 +64,11 @@ export function HelpButton() {
         throw new Error(data.error || `Request failed (${res.status})`);
       }
 
-      const data = (await res.json()) as { reply: string };
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      const data = (await res.json()) as { response: string };
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.response },
+      ]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(msg);
@@ -101,11 +106,17 @@ export function HelpButton() {
               key={i}
               className={
                 m.role === "user"
-                  ? "ml-auto max-w-[85%] rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
-                  : "mr-auto max-w-[85%] whitespace-pre-wrap rounded-lg bg-muted px-3 py-2 text-sm"
+                  ? "ml-auto max-w-[85%] whitespace-pre-wrap rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
+                  : "mr-auto max-w-[85%] rounded-lg bg-muted px-3 py-2 text-sm"
               }
             >
-              {m.content}
+              {m.role === "assistant" ? (
+                <div className="space-y-2 [&_a]:text-teal-700 [&_a]:underline [&_li]:ml-4 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:leading-relaxed [&_strong]:font-semibold">
+                  <ReactMarkdown>{m.content}</ReactMarkdown>
+                </div>
+              ) : (
+                m.content
+              )}
             </div>
           ))}
           {pending && (
