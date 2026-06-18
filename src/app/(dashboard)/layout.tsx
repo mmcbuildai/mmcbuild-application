@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { HelpChat } from "@/components/help-chat/help-chat";
 import { TermsGate } from "@/components/legal/terms-gate";
 import { isOperatorEmail } from "@/lib/auth/operator";
+import { provisionUser } from "@/lib/auth/provision";
 
 export default async function DashboardLayout({
   children,
@@ -37,8 +39,29 @@ export default async function DashboardLayout({
       .single(),
   ]);
 
-  const profile = profileRes.data;
+  let profile = profileRes.data;
   const runCount = usageRes.data?.run_count ?? 0;
+
+  // Safety net: an authenticated user with NO profile is a stranded account —
+  // their email confirmation was consumed by a mail scanner (or otherwise never
+  // ran provisioning). Repair it on the spot so they aren't dead-ended. This is
+  // the same idempotent path the auth callback uses; it joins a pending-invite
+  // org when one exists, else creates a personal org.
+  if (!profile && user.email) {
+    await provisionUser(createAdminClient(), {
+      id: user.id,
+      email: user.email,
+      fullName: (user.user_metadata?.full_name as string | undefined) ?? null,
+      orgNameFallback:
+        (user.user_metadata?.org_name as string | undefined) ?? null,
+    });
+    const repaired = await admin
+      .from("profiles")
+      .select("full_name, role, org_id")
+      .eq("user_id", user.id)
+      .single();
+    profile = repaired.data;
+  }
 
   // T&C gate (SCRUM-281). Protects against the PUBLIC — general users, invitees,
   // and suppliers who sign up — NOT our own operators. Platform operators (our

@@ -1,145 +1,66 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ensureMembership } from "@/lib/auth/membership";
+import { provisionUser } from "@/lib/auth/provision";
+import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  // Invite / signup-confirm links built from {{ .ConfirmationURL }} (or a
+  // {{ .TokenHash }} template) arrive as ?token_hash=&type= instead of ?code=.
+  // The callback used to handle ONLY ?code, so every token_hash link dead-ended
+  // on "Authentication failed" and the user was never provisioned. Handle both.
+  const tokenHash = searchParams.get("token_hash");
+  const type = searchParams.get("type") as EmailOtpType | null;
   const redirect = searchParams.get("redirect") ?? "/dashboard";
 
+  const supabase = await createClient();
+
+  // Establish the session from whichever credential the link carried.
+  let sessionUser = null as Awaited<
+    ReturnType<typeof supabase.auth.getUser>
+  >["data"]["user"];
+  let exchangeError: unknown = null;
+
   if (code) {
-    const supabase = await createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) exchangeError = error;
+    else sessionUser = data.user;
+  } else if (tokenHash && type) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type,
+    });
+    if (error) exchangeError = error;
+    else sessionUser = data.user;
+  }
 
-    // Email link prefetchers (scanners, previewers) often hit the callback
-    // before the human, consuming the single-use code. The exchange then
-    // fails on the real click — but the session cookie from the first hit
-    // is already valid. If a session exists, treat this as success.
-    if (error) {
-      const { data: { user: existingUser } } = await supabase.auth.getUser();
-      if (existingUser) {
-        return NextResponse.redirect(`${origin}${redirect}`);
-      }
-    }
+  // Email link prefetchers (Yahoo!/Outlook scanners, previewers) often hit the
+  // callback before the human, consuming the single-use credential. The exchange
+  // then fails on the real click — but a session cookie from an earlier hit in
+  // THIS browser may already be valid. If a session exists, treat as success.
+  if (!sessionUser && (exchangeError || (!code && !tokenHash))) {
+    const {
+      data: { user: existingUser },
+    } = await supabase.auth.getUser();
+    sessionUser = existingUser;
+  }
 
-    if (!error && data.user) {
-      const admin = createAdminClient();
-      const userId = data.user.id;
-      const userEmail = data.user.email!.toLowerCase();
-      const fullName =
-        data.user.user_metadata?.full_name ||
-        data.user.email?.split("@")[0] ||
-        "User";
-
-      // Identity row (one per user). Its absence => brand-new user.
-      const { data: existingProfile } = await supabase
-        .from("profiles")
-        .select("id, org_id")
-        .eq("user_id", userId)
-        .single();
-
-      // A pending invitation is processed for BOTH new AND existing users, so an
-      // existing user can join a SECOND org (multi-org) instead of colliding on
-      // the single profile row (the original bug).
-      const { data: invite } = await admin
-        .from("org_invitations")
-        .select("id, org_id, role, seat_type, project_ids")
-        .eq("email", userEmail)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (invite) {
-        const inv = invite as {
-          id: string;
-          org_id: string;
-          role: string;
-          seat_type?: string | null;
-          project_ids?: string[] | null;
-        };
-        const seatType = inv.seat_type ?? "internal";
-
-        // Source-of-truth membership in the invited org. New user => make it
-        // active; existing user => leave their current active org (OD1, no
-        // auto-switch — they pick it from the org switcher).
-        await ensureMembership(admin, userId, inv.org_id, inv.role, seatType, {
-          setActive: !existingProfile,
-        });
-
-        // Brand-new user: create their single profile (mirrors the active org).
-        let profileId: string | null = existingProfile
-          ? (existingProfile as { id: string }).id
-          : null;
-        if (!existingProfile) {
-          const { data: createdProfile } = await admin
-            .from("profiles")
-            .insert({
-              org_id: inv.org_id,
-              user_id: userId,
-              // role + seat_type enums include 'beta' on live; generated types lag,
-              // so cast through never (runtime values are valid on the DB).
-              role: inv.role as never,
-              seat_type: seatType as never,
-              full_name: fullName,
-              email: userEmail,
-            })
-            .select("id")
-            .single();
-          profileId = createdProfile ? (createdProfile as { id: string }).id : null;
-        }
-
-        // External / viewer invites: grant project-scoped access rows.
-        if (
-          profileId &&
-          (seatType === "external" || seatType === "viewer") &&
-          inv.project_ids &&
-          inv.project_ids.length > 0
-        ) {
-          const accessRows = inv.project_ids.map((projectId) => ({
-            project_id: projectId,
-            profile_id: profileId,
-            org_id: inv.org_id,
-            role: seatType,
-          }));
-          await admin.from("project_user_access").insert(accessRows as never);
-        }
-
-        // Mark invitation accepted.
-        await admin
-          .from("org_invitations")
-          .update({
-            status: "accepted",
-            accepted_at: new Date().toISOString(),
-          } as never)
-          .eq("id", inv.id);
-      } else if (!existingProfile) {
-        // No invite + no profile => fresh org + owner profile + membership.
-        const { data: org, error: orgError } = await admin
-          .from("organisations")
-          .insert({
-            name: data.user.user_metadata?.org_name || "My Organisation",
-          })
-          .select("id")
-          .single();
-
-        if (!orgError && org) {
-          await admin.from("profiles").insert({
-            org_id: org.id as string,
-            user_id: userId,
-            role: "owner",
-            full_name: fullName,
-            email: userEmail,
-          });
-          await ensureMembership(admin, userId, org.id as string, "owner", "internal", {
-            setActive: true,
-          });
-        }
-      }
-
-      return NextResponse.redirect(`${origin}${redirect}`);
-    }
+  if (sessionUser?.email) {
+    // Idempotently ensure org + profile + membership (joins a pending-invite org
+    // when one exists, else creates a personal org). Running this here — not just
+    // on first signup — is what repairs scanner-stranded confirmations.
+    const admin = createAdminClient();
+    await provisionUser(admin, {
+      id: sessionUser.id,
+      email: sessionUser.email,
+      fullName:
+        (sessionUser.user_metadata?.full_name as string | undefined) ?? null,
+      orgNameFallback:
+        (sessionUser.user_metadata?.org_name as string | undefined) ?? null,
+    });
+    return NextResponse.redirect(`${origin}${redirect}`);
   }
 
   // Auth error — redirect to login with error
