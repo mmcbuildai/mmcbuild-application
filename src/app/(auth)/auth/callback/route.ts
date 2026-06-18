@@ -13,7 +13,10 @@ export async function GET(request: Request) {
   // on "Authentication failed" and the user was never provisioned. Handle both.
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const redirect = searchParams.get("redirect") ?? "/dashboard";
+  // An EXPLICIT ?redirect (e.g. password-reset -> /reset-password) always wins.
+  // When absent, the post-auth destination is role-based (see below): beta
+  // testers land in the Beta Testing area, everyone else on the dashboard.
+  const explicitRedirect = searchParams.get("redirect");
 
   const supabase = await createClient();
 
@@ -60,7 +63,20 @@ export async function GET(request: Request) {
       orgNameFallback:
         (sessionUser.user_metadata?.org_name as string | undefined) ?? null,
     });
-    return NextResponse.redirect(`${origin}${redirect}`);
+
+    // Destination: an explicit ?redirect wins; otherwise beta testers go to the
+    // Beta Testing area and everyone else to the dashboard. This covers the
+    // invite link AND the magic-link logins the recovered testers are using.
+    let dest = explicitRedirect ?? "/dashboard";
+    if (!explicitRedirect) {
+      const { data: prof } = await admin
+        .from("profiles")
+        .select("role")
+        .eq("user_id", sessionUser.id)
+        .single();
+      if ((prof as { role?: string } | null)?.role === "beta") dest = "/beta";
+    }
+    return NextResponse.redirect(`${origin}${dest}`);
   }
 
   // Auth error — redirect to login with error
