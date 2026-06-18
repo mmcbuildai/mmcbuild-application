@@ -6,9 +6,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export default async function BetaPage() {
   const progress = await getBetaProgress();
 
-  // Gate the module test-cards behind having a project: testers were dropped
-  // straight onto five module cards with nothing to test them against. Count
-  // the org's projects so the dashboard can lead with "create a project first".
+  // Gate the module test-cards behind THIS tester having created their own
+  // project. Counting org projects was wrong for the beta: every tester is
+  // provisioned into the shared MMC Build org, which already has the operator's
+  // projects — so the gate never engaged and testers saw unlocked modules
+  // pointing at someone else's project. Count projects created_by this user's
+  // profile so each tester gets the "create a project first" onboarding.
+  // (projects.created_by = profiles.id — the profile PK, not the auth user id.)
   const supabase = await createClient();
   const {
     data: { user },
@@ -18,15 +22,15 @@ export default async function BetaPage() {
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("org_id")
+      .select("id")
       .eq("user_id", user.id)
       .single();
-    if (profile?.org_id) {
+    if (profile?.id) {
       const admin = createAdminClient();
       const { count } = await admin
         .from("projects")
         .select("id", { count: "exact", head: true })
-        .eq("org_id", profile.org_id);
+        .eq("created_by", profile.id);
       hasProjects = (count ?? 0) > 0;
     }
   }
