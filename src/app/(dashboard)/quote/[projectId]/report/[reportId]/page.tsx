@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCostReport, getHoldingCostVariables } from "@/app/(dashboard)/quote/actions";
 import { CostReport } from "@/components/quote/cost-report";
 import { EstimationProgress } from "@/components/quote/estimation-progress";
+import { RunEstimateButton } from "@/components/quote/run-estimate-button";
 
 export default async function CostReportPage({
   params,
@@ -20,6 +21,7 @@ export default async function CostReportPage({
   const estimate = result.estimate as unknown as {
     id: string;
     project_id: string;
+    plan_id: string | null;
     status: string;
     summary: string | null;
     total_traditional: number | null;
@@ -50,7 +52,14 @@ export default async function CostReportPage({
     rate_source_detail: string | null;
   }[];
 
-  const holdingCostVariables = estimate.status === "completed"
+  // Treat a run that produced line items as complete even if the status field
+  // never flipped to "completed" — the job stores line items BEFORE the final
+  // status update (summary/duration steps run in between), so a late-step
+  // failure left finished estimates showing as processing/error ("completed in
+  // the log, incomplete in the UI"). Line items present = a real result to show.
+  const isComplete = estimate.status === "completed" || lineItems.length > 0;
+
+  const holdingCostVariables = isComplete
     ? await getHoldingCostVariables(reportId)
     : null;
 
@@ -66,18 +75,33 @@ export default async function CostReportPage({
         <h1 className="mt-2 text-2xl font-bold">Cost Estimation Report</h1>
       </div>
 
-      {estimate.status === "completed" ? (
+      {isComplete ? (
         <CostReport
           estimate={estimate}
           lineItems={lineItems}
           holdingCostVariables={holdingCostVariables}
         />
       ) : (
-        <EstimationProgress
-          estimateId={reportId}
-          initialStatus={estimate.status}
-          initialSummary={estimate.summary}
-        />
+        <div className="space-y-4">
+          <EstimationProgress
+            estimateId={reportId}
+            initialStatus={estimate.status}
+            initialSummary={estimate.summary}
+          />
+          {/* A failed run is a dead end without this — let the user re-run
+              explicitly (a fresh estimate) rather than staring at a spinner. */}
+          {estimate.status === "error" && estimate.plan_id && (
+            <div className="rounded-lg border border-dashed p-4">
+              <p className="mb-3 text-sm text-muted-foreground">
+                This estimate didn&apos;t finish. You can run it again.
+              </p>
+              <RunEstimateButton
+                projectId={projectId}
+                planId={estimate.plan_id}
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

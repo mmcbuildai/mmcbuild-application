@@ -192,7 +192,12 @@ export default async function ProjectQuotePage({
                         <FileText className="h-5 w-5 text-muted-foreground" />
                         <div>
                           <p className="text-sm font-medium capitalize">
-                            {est.status}
+                            {est.total_traditional != null ||
+                            est.status === "completed"
+                              ? "Completed"
+                              : est.status === "error"
+                                ? "Failed"
+                                : "In progress"}
                             {est.total_traditional != null &&
                               ` - $${est.total_traditional.toLocaleString()}`}
                             {est.total_savings_pct != null &&
