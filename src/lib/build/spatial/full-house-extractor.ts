@@ -34,7 +34,83 @@ import {
   planTooLargeMessage,
 } from "@/lib/plans/file-kind";
 import { detectAiProviderUnavailable } from "@/lib/ai/provider-errors";
-import type { SpatialLayout, RoofForm } from "./types";
+import type { SpatialLayout, RoofForm, Wall, Room, Point2D } from "./types";
+
+/**
+ * Backfill walls from room boundaries.
+ *
+ * The vision model reliably traces each room's `polygon` but under-populates the
+ * separate `walls` array — observed layouts had e.g. 12 rooms but only 15 walls,
+ * which is geometrically impossible (12 rooms need far more enclosing walls).
+ * Since the COLLADA/.dae export renders WALLS, the 3D model came out as a shell
+ * missing its internal partitions. Every room polygon edge IS a wall, so derive
+ * the missing ones: an edge shared by two rooms is an internal partition; an
+ * edge belonging to only one room is on the building perimeter (external).
+ *
+ * Deterministic and idempotent: deduped against edges the vision model already
+ * extracted (so their richer material/type data is preserved) and against shared
+ * room edges (so a party wall is emitted once). Safe to always run — a complete
+ * extraction simply yields no additions.
+ */
+function backfillWallsFromRooms(existing: Wall[], rooms: Room[]): Wall[] {
+  if (rooms.length === 0) return existing;
+
+  const TOL = 0.05; // metres — treat points within 5 cm as identical
+  const ptKey = (p: Point2D) =>
+    `${Math.round(p.x / TOL)},${Math.round(p.y / TOL)}`;
+  const edgeKey = (a: Point2D, b: Point2D, storey: number) => {
+    const ka = ptKey(a);
+    const kb = ptKey(b);
+    const [lo, hi] = ka <= kb ? [ka, kb] : [kb, ka];
+    return `${storey}|${lo}|${hi}`;
+  };
+  const samePt = (a: Point2D, b: Point2D) =>
+    Math.abs(a.x - b.x) < TOL && Math.abs(a.y - b.y) < TOL;
+
+  // Edges already represented by an extracted wall — never duplicate them.
+  const seen = new Set<string>();
+  for (const w of existing) seen.add(edgeKey(w.start, w.end, w.storey ?? 0));
+
+  // Count rooms sharing each polygon edge: shared (>=2) = internal partition,
+  // unique (1) = building perimeter.
+  const edges = new Map<
+    string,
+    { a: Point2D; b: Point2D; count: number; storey: number }
+  >();
+  for (const room of rooms) {
+    const poly = room.polygon ?? [];
+    if (poly.length < 3) continue;
+    const storey = room.floor_level ?? 0;
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      if (samePt(a, b)) continue;
+      const key = edgeKey(a, b, storey);
+      const e = edges.get(key);
+      if (e) e.count++;
+      else edges.set(key, { a, b, count: 1, storey });
+    }
+  }
+
+  const defaultThickness =
+    existing.find((w) => w.thickness > 0)?.thickness ?? 0.09;
+
+  const derived: Wall[] = [];
+  let idx = 0;
+  for (const [key, e] of edges) {
+    if (seen.has(key)) continue; // already an extracted wall
+    derived.push({
+      id: `derived_wall_${idx++}`,
+      start: e.a,
+      end: e.b,
+      thickness: defaultThickness,
+      type: e.count >= 2 ? "internal" : "external",
+      storey: e.storey,
+    });
+  }
+
+  return [...existing, ...derived];
+}
 
 /**
  * Cap the classifier at the first N pages of the source PDF. Floor plans,
@@ -516,6 +592,18 @@ export async function extractFullHouse(
     layout.notes = "Extracted via sheet decomposer (multi-drawing CAD sheet fallback).";
   } else if (sheetDecompositionUsed && layout.notes) {
     layout.notes = `[sheet-decomposer] ${layout.notes}`;
+  }
+
+  // Backfill internal partitions from room boundaries so the 3D/.dae model
+  // shows the full layout, not just the walls the vision model happened to
+  // trace (it under-populates `walls` while reliably tracing room polygons).
+  const wallsBefore = layout.walls?.length ?? 0;
+  layout.walls = backfillWallsFromRooms(layout.walls ?? [], layout.rooms ?? []);
+  if (layout.walls.length > wallsBefore) {
+    console.log(
+      `[extractFullHouse] backfilled ${layout.walls.length - wallsBefore} walls ` +
+        `from ${layout.rooms?.length ?? 0} room boundaries (${wallsBefore} -> ${layout.walls.length})`,
+    );
   }
 
   // Roof — pick highest-confidence elevation that has roof.form
