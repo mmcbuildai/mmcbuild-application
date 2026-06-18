@@ -75,17 +75,10 @@ const ADMIN_SECTIONS = [
       },
       {
         title: "Beta Activity",
-        description: "See which testers signed in, what modules they tested, their ratings and feedback, and real run counts.",
-        icon: FlaskConical,
-        href: "/admin/beta-activity",
-        color: "from-rose-500 to-rose-600",
-      },
-      {
-        title: "Beta Activity — All Orgs",
-        description: "Platform-wide view: every signup across all organisations, how far each got (confirmed → signed in → ran a job → feedback). Operators only.",
+        description: "Every signup across all organisations: how far each tester got (confirmed → signed in → ran a job → left feedback), with their ratings and real run counts. Operators only.",
         icon: FlaskConical,
         href: "/admin/beta-activity-global",
-        color: "from-rose-600 to-rose-700",
+        color: "from-rose-500 to-rose-600",
       },
       {
         title: "R&D Tax Tracking",

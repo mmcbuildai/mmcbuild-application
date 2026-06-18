@@ -38,8 +38,8 @@ export default async function GlobalBetaActivityPage() {
           Every account on the platform, across all organisations — including
           people who signed up but never confirmed their email or never signed
           in. Use it to see how far each tester got: confirmed their email,
-          signed in, ran a real AI job, and left feedback. This is the global
-          view; the per-org Beta Activity page only shows your own organisation.
+          signed in, ran a real AI job, and left feedback — across every
+          organisation on the platform, not just your own.
         </p>
       </div>
 
