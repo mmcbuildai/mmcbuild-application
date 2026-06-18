@@ -43,7 +43,8 @@ export default async function DashboardPage() {
   // Routing here (not just in the auth callback) catches every entry path —
   // invite link, magic link, or a direct visit — so a beta tester always lands
   // on /beta.
-  if (profile.role === "beta") redirect("/beta");
+  // role enum includes 'beta' on live; generated types lag, so compare as string.
+  if ((profile.role as string) === "beta") redirect("/beta");
 
   const [status, projectCount] = await Promise.all([
     getSubscriptionStatus(profile.org_id),
