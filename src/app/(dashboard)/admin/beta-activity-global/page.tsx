@@ -7,6 +7,12 @@ import {
   type BetaModuleCell,
   type SignupSource,
 } from "./actions";
+import { FixTesterButton } from "./fix-tester-button";
+
+/** A tester is "stranded" if their email is unconfirmed or they have no org/profile. */
+function needsFix(r: GlobalBetaTesterRow): boolean {
+  return !r.emailConfirmedAt || !r.orgName;
+}
 
 const MODULES = [
   { id: "comply", label: "Comply" },
@@ -85,6 +91,7 @@ export default async function GlobalBetaActivityPage() {
                       <div className="text-[11px] text-muted-foreground">
                         {r.orgName || "—"}
                       </div>
+                      {needsFix(r) && <FixTesterButton userId={r.userId} />}
                     </td>
                     <td className="px-3 py-3">
                       <SourceBadge source={r.source} />
@@ -130,6 +137,7 @@ export default async function GlobalBetaActivityPage() {
                   </div>
                   <SourceBadge source={r.source} />
                 </div>
+                {needsFix(r) && <FixTesterButton userId={r.userId} />}
                 <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <dt className="text-muted-foreground">Confirmed</dt>

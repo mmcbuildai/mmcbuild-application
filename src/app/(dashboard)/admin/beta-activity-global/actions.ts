@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { db } from "@/lib/supabase/db";
 import { isOperatorEmail } from "@/lib/auth/operator";
+import { provisionUser } from "@/lib/auth/provision";
+import { revalidatePath } from "next/cache";
 
 // Modules with a per-run AI table we can count real usage from. (Direct and
 // Train have no AI-run table — their activity shows only via beta self-report.)
@@ -254,4 +256,65 @@ export async function getGlobalBetaActivity(): Promise<GlobalBetaActivityResult>
   };
 
   return { rows, funnel };
+}
+
+export interface FixTesterResult {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Operator action: confirm a stranded tester's email and provision their
+ * org/profile in one click — the UI equivalent of the manual SQL backfill.
+ *
+ * Reuses the SAME provisioning path the auth callback uses (provisionUser), so
+ * a tester with a pending invite joins the inviting org and everyone else gets a
+ * personal org. Idempotent: safe to click on an already-provisioned account.
+ */
+export async function confirmAndProvisionTester(
+  userId: string
+): Promise<FixTesterResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Not authenticated" };
+  if (!isOperatorEmail(user.email))
+    return { ok: false, message: "Not authorised" };
+
+  const admin = createAdminClient();
+
+  const { data: target, error } = await admin.auth.admin.getUserById(userId);
+  const tu = target?.user;
+  const email = tu?.email;
+  if (error || !tu || !email) {
+    return { ok: false, message: "User not found" };
+  }
+
+  // Confirm the email so they can sign in (idempotent — skip if already done).
+  if (!tu.email_confirmed_at) {
+    await admin.auth.admin.updateUserById(userId, { email_confirm: true });
+  }
+
+  const res = await provisionUser(admin, {
+    id: userId,
+    email,
+    fullName: (tu.user_metadata?.full_name as string | undefined) ?? null,
+    orgNameFallback:
+      (tu.user_metadata?.org_name as string | undefined) ?? null,
+  });
+
+  revalidatePath("/admin/beta-activity-global");
+
+  switch (res.outcome) {
+    case "existing":
+      return { ok: true, message: "Already provisioned — email confirmed." };
+    case "invited":
+    case "joined_additional_org":
+      return { ok: true, message: "Confirmed and joined the invited org." };
+    case "self_signup":
+      return { ok: true, message: "Confirmed and created their org." };
+    default:
+      return { ok: false, message: "Could not provision this account." };
+  }
 }
