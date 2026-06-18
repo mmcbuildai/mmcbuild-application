@@ -21,41 +21,13 @@ import {
   Lock,
 } from "lucide-react";
 import { MODULES, type ModuleId } from "@/lib/stripe/plans";
-import { startTesting, submitFeedback, type BetaFeedbackRow } from "./actions";
-
-/* ── Testing prompts per module ── */
-const TESTING_PROMPTS: Record<ModuleId, string[]> = {
-  comply: [
-    "Upload a PDF building plan and run a compliance check",
-    "Review the generated NCC findings report",
-    "Check that citations reference specific NCC clauses",
-    "Try exporting the report as PDF",
-  ],
-  build: [
-    "Open an existing project and view design suggestions",
-    "Check the 3D viewer loads correctly",
-    "Review material and system selection options",
-    "Verify suggestions are relevant to your project type",
-  ],
-  quote: [
-    "Generate a cost estimate for a project",
-    "Compare traditional vs MMC cost breakdown",
-    "Check that rate benchmarks look reasonable",
-    "Try exporting the quote as PDF or Word",
-  ],
-  direct: [
-    "Search for trades by state and category",
-    "Open a company profile and check all fields display",
-    "Try filtering by certification status",
-    "Test the enquiry form on a listing",
-  ],
-  train: [
-    "Browse available training modules",
-    "Start a module and complete at least one lesson",
-    "Check that progress is tracked on the dashboard",
-    "Try a quiz and verify scoring works",
-  ],
-};
+import {
+  startTesting,
+  submitFeedback,
+  toggleTask,
+  type BetaFeedbackRow,
+} from "./actions";
+import { TESTING_TASKS, allTasksDone } from "@/lib/beta/testing-tasks";
 
 const MODULE_ICONS: Record<ModuleId, typeof ShieldCheck> = {
   comply: ShieldCheck,
@@ -174,14 +146,46 @@ function ModuleCard({
   const Icon = MODULE_ICONS[moduleId];
   const colors = MODULE_COLORS[moduleId];
   const statusCfg = STATUS_CONFIG[progress.status];
-  const prompts = TESTING_PROMPTS[moduleId];
+  const tasks = TESTING_TASKS[moduleId];
 
   const [feedback, setFeedback] = useState(progress.feedback ?? "");
   const [rating, setRating] = useState(progress.rating ?? 0);
+  const [doneTasks, setDoneTasks] = useState<number[]>(
+    progress.completed_tasks ?? []
+  );
   const [isPending, startTransition] = useTransition();
   const [showFeedback, setShowFeedback] = useState(
     progress.status === "in_progress" || progress.status === "completed"
   );
+
+  const tasksComplete = allTasksDone(moduleId, doneTasks);
+  const canSubmit = tasksComplete && feedback.trim().length > 0 && rating > 0;
+
+  function handleToggleTask(index: number) {
+    const optimistic = doneTasks.includes(index)
+      ? doneTasks.filter((i) => i !== index)
+      : [...doneTasks, index].sort((a, b) => a - b);
+    const previous = doneTasks;
+    setDoneTasks(optimistic);
+    if (!showFeedback) setShowFeedback(true);
+    startTransition(async () => {
+      const res = await toggleTask(moduleId, index);
+      if (res.error) {
+        alert(res.error);
+        setDoneTasks(previous); // rollback
+        return;
+      }
+      const serverTasks = res.completed_tasks ?? optimistic;
+      setDoneTasks(serverTasks);
+      onUpdate({
+        ...progress,
+        completed_tasks: serverTasks,
+        status:
+          (res.status as BetaFeedbackRow["status"]) ??
+          (progress.status === "not_started" ? "in_progress" : progress.status),
+      });
+    });
+  }
 
   function handleStartTesting() {
     startTransition(async () => {
@@ -200,6 +204,10 @@ function ModuleCard({
   }
 
   function handleSubmitFeedback() {
+    if (!tasksComplete) {
+      alert("Tick off all the test tasks before completing this module.");
+      return;
+    }
     if (!feedback.trim()) {
       alert("Please write some feedback before submitting.");
       return;
@@ -265,24 +273,60 @@ function ModuleCard({
         </div>
       </div>
 
-      {/* What to test */}
+      {/* Test tasks — interactive checklist; all must be ticked to complete */}
       <div className="px-5 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-          What to test
-        </p>
-        <ul className="space-y-1.5">
-          {prompts.map((prompt, i) => (
-            <li
-              key={i}
-              className="flex items-start gap-2 text-sm text-muted-foreground"
-            >
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
-                {i + 1}
-              </span>
-              {prompt}
-            </li>
-          ))}
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Test tasks
+          </p>
+          <span
+            className={`text-xs font-medium ${
+              tasksComplete ? "text-green-600" : "text-muted-foreground"
+            }`}
+          >
+            {doneTasks.length}/{tasks.length} done
+          </span>
+        </div>
+        <ul className="space-y-0.5">
+          {tasks.map((task, i) => {
+            const checked = doneTasks.includes(i);
+            return (
+              <li key={i}>
+                <button
+                  type="button"
+                  disabled={locked || isPending}
+                  onClick={() => handleToggleTask(i)}
+                  aria-pressed={checked}
+                  className="flex w-full items-start gap-2 rounded-md px-1.5 py-1 text-left text-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  {checked ? (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                  ) : (
+                    <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
+                  )}
+                  <span
+                    className={
+                      checked
+                        ? "text-slate-400 line-through"
+                        : "text-foreground"
+                    }
+                  >
+                    {task}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
+        {!locked && (
+          <Link
+            href={mod.href}
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Open {mod.name.replace("MMC ", "")} to do these
+          </Link>
+        )}
       </div>
 
       {/* Completed feedback display */}
@@ -332,17 +376,23 @@ function ModuleCard({
                 </label>
                 <StarRating value={rating} onChange={setRating} />
               </div>
+              {!tasksComplete && (
+                <p className="text-xs text-amber-700">
+                  Tick off all {tasks.length} test tasks above to complete this
+                  module ({doneTasks.length}/{tasks.length} done).
+                </p>
+              )}
               <button
                 onClick={handleSubmitFeedback}
-                disabled={isPending}
-                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50"
+                disabled={isPending || !canSubmit}
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
                 )}
-                Submit Feedback
+                Complete Module
               </button>
             </div>
           </div>
@@ -489,13 +539,13 @@ export function BetaDashboard({
             },
             {
               step: 2,
-              title: "Try the Module",
-              desc: "Open the module from the side navbar and work through the test prompts",
+              title: "Work the Tasks",
+              desc: "Open the module and tick off each test task as you complete it",
             },
             {
               step: 3,
-              title: "Give Feedback",
-              desc: "Rate the module and tell us what worked (or didn't)",
+              title: "Review & Complete",
+              desc: "Rate the module and leave a comment — it completes only when every task is ticked",
             },
           ].map((s) => (
             <div key={s.step} className="flex items-start gap-3">

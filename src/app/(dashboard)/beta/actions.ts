@@ -4,6 +4,7 @@ import { db } from "@/lib/supabase/db";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ModuleId } from "@/lib/stripe/plans";
+import { allTasksDone, taskCount } from "@/lib/beta/testing-tasks";
 
 const VALID_MODULES: ModuleId[] = ["comply", "build", "quote", "direct", "train"];
 
@@ -32,6 +33,8 @@ export interface BetaFeedbackRow {
   rating: number | null;
   started_at: string | null;
   completed_at: string | null;
+  /** Indices (per src/lib/beta/testing-tasks.ts) of the tasks ticked off. */
+  completed_tasks: number[];
 }
 
 export async function getBetaProgress(): Promise<BetaFeedbackRow[]> {
@@ -39,10 +42,20 @@ export async function getBetaProgress(): Promise<BetaFeedbackRow[]> {
 
   const { data } = await db()
     .from("beta_feedback")
-    .select("id, module_id, status, feedback, rating, started_at, completed_at")
+    .select(
+      "id, module_id, status, feedback, rating, started_at, completed_at, completed_tasks"
+    )
     .eq("user_id", userId);
 
-  const rows = (data ?? []) as BetaFeedbackRow[];
+  const raw = (data ?? []) as Array<
+    BetaFeedbackRow & { completed_tasks?: unknown }
+  >;
+  const rows: BetaFeedbackRow[] = raw.map((r) => ({
+    ...r,
+    completed_tasks: Array.isArray(r.completed_tasks)
+      ? (r.completed_tasks as number[])
+      : [],
+  }));
   const map = new Map(rows.map((r) => [r.module_id, r]));
 
   // Return one entry per module, defaulting to not_started
@@ -56,8 +69,78 @@ export async function getBetaProgress(): Promise<BetaFeedbackRow[]> {
         rating: null,
         started_at: null,
         completed_at: null,
+        completed_tasks: [],
       }
   );
+}
+
+/**
+ * Toggle a single test task on/off for a module. Creates the beta_feedback row
+ * (status in_progress) on first tick so partial progress is always persisted.
+ * Returns the new completed_tasks array.
+ */
+export async function toggleTask(
+  moduleId: string,
+  taskIndex: number
+): Promise<{ error?: string; completed_tasks?: number[]; status?: string }> {
+  if (!VALID_MODULES.includes(moduleId as ModuleId)) {
+    return { error: "Invalid module" };
+  }
+  const n = taskCount(moduleId as ModuleId);
+  if (!Number.isInteger(taskIndex) || taskIndex < 0 || taskIndex >= n) {
+    return { error: "Invalid task" };
+  }
+
+  const { userId, orgId } = await requireUser();
+
+  const { data: existing } = await db()
+    .from("beta_feedback")
+    .select("id, status, completed_tasks")
+    .eq("user_id", userId)
+    .eq("module_id", moduleId)
+    .maybeSingle();
+
+  const current: number[] = Array.isArray(existing?.completed_tasks)
+    ? (existing!.completed_tasks as number[])
+    : [];
+  const next = current.includes(taskIndex)
+    ? current.filter((i) => i !== taskIndex)
+    : [...current, taskIndex].sort((a, b) => a - b);
+
+  if (existing) {
+    // Ticking the first task moves a not_started module into in_progress.
+    const nextStatus =
+      existing.status === "not_started" && next.length > 0
+        ? "in_progress"
+        : existing.status;
+    const { error } = await db()
+      .from("beta_feedback")
+      .update({
+        completed_tasks: next,
+        status: nextStatus,
+        started_at:
+          existing.status === "not_started" && next.length > 0
+            ? new Date().toISOString()
+            : undefined,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id);
+    if (error) return { error: error.message };
+    revalidatePath("/beta");
+    return { completed_tasks: next, status: nextStatus };
+  }
+
+  const { error } = await db().from("beta_feedback").insert({
+    user_id: userId,
+    module_id: moduleId,
+    org_id: orgId,
+    status: "in_progress",
+    completed_tasks: next,
+    started_at: new Date().toISOString(),
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/beta");
+  return { completed_tasks: next, status: "in_progress" };
 }
 
 export async function startTesting(moduleId: string) {
@@ -121,10 +204,21 @@ export async function submitFeedback(
   // Check if exists
   const { data: existing } = await db()
     .from("beta_feedback")
-    .select("id")
+    .select("id, completed_tasks")
     .eq("user_id", userId)
     .eq("module_id", moduleId)
     .maybeSingle();
+
+  // A module is only "fully complete" when every test task is ticked AND a
+  // review (rating) + comment are provided. Guard the tasks half here.
+  const done: number[] = Array.isArray(existing?.completed_tasks)
+    ? (existing!.completed_tasks as number[])
+    : [];
+  if (!allTasksDone(moduleId as ModuleId, done)) {
+    return {
+      error: `Tick off all ${taskCount(moduleId as ModuleId)} test tasks before completing this module.`,
+    };
+  }
 
   if (existing) {
     const { error } = await db()
