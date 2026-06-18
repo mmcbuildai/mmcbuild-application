@@ -318,6 +318,10 @@ export async function inviteUser(
   // succeeds for a BRAND-NEW user; an existing account returns `email_exists`.
   const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
     email.trim().toLowerCase(),
+    // Without redirectTo the invite link returns to the project Site URL (the
+    // marketing home + waitlist) instead of the membership-granting callback —
+    // the invitee lands on the waitlist and the invite is never accepted.
+    { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback` },
   );
   if (inviteErr) {
     const alreadyExists =
@@ -535,7 +539,11 @@ export async function resendInvitation(invitationId: string) {
   // existing account returns `email_exists`. With multi-org membership available,
   // an existing user CAN still join — send them a sign-in (magic) link instead,
   // mirroring inviteUser, rather than erroring.
-  const { error: resendErr } = await admin.auth.admin.inviteUserByEmail(inv.email);
+  const { error: resendErr } = await admin.auth.admin.inviteUserByEmail(inv.email, {
+    // Same as the initial invite: route the link to the membership-granting
+    // callback, not the project Site URL (marketing home + waitlist).
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`,
+  });
   if (resendErr) {
     const alreadyExists =
       (resendErr as { code?: string }).code === "email_exists" || resendErr.status === 422;
