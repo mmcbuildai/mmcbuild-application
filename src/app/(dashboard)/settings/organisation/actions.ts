@@ -10,6 +10,13 @@ import {
 } from "@/lib/auth/seats";
 import { getSubscriptionStatus } from "@/lib/stripe/subscription";
 
+// Absolute callback URL for auth emails (invite + magic-link fallback). Supabase
+// DROPS a relative/empty redirect_to and falls back to the Site URL — the
+// marketing home + waitlist — which is the "Accept invitation lands on the
+// waitlist" bug. Never let this be relative: if the env var is missing, fall
+// back to the prod origin rather than emitting a bare "/auth/callback".
+const AUTH_CALLBACK_URL = `${process.env.NEXT_PUBLIC_APP_URL || "https://app.mmcbuild.com.au"}/auth/callback`;
+
 async function getProfile() {
   const supabase = await createClient();
   const {
@@ -321,7 +328,7 @@ export async function inviteUser(
     // Without redirectTo the invite link returns to the project Site URL (the
     // marketing home + waitlist) instead of the membership-granting callback —
     // the invitee lands on the waitlist and the invite is never accepted.
-    { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback` },
+    { redirectTo: AUTH_CALLBACK_URL },
   );
   if (inviteErr) {
     const alreadyExists =
@@ -335,7 +342,7 @@ export async function inviteUser(
         email: email.trim().toLowerCase(),
         options: {
           shouldCreateUser: false,
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`,
+          emailRedirectTo: AUTH_CALLBACK_URL,
         },
       });
       revalidatePath("/settings/organisation");
@@ -542,7 +549,7 @@ export async function resendInvitation(invitationId: string) {
   const { error: resendErr } = await admin.auth.admin.inviteUserByEmail(inv.email, {
     // Same as the initial invite: route the link to the membership-granting
     // callback, not the project Site URL (marketing home + waitlist).
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`,
+    redirectTo: AUTH_CALLBACK_URL,
   });
   if (resendErr) {
     const alreadyExists =
@@ -553,7 +560,7 @@ export async function resendInvitation(invitationId: string) {
         email: inv.email,
         options: {
           shouldCreateUser: false,
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback`,
+          emailRedirectTo: AUTH_CALLBACK_URL,
         },
       });
       revalidatePath("/settings/organisation");
