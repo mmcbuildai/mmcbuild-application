@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { InviteSessionRedirect } from "./invite-session-redirect";
 import {
   ArrowRight,
   CheckCircle2,
@@ -137,6 +138,9 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col">
+      {/* Catch invite "Accept invitation" links that land here with the session
+          in the URL fragment, and forward the invitee into the app. */}
+      <InviteSessionRedirect />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
