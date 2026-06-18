@@ -71,6 +71,18 @@ export function OptimisationProgress({
     return m > 0 ? `${m}m ${s}s` : `${s}s`;
   };
 
+  // The job doesn't emit a precise percentage, so the bar is a TIME-BASED
+  // estimate: it fills toward an expected ~2 min run and holds near the end
+  // until the run actually completes — honest reassurance for a long wait,
+  // never a fake "done".
+  const ESTIMATED_SECONDS = 120;
+  const percent =
+    status === "completed"
+      ? 100
+      : status === "queued"
+        ? 6
+        : Math.min(95, Math.round((elapsed / ESTIMATED_SECONDS) * 100));
+
   if (status === "completed") {
     return (
       <Card>
@@ -134,6 +146,28 @@ export function OptimisationProgress({
           </div>
         </div>
 
+        {/* Horizontal progress bar (time-based estimate) */}
+        <div className="space-y-1">
+          <div
+            className="h-2 w-full overflow-hidden rounded-full bg-slate-100"
+            role="progressbar"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Design optimisation progress"
+          >
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-teal-600 transition-[width] duration-1000 ease-out"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          <div className="flex justify-end">
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {percent}%
+            </span>
+          </div>
+        </div>
+
         {status === "queued" && (
           <p className="text-xs text-muted-foreground">
             Your design optimisation is in the queue and will start shortly.
@@ -142,7 +176,7 @@ export function OptimisationProgress({
 
         {status === "processing" && (
           <p className="text-xs text-muted-foreground">
-            AI is reviewing your plans for prefabrication and modern construction opportunities. This typically takes 30-60 seconds.
+            AI is reviewing your plans for prefabrication and modern construction opportunities. This can take a couple of minutes — you can leave this page open.
           </p>
         )}
       </CardContent>
