@@ -4,6 +4,7 @@ import { db } from "@/lib/supabase/db";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { HelpChat } from "@/components/help-chat/help-chat";
 import { TermsGate } from "@/components/legal/terms-gate";
+import { isOperatorEmail } from "@/lib/auth/operator";
 
 export default async function DashboardLayout({
   children,
@@ -50,22 +51,9 @@ export default async function DashboardLayout({
   // Read terms acceptance defensively: if the terms_accepted_at column isn't
   // present yet (migration 00060 not applied) the query errors and we fail OPEN
   // (no gate). Once the column exists, a null value means the user must accept.
-  // Baked-in operator allowlist so the exemption works on deploy without a
-  // separate env step; ADMIN_EMAILS (comma-separated) extends it for any
-  // additional operators added later.
-  const DEFAULT_OPERATOR_EMAILS = [
-    "dennis@corporateaisolutions.com",
-    "karen.engel@mmcbuild.com.au",
-    "karthik.rao@mmcbuild.com.au",
-  ];
-  const operatorEmails = [
-    ...DEFAULT_OPERATOR_EMAILS,
-    ...(process.env.ADMIN_EMAILS ?? "").split(","),
-  ]
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  const isOperator =
-    !!user.email && operatorEmails.includes(user.email.toLowerCase());
+  // Operator identity is an email allowlist (shared with the global beta-activity
+  // view): see @/lib/auth/operator. ADMIN_EMAILS extends the baked-in defaults.
+  const isOperator = isOperatorEmail(user.email);
 
   let needsTerms = false;
   if (!isOperator) {

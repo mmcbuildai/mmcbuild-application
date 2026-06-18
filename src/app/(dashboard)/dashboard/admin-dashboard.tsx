@@ -81,6 +81,13 @@ const ADMIN_SECTIONS = [
         color: "from-rose-500 to-rose-600",
       },
       {
+        title: "Beta Activity — All Orgs",
+        description: "Platform-wide view: every signup across all organisations, how far each got (confirmed → signed in → ran a job → feedback). Operators only.",
+        icon: FlaskConical,
+        href: "/admin/beta-activity-global",
+        color: "from-rose-600 to-rose-700",
+      },
+      {
         title: "R&D Tax Tracking",
         description: "Log R&D hours by stage and deliverable for tax incentive claims.",
         icon: Clock,
