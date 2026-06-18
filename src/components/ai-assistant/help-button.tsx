@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { HelpCircle, Send, Loader2 } from "lucide-react";
+import { HelpCircle, Send, Loader2, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -22,6 +22,15 @@ const GREETING: Message = {
     "Hi — I'm the MMC Build assistant. Ask me about any module, what a step does, or what you should do next on this page.",
 };
 
+// SayFix escalation — same hosted intake the old floating widget used. Surfaced
+// INSIDE the assistant as a triage step: the user asks the assistant first, and
+// only escalates to "Report a problem" if they're still stuck (so questions
+// don't get logged as problems). Renders nothing if the env var is unset.
+const SAYFIX_BASE = process.env.NEXT_PUBLIC_SAYFIX_BASE_URL?.replace(/\/+$/, "");
+const SAYFIX_URL = SAYFIX_BASE
+  ? `${SAYFIX_BASE}/welcome?product=mmcbuild-application`
+  : null;
+
 export function HelpButton() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -30,6 +39,11 @@ export function HelpButton() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Only offer the "report a problem" escalation once the user has actually
+  // engaged the assistant (asked at least one question) and is still in the
+  // conversation — triage, not a front-and-centre "I have a problem" button.
+  const hasAsked = messages.some((m) => m.role === "user");
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -134,6 +148,20 @@ export function HelpButton() {
             </div>
           )}
         </div>
+
+        {SAYFIX_URL && hasAsked && (
+          <div className="border-t bg-amber-50/50 px-4 py-2">
+            <a
+              href={SAYFIX_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 hover:underline"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              Still stuck? Report a problem
+            </a>
+          </div>
+        )}
 
         <div className="border-t p-3">
           <div className="flex items-end gap-2">
