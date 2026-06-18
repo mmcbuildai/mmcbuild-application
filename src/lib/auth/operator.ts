@@ -13,6 +13,10 @@ export const DEFAULT_OPERATOR_EMAILS = [
   "dennis@corporateaisolutions.com",
   "karen.engel@mmcbuild.com.au",
   "karthik.rao@mmcbuild.com.au",
+  // Karen's other accounts — she reviews Beta Activity from these too, so they
+  // need operator access or the all-orgs page bounces her to /dashboard.
+  "karen.engel43@gmail.com",
+  "karen.burns43@yahoo.com.au",
 ];
 
 /** The full, normalised operator allowlist (defaults + ADMIN_EMAILS env). */
