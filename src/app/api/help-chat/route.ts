@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase/db";
 import { callModel } from "@/lib/ai/models";
+import { describePage } from "@/lib/assistant/page-context";
 
 interface Message {
   role: "user" | "assistant";
@@ -23,10 +24,18 @@ If asked about topics outside your knowledge base, be honest and say you don't h
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, history } = (await req.json()) as {
+    const { message, history, pathname } = (await req.json()) as {
       message: string;
       history: Message[];
+      pathname?: string;
     };
+
+    // Page-awareness: so "explain this page" / "what do I do here" can be
+    // answered WITHOUT asking the user which page they're on.
+    const page = describePage(pathname);
+    const pageBlock = page
+      ? `The user is currently on the ${page.module} page. ${page.summary}`
+      : "";
 
     if (!message?.trim()) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
@@ -80,7 +89,7 @@ export async function POST(req: NextRequest) {
 
     // Call AI with RAG context
     const prompt = `${SYSTEM_PROMPT}
-
+${pageBlock ? `\nCurrent page (use this to answer "what is this page / what do I do here" directly, without asking):\n${pageBlock}\n` : ""}
 Relevant knowledge base documents:
 ${context}
 

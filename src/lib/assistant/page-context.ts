@@ -40,6 +40,11 @@ const STATIC_ROUTES: Record<string, PageDescription> = {
     module: "Projects",
     summary: "List of the org's projects. Each project links into Comply, Build, Quote, and Direct.",
   },
+  "/beta": {
+    module: "Beta Testing",
+    summary:
+      "Beta tester dashboard. Each module (Comply, Build, Quote, Direct, Train) has a checklist of test tasks — the tester ticks each task off, and a module is only complete once every task is ticked plus a rating and comment are submitted. Every module runs inside a project, so a project must be created first.",
+  },
 };
 
 export function describePage(pathname: string | undefined): PageDescription | null {

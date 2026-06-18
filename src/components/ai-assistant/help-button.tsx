@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { HelpCircle, Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ const GREETING: Message = {
 };
 
 export function HelpButton() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [input, setInput] = useState("");
@@ -56,6 +58,7 @@ export function HelpButton() {
         body: JSON.stringify({
           message: trimmed,
           history: messages.filter((m) => m !== GREETING),
+          pathname,
         }),
       });
 
