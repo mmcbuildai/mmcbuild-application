@@ -25,10 +25,31 @@ export default async function ProjectsPage({
   const autoCreate = params.prompt === "create";
   const supabase = await createClient();
 
-  const { data: projects } = await supabase
+  // Beta testers share one org (MMC Build), so RLS alone would show them every
+  // tester's — and the operator's — projects. Scope the list to the tester's OWN
+  // projects (created_by = their profile) so each tester only sees what they
+  // made. Operators/owners/admins still see all org projects.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let ownProfileId: string | null = null;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, role")
+      .eq("user_id", user.id)
+      .single();
+    if (profile && (profile.role as string) === "beta") {
+      ownProfileId = profile.id as string;
+    }
+  }
+
+  let projectsQuery = supabase
     .from("projects")
     .select("id, name, address, status, created_at, created_by")
     .order("created_at", { ascending: false });
+  if (ownProfileId) projectsQuery = projectsQuery.eq("created_by", ownProfileId);
+  const { data: projects } = await projectsQuery;
 
   return (
     <div className="space-y-6">

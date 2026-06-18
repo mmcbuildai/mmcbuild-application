@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getDesignReport } from "@/app/(dashboard)/build/actions";
 import { DesignReport } from "@/components/build/design-report";
 import { OptimisationProgress } from "@/components/build/optimisation-progress";
+import { ReportNextSteps } from "@/components/shared/report-next-steps";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 
 export default async function ReportPage({
@@ -65,6 +66,29 @@ export default async function ReportPage({
               already runs on the Build page ("See your design built in the 4
               MMC systems") before optimisation. */}
           <DesignReport check={check} suggestions={suggestions} />
+          <ReportNextSteps
+            projectId={projectId}
+            steps={[
+              {
+                title: "Get a cost estimate",
+                description:
+                  "Run MMC Quote on this project — traditional vs MMC costs, itemised.",
+                href: `/quote/${projectId}`,
+              },
+              {
+                title: "Check compliance",
+                description:
+                  "Run MMC Comply for an NCC compliance pass on this plan.",
+                href: `/comply/${projectId}`,
+              },
+              {
+                title: "Find trades & suppliers",
+                description:
+                  "Browse MMC Direct for verified trades and consultants.",
+                href: "/direct",
+              },
+            ]}
+          />
         </>
       ) : (
         <OptimisationProgress

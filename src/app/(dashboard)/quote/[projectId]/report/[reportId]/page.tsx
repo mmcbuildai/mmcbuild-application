@@ -4,6 +4,7 @@ import { getCostReport, getHoldingCostVariables } from "@/app/(dashboard)/quote/
 import { CostReport } from "@/components/quote/cost-report";
 import { EstimationProgress } from "@/components/quote/estimation-progress";
 import { RunEstimateButton } from "@/components/quote/run-estimate-button";
+import { ReportNextSteps } from "@/components/shared/report-next-steps";
 
 export default async function CostReportPage({
   params,
@@ -76,11 +77,36 @@ export default async function CostReportPage({
       </div>
 
       {isComplete ? (
-        <CostReport
-          estimate={estimate}
-          lineItems={lineItems}
-          holdingCostVariables={holdingCostVariables}
-        />
+        <>
+          <CostReport
+            estimate={estimate}
+            lineItems={lineItems}
+            holdingCostVariables={holdingCostVariables}
+          />
+          <ReportNextSteps
+            projectId={projectId}
+            steps={[
+              {
+                title: "Optimise the design",
+                description:
+                  "Run MMC Build for design suggestions and the 3D model.",
+                href: `/build/${projectId}`,
+              },
+              {
+                title: "Check compliance",
+                description:
+                  "Run MMC Comply for an NCC compliance pass on this plan.",
+                href: `/comply/${projectId}`,
+              },
+              {
+                title: "Find trades & suppliers",
+                description:
+                  "Browse MMC Direct for verified trades and consultants.",
+                href: "/direct",
+              },
+            ]}
+          />
+        </>
       ) : (
         <div className="space-y-4">
           <EstimationProgress
