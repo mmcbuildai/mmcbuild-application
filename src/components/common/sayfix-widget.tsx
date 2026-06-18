@@ -33,8 +33,11 @@ export function SayFixWidget() {
       aria-label="Report a problem — get it SayFixed"
       style={{
         position: "fixed",
-        bottom: 24,
-        right: 24,
+        // Sit ABOVE the draggable HelpChat button (48px tall, anchored at
+        // bottom-right 20px) so the two floating controls never overlap —
+        // critical on a phone where the corner is tight. 20 + 48 + 16 gap = 84.
+        bottom: 84,
+        right: 20,
         zIndex: 2147483000,
         display: "inline-flex",
         alignItems: "center",

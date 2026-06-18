@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { HelpChat } from "@/components/help-chat/help-chat";
 import { TermsGate } from "@/components/legal/terms-gate";
+import { SayFixWidget } from "@/components/common/sayfix-widget";
 import { isOperatorEmail } from "@/lib/auth/operator";
 import { provisionUser } from "@/lib/auth/provision";
 
@@ -112,6 +113,7 @@ export default async function DashboardLayout({
     >
       {children}
       <HelpChat />
+      <SayFixWidget />
       <TermsGate needsTerms={needsTerms} />
     </DashboardShell>
   );
