@@ -274,19 +274,35 @@ export const REGIONAL_MULTIPLIERS: Record<string, number> = {
 };
 
 /** Cost estimation execution phases — categories in the same phase run concurrently */
+// Phases run sequentially (so later categories can reference earlier ones via
+// get_prior_estimates); categories WITHIN a phase run in parallel. Only A→B→C
+// is a genuine structural cost dependency (frame after substructure, openings
+// after the envelope). Services, finishes and external works all depend on the
+// layout but NOT on each other's costs, so they share one parallel phase —
+// collapsing three sequential phases into one cuts ~9 min to ~6 (each category
+// still does its own rate lookups + quantity extraction; only the cross-category
+// prior peek between them is traded away). contingency is filtered out here and
+// rolled up separately after all phases.
 export const COST_EXECUTION_PHASES: CostCategory[][] = [
   // Phase A: Independent foundations
   ["preliminaries", "substructure"],
   // Phase B: Superstructure depends on substructure
   ["frame", "roof", "external_walls"],
-  // Phase C: Depends on envelope
+  // Phase C: Layout/envelope depends on superstructure
   ["windows_doors", "internal_walls", "internal_doors"],
-  // Phase D: Services depend on layout
-  ["plumbing", "electrical", "mechanical", "fire_services"],
-  // Phase E: Finishes & fitments
-  ["wall_finishes", "floor_finishes", "ceiling_finishes", "fitments"],
-  // Phase F: External works + contingency rollup
-  ["external_works", "contingency"],
+  // Phase D: Services + finishes + external works — all post-layout, mutually
+  // independent on cost, run together.
+  [
+    "plumbing",
+    "electrical",
+    "mechanical",
+    "fire_services",
+    "wall_finishes",
+    "floor_finishes",
+    "ceiling_finishes",
+    "fitments",
+    "external_works",
+  ],
 ];
 
 export type CategoryStatus = "passed" | "issues" | "failed";

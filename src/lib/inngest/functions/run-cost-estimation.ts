@@ -19,6 +19,33 @@ import {
 } from "@/lib/ai/agent/cost-estimation-agent";
 import { createReportVersion } from "@/lib/report-versions";
 
+/**
+ * Run `fn` over `items` with at most `limit` in flight at once. Used for the
+ * merged services+finishes+external phase: those categories run in parallel for
+ * speed, but callModel has no rate-limit backoff, so an unbounded Promise.all of
+ * 9 large-context calls could trip the provider's tokens-per-minute limit and
+ * fail categories (back to empty items). 5 keeps burst load near the previously
+ * proven-safe max while still cutting wall-clock vs the old 3 sequential phases.
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, worker)
+  );
+  return results;
+}
+
 export const runCostEstimation = inngest.createFunction(
   {
     id: "run-cost-estimation",
@@ -154,8 +181,10 @@ export const runCostEstimation = inngest.createFunction(
       const phaseResults = await step.run(
         `agent-phase-${phaseIdx}`,
         async () => {
-          const results = await Promise.all(
-            phaseCategories.map(async (category) => {
+          const results = await mapWithConcurrency(
+            phaseCategories,
+            5,
+            async (category) => {
               const agentResult = await runCostAgent(
                 category,
                 planContent,
@@ -180,7 +209,7 @@ export const runCostEstimation = inngest.createFunction(
                 result: agentResult.result,
                 dependencies: agentResult.dependencies,
               };
-            })
+            }
           );
 
           return results;
