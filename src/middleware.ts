@@ -68,6 +68,18 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // app.mmcbuild.com.au serves ONLY the application — the marketing brochure is
+  // a separate Vercel project on mmcbuild.com.au. The leftover (marketing)
+  // landing at the root stranded beta testers on a "14 days free" waitlist form
+  // with no visible way into the app or its Magic Link tab (Sharon, 2026-06-19).
+  // Send the app root straight where the visitor needs to go.
+  if (pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? "/dashboard" : "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   // Redirect unauthenticated users away from protected routes
   if (!user && PROTECTED_ROUTES.some((route) => pathname.startsWith(route))) {
     const url = request.nextUrl.clone();
