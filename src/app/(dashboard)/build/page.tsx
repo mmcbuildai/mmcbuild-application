@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Wrench, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 
 export default async function BuildPage() {
   const supabase = await createClient();
@@ -27,6 +28,7 @@ export default async function BuildPage() {
 
   return (
     <div className="space-y-6">
+      <BetaTaskPanel moduleId="build" />
       <ExplainerVideo module="build" videoUrl="/videos/build-explainer.mp4" />
 
       <div className="space-y-6">

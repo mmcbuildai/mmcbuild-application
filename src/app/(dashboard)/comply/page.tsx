@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ShieldCheck, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 
 export default async function ComplyPage() {
   const supabase = await createClient();
@@ -27,6 +28,7 @@ export default async function ComplyPage() {
 
   return (
     <div className="space-y-6">
+      <BetaTaskPanel moduleId="comply" />
       <ExplainerVideo module="comply" videoUrl="/videos/comply-explainer.mp4" />
 
       <div className="space-y-6">
