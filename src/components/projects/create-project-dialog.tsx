@@ -15,8 +15,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { createProject } from "@/app/(dashboard)/projects/actions";
-import { Plus, Loader2, AlertTriangle } from "lucide-react";
+import {
+  createProject,
+  createProjectFromSample,
+} from "@/app/(dashboard)/projects/actions";
+import { SAMPLE_DESIGNS } from "@/lib/beta/sample-designs";
+import { Plus, Loader2, AlertTriangle, ArrowRight } from "lucide-react";
 import { AddressAutocomplete } from "@/components/common/address-autocomplete";
 import { usePropertyOnboarding, PropertyAssessment } from "@/lib/property-services";
 import type { GeocodedAddress } from "@/lib/services/mapbox";
@@ -24,6 +28,8 @@ import type { GeocodedAddress } from "@/lib/services/mapbox";
 export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boolean } = {}) {
   const [open, setOpen] = useState(defaultOpen);
   const [loading, setLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [sampleLoading, setSampleLoading] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const geocodedRef = useRef<GeocodedAddress | null>(null);
   // Hard re-entry guard. `disabled={loading}` stops most double-clicks, but a
@@ -86,6 +92,33 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
     }
   }
 
+  async function handleUseSample(sampleId: string) {
+    if (!name.trim()) {
+      setSubmitError("Enter a project name first, then pick a sample design.");
+      return;
+    }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSampleLoading(sampleId);
+    setSubmitError(null);
+    try {
+      const res = await createProjectFromSample(sampleId, name);
+      if (res.error) {
+        setSubmitError(res.error);
+        return;
+      }
+      setOpen(false);
+      router.push(`/projects/${res.projectId}?tab=documents`);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Failed to create from sample",
+      );
+    } finally {
+      setSampleLoading(null);
+      submittingRef.current = false;
+    }
+  }
+
   const profile = property.profile;
 
   return (
@@ -111,6 +144,8 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
               <Input
                 id="name"
                 name="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. 42 Smith Street Renovation"
                 required
               />
@@ -122,6 +157,43 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
                 placeholder="Start typing an Australian address..."
               />
             </div>
+
+            {/* Sample designs — for testers without their own plan. Picking one
+                creates the project and loads that design straight in. */}
+            {SAMPLE_DESIGNS.length > 0 && (
+              <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+                <Label className="text-sm">
+                  No plan of your own? Start from a sample design
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Pick one and we&apos;ll load it into your new project — no
+                  upload needed.
+                </p>
+                <div className="grid gap-2">
+                  {SAMPLE_DESIGNS.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      disabled={!!sampleLoading || loading}
+                      onClick={() => handleUseSample(s.id)}
+                      className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3 text-left transition-colors hover:border-teal-300 hover:bg-teal-50/40 disabled:opacity-50"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">{s.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {s.description}
+                        </div>
+                      </div>
+                      {sampleLoading === s.id ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                      ) : (
+                        <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4 overflow-y-auto flex-1 min-h-0 pr-1 mt-4">

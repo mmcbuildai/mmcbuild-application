@@ -122,7 +122,12 @@ async function main() {
       );
     } else {
       const extra = objs.filter(
-        (o) => !isSafePath(o.name) && !keep.has(o.name)
+        (o) =>
+          !isSafePath(o.name) &&
+          !keep.has(o.name) &&
+          // Never touch the curated sample designs — they're shared templates,
+          // not referenced by a plans row, so they'd otherwise look orphaned.
+          !o.name.startsWith("samples/")
       );
       candidates = [...candidates, ...extra];
     }

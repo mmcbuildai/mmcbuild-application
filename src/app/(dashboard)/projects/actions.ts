@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { deriveSiteIntel } from "@/lib/site-intel";
 import { getStaticMapUrl } from "@/lib/services/mapbox";
 import { inngest } from "@/lib/inngest/client";
+import { getSampleDesign } from "@/lib/beta/sample-designs";
 
 async function getProfile() {
   const supabase = await createClient();
@@ -650,6 +651,77 @@ export async function registerPlan(
   }
 
   return { success: true, planId };
+}
+
+/**
+ * Create a project from one of the ready sample designs (for testers who don't
+ * have their own plan). Creates the project, copies the sample file into the
+ * project's storage path, then registers it so it processes exactly like a
+ * normal upload (Comply embed + eager 3D extraction).
+ */
+export async function createProjectFromSample(
+  sampleId: string,
+  projectName?: string,
+) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const sample = getSampleDesign(sampleId);
+  if (!sample) return { error: "Unknown sample design" };
+
+  const name = projectName?.trim() || sample.name;
+
+  const { data: project, error } = await admin
+    .from("projects")
+    .insert({
+      org_id: profile.org_id,
+      name,
+      status: "draft",
+      created_by: profile.id,
+    } as never)
+    .select("id")
+    .single();
+
+  if (error || !project) {
+    if (
+      error?.code === "23505" ||
+      error?.message?.includes("unique_project_name_per_org")
+    ) {
+      return {
+        error: `A project named "${name}" already exists. Please choose a different name.`,
+      };
+    }
+    return { error: `Failed to create project: ${error?.message}` };
+  }
+  const projectId = (project as { id: string }).id;
+
+  // Copy the sample plan into this project's storage path.
+  const safeName = sample.fileName.replace(/[^\w.\-]+/g, "_");
+  const destPath = `${profile.org_id}/${projectId}/sample_${Date.now()}_${safeName}`;
+  const { error: copyError } = await admin.storage
+    .from("plan-uploads")
+    .copy(sample.samplePath, destPath);
+
+  if (copyError) {
+    // Roll back the empty project so the tester isn't left with a dud.
+    await admin.from("projects").delete().eq("id", projectId);
+    return {
+      error: `Couldn't load that sample design — it may not be set up yet. Please upload your own plan, or try another sample. (${copyError.message})`,
+    };
+  }
+
+  const res = await registerPlan(
+    projectId,
+    sample.fileName,
+    destPath,
+    sample.sizeBytes,
+    sample.fileKind,
+  );
+  if (res.error) {
+    return { error: res.error, projectId };
+  }
+
+  return { success: true, projectId };
 }
 
 export async function retryPlanProcessing(planId: string) {
