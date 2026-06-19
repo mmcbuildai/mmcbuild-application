@@ -42,8 +42,17 @@ export function DummyTesterButton() {
               setUrl(null);
               setCopied(false);
               const res = await startDummyBetaSession();
-              if (res.error) setError(res.error);
-              else setUrl(res.url ?? null);
+              if (res.error) {
+                setError(res.error);
+                return;
+              }
+              if (res.url) {
+                setUrl(res.url);
+                // Go straight into the demo tester on /beta. This signs you in
+                // as the demo in this browser; use "Copy link" + incognito if
+                // you'd rather keep your admin session.
+                window.location.href = res.url;
+              }
             })
           }
           className="inline-flex shrink-0 items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
@@ -56,13 +65,21 @@ export function DummyTesterButton() {
 
       {url && (
         <div className="mt-3 space-y-2 rounded-md bg-amber-50 p-3 text-xs">
-          <p className="font-medium text-amber-900">Demo session ready.</p>
+          <p className="font-medium text-amber-900">
+            Opening the demo session on /beta…
+          </p>
           <p className="text-amber-800">
-            Open this in a <strong>private / incognito window</strong> to stay
-            signed in as yourself here. (Opening it in this same browser will
-            sign you in as the demo tester.)
+            If you&apos;re not redirected, use the link below. To keep your admin
+            session, <strong>copy it and open in a private/incognito window</strong>{" "}
+            instead.
           </p>
           <div className="flex flex-wrap gap-2">
+            <a
+              href={url}
+              className="rounded bg-amber-600 px-2 py-1 font-medium text-white hover:bg-amber-700"
+            >
+              Open the demo
+            </a>
             <button
               type="button"
               onClick={() => {
@@ -71,14 +88,8 @@ export function DummyTesterButton() {
               }}
               className="rounded border border-amber-300 bg-white px-2 py-1 font-medium text-amber-800 hover:bg-amber-100"
             >
-              {copied ? "Copied ✓" : "Copy sign-in link"}
+              {copied ? "Copied ✓" : "Copy link (for incognito)"}
             </button>
-            <a
-              href={url}
-              className="rounded bg-amber-600 px-2 py-1 font-medium text-white hover:bg-amber-700"
-            >
-              Open here (signs you in as the demo)
-            </a>
           </div>
         </div>
       )}

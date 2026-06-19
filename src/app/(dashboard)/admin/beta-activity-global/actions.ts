@@ -379,20 +379,24 @@ export async function startDummyBetaSession(): Promise<{
   }
   await db().from("beta_feedback").delete().eq("user_id", dummyId);
 
-  // 4. One-time sign-in link, routed through the callback so it lands on /beta.
+  // 4. One-time sign-in. Build a token_hash link to OUR /auth/callback (NOT the
+  //    default action_link, which returns the session in the URL fragment via
+  //    the implicit flow and lands on the Site URL / dashboard). The callback
+  //    verifies it server-side (cookie set), provisions, and routes a beta-role
+  //    user straight to /beta.
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || "https://app.mmcbuild.com.au";
   const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email: DUMMY_BETA_EMAIL,
-    options: { redirectTo: `${appUrl}/auth/callback` },
   });
-  if (linkErr || !link?.properties?.action_link) {
+  if (linkErr || !link?.properties?.hashed_token) {
     return {
       error: `Couldn't generate the sign-in link: ${linkErr?.message ?? "unknown"}`,
     };
   }
-  return { url: link.properties.action_link };
+  const url = `${appUrl}/auth/callback?token_hash=${link.properties.hashed_token}&type=magiclink`;
+  return { url };
 }
 
 export async function confirmAndProvisionTester(
