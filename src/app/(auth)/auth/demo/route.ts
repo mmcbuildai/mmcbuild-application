@@ -15,21 +15,25 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const tokenHash = searchParams.get("token_hash");
-  const type =
-    (searchParams.get("type") as EmailOtpType | null) ?? "magiclink";
 
   const supabase = await createClient();
   await supabase.auth.signOut({ scope: "local" });
 
   if (tokenHash) {
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type,
-    });
-    if (!error) {
-      return NextResponse.redirect(`${origin}/beta`);
+    // A magic-link token_hash verifies with type "email" (Supabase's generic
+    // email-OTP type); "magiclink" is rejected. Try "email" first, then fall
+    // back through the other email types just in case.
+    const types: EmailOtpType[] = ["email", "magiclink", "signup"];
+    for (const type of types) {
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type,
+      });
+      if (!error) {
+        return NextResponse.redirect(`${origin}/beta`);
+      }
+      console.error(`[auth/demo] verifyOtp (${type}) failed:`, error.message);
     }
-    console.error("[auth/demo] verifyOtp failed:", error.message);
   }
 
   return NextResponse.redirect(
