@@ -395,7 +395,10 @@ export async function startDummyBetaSession(): Promise<{
       error: `Couldn't generate the sign-in link: ${linkErr?.message ?? "unknown"}`,
     };
   }
-  const url = `${appUrl}/auth/callback?token_hash=${link.properties.hashed_token}&type=magiclink`;
+  // Route through the dedicated demo sign-in (NOT /auth/callback): it clears the
+  // operator's session first, so the demo session actually takes effect instead
+  // of falling back to "you're already logged in".
+  const url = `${appUrl}/auth/demo?token_hash=${link.properties.hashed_token}&type=magiclink`;
   return { url };
 }
 
