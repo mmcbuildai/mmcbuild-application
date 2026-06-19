@@ -22,7 +22,76 @@ async function requireUser() {
     .single();
 
   if (!profile) throw new Error("Profile not found");
-  return { userId: user.id, orgId: profile.org_id, role: profile.role, fullName: profile.full_name };
+  return {
+    userId: user.id,
+    profileId: profile.id as string,
+    orgId: profile.org_id,
+    role: profile.role,
+    fullName: profile.full_name,
+  };
+}
+
+// Modules whose "did you run it" task can be auto-ticked from a real run. The
+// run tables stamp created_by = the PROFILE id. taskIndex is the index of the
+// "run/generate" task in src/lib/beta/testing-tasks.ts (index 0 for each).
+// Direct/Train have no run table, so their tasks stay manual.
+const RUN_SIGNAL: Partial<Record<ModuleId, { table: string; taskIndex: number }>> =
+  {
+    comply: { table: "compliance_checks", taskIndex: 0 },
+    build: { table: "design_checks", taskIndex: 0 },
+    quote: { table: "cost_estimates", taskIndex: 0 },
+  };
+
+/**
+ * Auto-tick the "ran the module" task when the tester has actually run it
+ * (a row exists in the module's run table). Persisted so the completion gate
+ * sees it. Judgment tasks (review/verify) are left for the tester to tick — that
+ * manual confirmation + comment is the beta feedback we want.
+ */
+async function autoTickRunTasks(
+  userId: string,
+  orgId: string,
+  profileId: string,
+) {
+  for (const [moduleId, sig] of Object.entries(RUN_SIGNAL)) {
+    const { count } = await db()
+      .from(sig.table)
+      .select("id", { count: "exact", head: true })
+      .eq("created_by", profileId);
+    if (!count || count === 0) continue;
+
+    const { data: row } = await db()
+      .from("beta_feedback")
+      .select("id, status, completed_tasks")
+      .eq("user_id", userId)
+      .eq("module_id", moduleId)
+      .maybeSingle();
+
+    if (row) {
+      const done: number[] = Array.isArray(row.completed_tasks)
+        ? (row.completed_tasks as number[])
+        : [];
+      if (done.includes(sig.taskIndex)) continue;
+      const next = [...done, sig.taskIndex].sort((a, b) => a - b);
+      await db()
+        .from("beta_feedback")
+        .update({
+          completed_tasks: next,
+          status: row.status === "not_started" ? "in_progress" : row.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id);
+    } else {
+      await db().from("beta_feedback").insert({
+        user_id: userId,
+        module_id: moduleId,
+        org_id: orgId,
+        status: "in_progress",
+        completed_tasks: [sig.taskIndex],
+        started_at: new Date().toISOString(),
+      });
+    }
+  }
 }
 
 export interface BetaFeedbackRow {
@@ -38,7 +107,10 @@ export interface BetaFeedbackRow {
 }
 
 export async function getBetaProgress(): Promise<BetaFeedbackRow[]> {
-  const { userId } = await requireUser();
+  const { userId, orgId, profileId } = await requireUser();
+
+  // Auto-tick "ran the module" tasks from the run tables before reading back.
+  await autoTickRunTasks(userId, orgId, profileId);
 
   const { data } = await db()
     .from("beta_feedback")
