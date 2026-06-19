@@ -8,6 +8,7 @@ import {
   type SignupSource,
 } from "./actions";
 import { FixTesterButton } from "./fix-tester-button";
+import { DummyTesterButton } from "./dummy-tester-button";
 
 /** A tester is "stranded" if their email is unconfirmed or they have no org/profile. */
 function needsFix(r: GlobalBetaTesterRow): boolean {
@@ -48,6 +49,8 @@ export default async function GlobalBetaActivityPage() {
           organisation on the platform, not just your own.
         </p>
       </div>
+
+      <DummyTesterButton />
 
       {/* Funnel — answers "did they actually log in and test?" at a glance */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">

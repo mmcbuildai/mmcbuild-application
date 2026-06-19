@@ -5,7 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { db } from "@/lib/supabase/db";
 import { isOperatorEmail } from "@/lib/auth/operator";
 import { provisionUser } from "@/lib/auth/provision";
+import { ensureMembership } from "@/lib/auth/membership";
 import { revalidatePath } from "next/cache";
+
+const DUMMY_BETA_EMAIL = "beta.demo@mmcbuild.com.au";
 
 // Modules with a per-run AI table we can count real usage from. (Direct and
 // Train have no AI-run table — their activity shows only via beta self-report.)
@@ -271,6 +274,127 @@ export interface FixTesterResult {
  * a tester with a pending invite joins the inviting org and everyone else gets a
  * personal org. Idempotent: safe to click on an already-provisioned account.
  */
+/**
+ * Operator action: wipe the dedicated demo beta-tester (beta.demo@mmcbuild.com.au)
+ * back to a clean newbie state — no projects, no module progress — and return a
+ * one-time sign-in link landing on /beta. Opening it (best in an incognito
+ * window so your admin session stays) lets you walk the REAL new-tester flow:
+ * locked modules -> create a project (upload or sample design) -> tasks. The demo
+ * account is created/provisioned into your org as a beta tester if it doesn't
+ * exist yet (normally invited once via Settings -> Organisation).
+ */
+export async function startDummyBetaSession(): Promise<{
+  url?: string;
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+  if (!isOperatorEmail(user.email)) return { error: "Not authorised" };
+
+  const admin = createAdminClient();
+
+  // The operator's org — the demo tester lives here so it shows on this board.
+  const { data: opProfile } = await admin
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  const orgId = (opProfile as { org_id?: string } | null)?.org_id ?? null;
+
+  // 1. Find or create the demo auth user (confirmed; the mailbox need not exist
+  //    because we hand back the sign-in link directly).
+  let dummyId: string | null = null;
+  for (let page = 1; page <= 20; page++) {
+    const { data } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+    const found = (data?.users ?? []).find(
+      (u) => u.email?.toLowerCase() === DUMMY_BETA_EMAIL,
+    );
+    if (found) {
+      dummyId = found.id;
+      break;
+    }
+    if (!data || data.users.length < 1000) break;
+  }
+  if (!dummyId) {
+    const { data, error } = await admin.auth.admin.createUser({
+      email: DUMMY_BETA_EMAIL,
+      email_confirm: true,
+      user_metadata: { full_name: "Beta Demo (preview)" },
+    });
+    if (error || !data?.user) {
+      return { error: `Couldn't create the demo account: ${error?.message}` };
+    }
+    dummyId = data.user.id;
+  }
+
+  // 2. Ensure a beta profile + membership in the operator's org.
+  const { data: prof } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("user_id", dummyId)
+    .maybeSingle();
+  let dummyProfileId = (prof as { id?: string } | null)?.id ?? null;
+  if (!dummyProfileId && orgId) {
+    const { data: created } = await admin
+      .from("profiles")
+      .insert({
+        org_id: orgId,
+        user_id: dummyId,
+        role: "beta" as never,
+        seat_type: "beta" as never,
+        full_name: "Beta Demo (preview)",
+        email: DUMMY_BETA_EMAIL,
+      })
+      .select("id")
+      .single();
+    dummyProfileId = (created as { id?: string } | null)?.id ?? null;
+    await ensureMembership(admin, dummyId, orgId, "beta", "beta", {
+      setActive: true,
+    });
+  }
+
+  // 3. Reset to a clean newbie: delete the demo's projects (storage + cascade)
+  //    and all its beta module progress.
+  if (dummyProfileId) {
+    const { data: projs } = await admin
+      .from("projects")
+      .select("id")
+      .eq("created_by", dummyProfileId);
+    for (const p of (projs ?? []) as Array<{ id: string }>) {
+      const { data: plans } = await admin
+        .from("plans")
+        .select("file_path")
+        .eq("project_id", p.id);
+      const paths = (plans ?? [])
+        .map((pl) => (pl as { file_path?: string }).file_path)
+        .filter(Boolean) as string[];
+      if (paths.length) {
+        await admin.storage.from("plan-uploads").remove(paths);
+      }
+      await admin.from("projects").delete().eq("id", p.id);
+    }
+  }
+  await db().from("beta_feedback").delete().eq("user_id", dummyId);
+
+  // 4. One-time sign-in link, routed through the callback so it lands on /beta.
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL || "https://app.mmcbuild.com.au";
+  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email: DUMMY_BETA_EMAIL,
+    options: { redirectTo: `${appUrl}/auth/callback` },
+  });
+  if (linkErr || !link?.properties?.action_link) {
+    return {
+      error: `Couldn't generate the sign-in link: ${linkErr?.message ?? "unknown"}`,
+    };
+  }
+  return { url: link.properties.action_link };
+}
+
 export async function confirmAndProvisionTester(
   userId: string
 ): Promise<FixTesterResult> {
