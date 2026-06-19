@@ -195,46 +195,51 @@ export const runComplianceCheck = inngest.createFunction(
       wasReconciled: boolean;
     }> = [];
 
-    for (let i = 0; i < categoriesToAnalyse.length; i++) {
-      const category = categoriesToAnalyse[i];
-      const analysis = analysisResults[i];
-
-      if (
-        ENABLE_CROSS_VALIDATION &&
-        shouldCrossValidate(category, CROSS_VALIDATION_TIER, analysis.result)
-      ) {
-        const validation = await step.run(
-          `validate-${category}`,
-          async () => {
-            return await crossValidate(
-              category as NccCategory,
-              analysis.result,
-              planContent,
-              fullContext,
-              analysis.nccContext,
-              { orgId: check.org_id, checkId: check.id }
-            );
-          }
+    // Cross-validate the eligible categories in parallel batches — independent
+    // per category, same batching as the analysis above so no single step risks
+    // the function timeout.
+    const valPairs = categoriesToAnalyse.map((category, i) => ({
+      category,
+      analysis: analysisResults[i],
+    }));
+    const valBatches = chunk(valPairs, ANALYSIS_CONCURRENCY);
+    for (let b = 0; b < valBatches.length; b++) {
+      const batchValidated = await step.run(`cross-validate-${b}`, async () => {
+        return await Promise.all(
+          valBatches[b].map(async ({ category, analysis }) => {
+            if (
+              ENABLE_CROSS_VALIDATION &&
+              shouldCrossValidate(category, CROSS_VALIDATION_TIER, analysis.result)
+            ) {
+              const validation = await crossValidate(
+                category as NccCategory,
+                analysis.result,
+                planContent,
+                fullContext,
+                analysis.nccContext,
+                { orgId: check.org_id, checkId: check.id }
+              );
+              return {
+                result: validation.reconciled,
+                chunkIds: analysis.chunkIds,
+                validationTier: analysis.validationTier,
+                agreementScore: validation.agreement_score,
+                secondaryModel: validation.secondary_model,
+                wasReconciled: validation.was_reconciled,
+              };
+            }
+            return {
+              result: analysis.result,
+              chunkIds: analysis.chunkIds,
+              validationTier: analysis.validationTier,
+              agreementScore: null as number | null,
+              secondaryModel: null as string | null,
+              wasReconciled: false,
+            };
+          })
         );
-
-        validatedResults.push({
-          result: validation.reconciled,
-          chunkIds: analysis.chunkIds,
-          validationTier: analysis.validationTier,
-          agreementScore: validation.agreement_score,
-          secondaryModel: validation.secondary_model,
-          wasReconciled: validation.was_reconciled,
-        });
-      } else {
-        validatedResults.push({
-          result: analysis.result,
-          chunkIds: analysis.chunkIds,
-          validationTier: analysis.validationTier,
-          agreementScore: null,
-          secondaryModel: null,
-          wasReconciled: false,
-        });
-      }
+      });
+      validatedResults.push(...batchValidated);
     }
 
     const allResults = validatedResults.map((v) => v.result);
@@ -326,8 +331,26 @@ export const runComplianceCheck = inngest.createFunction(
   }
 );
 
+/** Per-step parallelism cap. callModel has no rate-limit backoff, so this also
+ * bounds burst token usage. A batch is also the unit of one Inngest step, so it
+ * must finish inside the function timeout — keep it small. */
+const ANALYSIS_CONCURRENCY = 5;
+
+/** Split into fixed-size batches. Each batch is one Inngest step (own timeout +
+ * retry), so a slow category can't blow the whole pipeline's single budget. */
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 /**
- * Standard pipeline: sequential analysis with enhanced RAG.
+ * Standard pipeline: analyse the NCC categories in parallel batches. They are
+ * independent — each does its own RAG retrieval + analysis — so concurrency is
+ * safe and removes the sequential bottleneck (14 categories one-at-a-time was
+ * the ~16-minute run Karen saw). Each batch is its own step (Promise.all within),
+ * mirroring the cost pipeline's phased parallelism so no single step risks the
+ * function timeout.
  */
 async function runStandardPipeline(
   step: Parameters<Parameters<typeof inngest.createFunction>[2]>[0]["step"],
@@ -336,74 +359,80 @@ async function runStandardPipeline(
   planContent: string,
   fullContext: string
 ): Promise<AnalysisStepResult[]> {
+  const batches = chunk(categories, ANALYSIS_CONCURRENCY);
   const results: AnalysisStepResult[] = [];
 
-  for (const category of categories) {
+  for (let b = 0; b < batches.length; b++) {
+    const batch = batches[b];
     const completedSoFar = results.map((r) => r.result.category);
 
-    // Report progress before starting this domain
-    await step.run(`progress-${category}`, async () => {
+    await step.run(`progress-batch-${b}`, async () => {
       const admin = createAdminClient();
-      await admin.from("compliance_checks").update({
-        progress_current: category,
-        progress_completed: completedSoFar,
-      } as never).eq("id", check.id);
+      await admin
+        .from("compliance_checks")
+        .update({
+          progress_current: batch.map((c) => c).join(", "),
+          progress_completed: completedSoFar,
+        } as never)
+        .eq("id", check.id);
     });
 
-    const stepResult = await step.run(`analyse-${category}`, async () => {
-      const nccRetrieval = await enhancedRetrieve({
-        orgId: check.org_id,
-        category: category as string,
-        projectContext: fullContext,
-        sourceType: "ncc_volume",
-        matchThreshold: 0.5,
-        matchCount: 8,
-        includeSystem: true,
-        topK: 8,
-        checkId: check.id,
-      });
+    const batchResults = await step.run(`analyse-batch-${b}`, async () => {
+      return await Promise.all(
+        batch.map(async (category) => {
+          const nccRetrieval = await enhancedRetrieve({
+            orgId: check.org_id,
+            category: category as string,
+            projectContext: fullContext,
+            sourceType: "ncc_volume",
+            matchThreshold: 0.5,
+            matchCount: 8,
+            includeSystem: true,
+            topK: 8,
+            checkId: check.id,
+          });
 
-      const certDocs = await retrieveContext(
-        `${category.replace(/_/g, " ")} certification engineering`,
-        {
-          orgId: check.org_id,
-          sourceType: "certification",
-          matchThreshold: 0.6,
-          matchCount: 3,
-        }
+          const certDocs = await retrieveContext(
+            `${category.replace(/_/g, " ")} certification engineering`,
+            {
+              orgId: check.org_id,
+              sourceType: "certification",
+              matchThreshold: 0.6,
+              matchCount: 3,
+            }
+          );
+
+          const nccContext = [
+            ...nccRetrieval.documents.map((d) => d.content),
+            ...certDocs.map((d) => `[FROM CERTIFICATION] ${d.content}`),
+          ].join("\n\n---\n\n");
+
+          const fewShotExamples = await getFewShotExamples(
+            category as string,
+            check.org_id
+          );
+
+          let result = await analyseCompliance(
+            category as NccCategory,
+            planContent,
+            fullContext,
+            nccContext,
+            { orgId: check.org_id, checkId: check.id, fewShotExamples }
+          );
+
+          result = await calibrateConfidence(result, check.org_id);
+
+          return {
+            result,
+            nccContext,
+            chunkIds: nccRetrieval.chunkIds,
+            validationTier: getValidationTier(category),
+          };
+        })
       );
-
-      const nccContext = [
-        ...nccRetrieval.documents.map((d) => d.content),
-        ...certDocs.map((d) => `[FROM CERTIFICATION] ${d.content}`),
-      ].join("\n\n---\n\n");
-
-      // Enrich prompt with few-shot examples from positive feedback
-      const fewShotExamples = await getFewShotExamples(
-        category as string,
-        check.org_id
-      );
-
-      let result = await analyseCompliance(
-        category as NccCategory,
-        planContent,
-        fullContext,
-        nccContext,
-        { orgId: check.org_id, checkId: check.id, fewShotExamples }
-      );
-
-      // Calibrate confidence based on historical accuracy
-      result = await calibrateConfidence(result, check.org_id);
-
-      return {
-        result,
-        nccContext,
-        chunkIds: nccRetrieval.chunkIds,
-        validationTier: getValidationTier(category),
-      };
     });
 
-    results.push(stepResult);
+    results.push(...batchResults);
   }
 
   return results;
