@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calculator, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 
 export default async function QuotePage() {
   const supabase = await createClient();
@@ -32,6 +33,7 @@ export default async function QuotePage() {
 
   return (
     <div className="space-y-6">
+      <BetaTaskPanel moduleId="quote" />
       <ExplainerVideo module="quote" videoUrl="/videos/quote-explainer.mp4" />
 
       <div className="space-y-6">

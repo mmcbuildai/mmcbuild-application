@@ -37,6 +37,19 @@ export default async function GlobalBetaActivityPage() {
 
   const { rows, funnel } = await getGlobalBetaActivity();
 
+  // Active testers = signed in recently (distinct people, not cumulative totals).
+  // Computed from each row's last sign-in so it answers "who is actually using it
+  // right now?" rather than "how many ever signed in?".
+  const now = Date.now();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const activeWithin = (iso: string | null, ms: number) => {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return !Number.isNaN(t) && now - t <= ms;
+  };
+  const activeToday = rows.filter((r) => activeWithin(r.lastSignInAt, DAY_MS)).length;
+  const activeWeek = rows.filter((r) => activeWithin(r.lastSignInAt, 7 * DAY_MS)).length;
+
   return (
     <div className="space-y-6">
       <div>
@@ -52,13 +65,31 @@ export default async function GlobalBetaActivityPage() {
 
       <DummyTesterButton />
 
-      {/* Funnel — answers "did they actually log in and test?" at a glance */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Signed up" value={funnel.signedUp} />
-        <StatCard label="Confirmed email" value={funnel.confirmedEmail} />
-        <StatCard label="Signed in" value={funnel.signedIn} />
-        <StatCard label="Ran an AI job" value={funnel.ranSomething} accent />
-        <StatCard label="Left feedback" value={funnel.leftFeedback} accent />
+      {/* Active testers — who is signing in RIGHT NOW (distinct people, not a
+          cumulative total). Answers Karen's "is anyone actually using it?". */}
+      <div>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Active testers
+        </h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <StatCard label="Active today (24h)" value={activeToday} accent />
+          <StatCard label="Active this week (7d)" value={activeWeek} accent />
+          <StatCard label="Total testers" value={rows.length} />
+        </div>
+      </div>
+
+      {/* Funnel — cumulative: how far testers got overall, all time. */}
+      <div>
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Overall progress (all time)
+        </h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+          <StatCard label="Signed up" value={funnel.signedUp} />
+          <StatCard label="Confirmed email" value={funnel.confirmedEmail} />
+          <StatCard label="Signed in" value={funnel.signedIn} />
+          <StatCard label="Ran an AI job" value={funnel.ranSomething} accent />
+          <StatCard label="Left feedback" value={funnel.leftFeedback} accent />
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -103,7 +134,7 @@ export default async function GlobalBetaActivityPage() {
                       <ConfirmedBadge at={r.emailConfirmedAt} />
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
-                      {fmtDate(r.lastSignInAt)}
+                      {fmtDateTime(r.lastSignInAt)}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       {fmtDate(r.signedUpAt)}
@@ -150,7 +181,7 @@ export default async function GlobalBetaActivityPage() {
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Last sign-in</dt>
-                    <dd>{fmtDate(r.lastSignInAt)}</dd>
+                    <dd>{fmtDateTime(r.lastSignInAt)}</dd>
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Signed up</dt>
@@ -319,5 +350,21 @@ function fmtDate(iso: string | null): string {
     day: "2-digit",
     month: "short",
     year: "numeric",
+  });
+}
+
+/** Day + time, for sign-ins — so operators can see WHEN a tester last logged in,
+ * not just the date. Rendered in the operator's local timezone. */
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return "Never";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-AU", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   });
 }
