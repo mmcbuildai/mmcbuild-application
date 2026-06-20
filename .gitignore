@@ -77,3 +77,6 @@ tmp/
 # dump contains real customer PII + storage object paths. Local-only; delete
 # after the restore is verified (same discipline as .env.restore.local).
 supabase/dump-*.sql
+
+# Claude Code local worktrees / session data
+.claude/

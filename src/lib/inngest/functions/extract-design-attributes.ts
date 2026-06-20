@@ -25,7 +25,11 @@ import { callVisionModel } from "@/lib/build/spatial/vision-call";
 import { extractJson } from "@/lib/ai/extract-json";
 import type { DesignAttributes } from "@/lib/comply/questionnaire-prefill";
 import type { PlanFileKind } from "@/lib/plans/file-kind";
-import { contentTypeForKind } from "@/lib/plans/file-kind";
+import {
+  contentTypeForKind,
+  decodedBase64Bytes,
+  MIN_READABLE_PLAN_BYTES,
+} from "@/lib/plans/file-kind";
 
 const ATTRIBUTE_EXTRACTION_PROMPT = `You are a building-plan reader. From the supplied architectural plan, extract ONLY the high-level attributes a building-compliance questionnaire needs. Do NOT attempt full geometry — return a single compact JSON object and nothing else.
 
@@ -144,6 +148,12 @@ export const extractDesignAttributes = inngest.createFunction(
 
     // 4. One focused vision call → compact DesignAttributes JSON.
     const attributes = await step.run("extract-attributes", async () => {
+      // Never send a blank/near-empty document to the model (CLAUDE.md rule):
+      // it produces a misleading refusal. Fail fast → best-effort onFailure →
+      // design_attributes stays null and the questionnaire falls back cleanly.
+      if (decodedBase64Bytes(fileBase64) < MIN_READABLE_PLAN_BYTES) {
+        throw new Error("No readable plan provided for attribute extraction");
+      }
       const buffer = Buffer.from(fileBase64, "base64");
 
       const result =
