@@ -60,6 +60,11 @@ export default async function CheckPage({
   // Detect workflow findings (review_status IS NOT NULL) vs legacy
   const hasWorkflow = findings.some((f) => f.review_status != null);
 
+  // Actionable items drive the Phase-2 open-items board CTA.
+  const hasActionable = findings.some(
+    (f) => f.severity === "non_compliant" || f.severity === "critical"
+  );
+
   // Load contributors if workflow findings exist
   const contributors = hasWorkflow
     ? await getProjectContributors(projectId)
@@ -67,14 +72,24 @@ export default async function CheckPage({
 
   return (
     <div className="max-w-4xl space-y-6">
-      <div>
-        <Link
-          href={`/comply/${projectId}`}
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to Project
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold">Compliance Report</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <Link
+            href={`/comply/${projectId}`}
+            className="text-sm text-muted-foreground hover:underline"
+          >
+            &larr; Back to Project
+          </Link>
+          <h1 className="mt-2 text-2xl font-bold">Compliance Report</h1>
+        </div>
+        {check.status === "completed" && hasActionable && (
+          <Link
+            href={`/comply/${projectId}/open-items`}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+          >
+            Open items board
+          </Link>
+        )}
       </div>
 
       {check.status === "completed" ? (

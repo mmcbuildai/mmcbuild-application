@@ -6,6 +6,14 @@ import { inngest } from "@/lib/inngest/client";
 import { randomBytes } from "crypto";
 import { addProjectContributor } from "@/app/(dashboard)/projects/actions";
 import { checkAndIncrementUsage } from "@/lib/stripe/subscription";
+import {
+  computeFindingLifecycle,
+  type FindingLifecycle,
+} from "@/lib/comply/finding-lifecycle";
+import {
+  resolveFindingSchema,
+  waiveFindingSchema,
+} from "@/lib/validators/finding-resolution";
 
 export async function requestComplianceCheck(
   projectId: string,
@@ -125,14 +133,16 @@ export async function getComplianceReport(checkId: string) {
     return { error: "Failed to load findings" };
   }
 
-  const findingRows = (findings ?? []) as unknown as { id: string }[];
+  // `select("*")` already returns the Phase-2 resolution columns
+  // (resolution_type, resolution_note, waiver_reason, resolved_by, resolved_at).
+  const findingRows = (findings ?? []) as unknown as Record<string, unknown>[];
 
   // Attach contributor responses (notes + uploaded file) to each finding so the
   // builder can read the engineer's reply, not just see a status badge. Load every
   // responded share token for these findings and group by finding_id (most-recent first).
-  let findingsWithResponses = findingRows as unknown as Record<string, unknown>[];
+  let findingsWithResponses = findingRows;
   if (findingRows.length > 0) {
-    const findingIds = findingRows.map((f) => f.id);
+    const findingIds = findingRows.map((f) => f.id as string);
 
     const { data: tokens } = await admin
       .from("finding_share_tokens" as never)
@@ -152,10 +162,20 @@ export async function getComplianceReport(checkId: string) {
       byFinding.set(r.finding_id, list);
     }
 
-    findingsWithResponses = findingRows.map((f) => ({
-      ...(f as Record<string, unknown>),
-      responses: byFinding.get(f.id) ?? [],
-    }));
+    findingsWithResponses = findingRows.map((f) => {
+      const responses = byFinding.get(f.id as string) ?? [];
+      const lifecycle: FindingLifecycle = computeFindingLifecycle({
+        resolution_type: f.resolution_type as string | null,
+        resolved_at: f.resolved_at as string | null,
+        remediation_status: f.remediation_status as string | null,
+        responses,
+      });
+      return {
+        ...f,
+        responses,
+        lifecycle,
+      };
+    });
   }
 
   return { check, findings: findingsWithResponses };
@@ -347,6 +367,161 @@ export async function getProjectChecks(projectId: string) {
     .order("created_at", { ascending: false });
 
   return data ?? [];
+}
+
+// ============================================================
+// Finding Resolution (Comply Phase 2 — builder-side convergence)
+// ============================================================
+
+// Loads the authenticated builder's profile and verifies the finding belongs to
+// their org, with a role allowed to resolve (owner / admin / builder). Returns
+// either an { error } or the { profile, admin } the caller needs. Mirrors the
+// org/role gate used by deleteComplianceCheck, extended to allow the builder.
+async function authorizeFindingResolution(findingId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: "Not authenticated" as const };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, org_id, role")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) return { error: "Profile not found" as const };
+
+  if (
+    profile.role !== "owner" &&
+    profile.role !== "admin" &&
+    profile.role !== "builder"
+  ) {
+    return { error: "Only owners, admins, or the builder can resolve findings" as const };
+  }
+
+  const admin = createAdminClient();
+
+  // Verify the finding belongs to the user's org via its parent check.
+  const { data: finding } = await admin
+    .from("compliance_findings")
+    .select("id, check_id")
+    .eq("id", findingId)
+    .single();
+
+  if (!finding) return { error: "Finding not found" as const };
+
+  const { data: check } = await admin
+    .from("compliance_checks")
+    .select("org_id")
+    .eq("id", (finding as { check_id: string }).check_id)
+    .single();
+
+  if (!check || (check as { org_id: string }).org_id !== profile.org_id) {
+    return { error: "Finding not found" as const };
+  }
+
+  return { profile: profile as { id: string; org_id: string; role: string }, admin };
+}
+
+export async function resolveFinding(
+  findingId: string,
+  input: { type: "updated_drawings" | "evidence"; note?: string }
+) {
+  const parsed = resolveFindingSchema.safeParse({ findingId, ...input });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const auth = await authorizeFindingResolution(parsed.data.findingId);
+  if ("error" in auth) return { error: auth.error };
+  const { profile, admin } = auth;
+
+  const note = parsed.data.note?.trim() ? parsed.data.note.trim() : null;
+
+  const { error } = await admin
+    .from("compliance_findings")
+    .update({
+      resolution_type: parsed.data.type,
+      resolution_note: note,
+      waiver_reason: null,
+      resolved_by: profile.id,
+      resolved_at: new Date().toISOString(),
+    } as never)
+    .eq("id", parsed.data.findingId);
+
+  if (error) return { error: `Failed to resolve finding: ${error.message}` };
+
+  await admin.from("finding_activity_log").insert({
+    finding_id: parsed.data.findingId,
+    action: "finding_resolved",
+    actor_id: profile.id,
+    details: { resolution_type: parsed.data.type, note },
+  } as never);
+
+  return { success: true };
+}
+
+export async function waiveFinding(findingId: string, reason: string) {
+  const parsed = waiveFindingSchema.safeParse({ findingId, reason });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const auth = await authorizeFindingResolution(parsed.data.findingId);
+  if ("error" in auth) return { error: auth.error };
+  const { profile, admin } = auth;
+
+  const { error } = await admin
+    .from("compliance_findings")
+    .update({
+      resolution_type: "waiver",
+      resolution_note: null,
+      waiver_reason: parsed.data.reason,
+      resolved_by: profile.id,
+      resolved_at: new Date().toISOString(),
+    } as never)
+    .eq("id", parsed.data.findingId);
+
+  if (error) return { error: `Failed to waive finding: ${error.message}` };
+
+  await admin.from("finding_activity_log").insert({
+    finding_id: parsed.data.findingId,
+    action: "finding_waived",
+    actor_id: profile.id,
+    details: { reason: parsed.data.reason },
+  } as never);
+
+  return { success: true };
+}
+
+export async function reopenFinding(findingId: string) {
+  const auth = await authorizeFindingResolution(findingId);
+  if ("error" in auth) return { error: auth.error };
+  const { profile, admin } = auth;
+
+  const { error } = await admin
+    .from("compliance_findings")
+    .update({
+      resolution_type: null,
+      resolution_note: null,
+      waiver_reason: null,
+      resolved_by: null,
+      resolved_at: null,
+    } as never)
+    .eq("id", findingId);
+
+  if (error) return { error: `Failed to reopen finding: ${error.message}` };
+
+  await admin.from("finding_activity_log").insert({
+    finding_id: findingId,
+    action: "finding_reopened",
+    actor_id: profile.id,
+    details: {},
+  } as never);
+
+  return { success: true };
 }
 
 // ============================================================
