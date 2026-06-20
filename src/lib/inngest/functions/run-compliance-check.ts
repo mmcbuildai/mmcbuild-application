@@ -40,29 +40,71 @@ export const runComplianceCheck = inngest.createFunction(
     // forever (the UI spins, never showing why). Record the REAL reason on the
     // check so the user sees the cause (Diagnostic Integrity) and the UI shows
     // the error state. Mirrors process-plan's onFailure. (2026-06-11)
+    //
+    // Hardened 2026-06-20 (Karen live incident): a #49 parallel-pipeline run
+    // FAILED in Inngest but the row stayed "processing" (infinite spinner). The
+    // handler must NEVER throw or silently no-op — wrap everything, extract the
+    // event payload defensively (SDK failure-event nesting varies), target the
+    // actual queued/processing row, and log every branch so a future silent
+    // failure is visible. The reaper cron is the backstop for jobs that are
+    // LOST entirely and never reach this handler.
     onFailure: async ({ error, event }) => {
-      const admin = createAdminClient();
-      const { projectId, planId } = event.data.event.data;
-      if (!projectId || !planId) return;
-      const { data: check } = await admin
-        .from("compliance_checks")
-        .select("id")
-        .eq("project_id", projectId)
-        .eq("plan_id", planId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-      if (check) {
-        await admin
+      try {
+        const ev = event as unknown as {
+          data?: {
+            event?: { data?: { projectId?: string; planId?: string } };
+            projectId?: string;
+            planId?: string;
+          };
+        };
+        const orig = ev?.data?.event?.data ?? ev?.data ?? {};
+        const projectId = orig.projectId;
+        const planId = orig.planId;
+        if (!projectId || !planId) {
+          console.error(
+            `[runComplianceCheck.onFailure] missing projectId/planId; cannot flip row. err=${error.message}`
+          );
+          return;
+        }
+        const admin = createAdminClient();
+        const { data: check, error: lookupErr } = await admin
+          .from("compliance_checks")
+          .select("id")
+          .eq("project_id", projectId)
+          .eq("plan_id", planId)
+          .in("status", ["queued", "processing"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (lookupErr || !check) {
+          console.error(
+            `[runComplianceCheck.onFailure] no queued/processing check for project=${projectId} plan=${planId} (lookupErr=${lookupErr?.message}). err=${error.message}`
+          );
+          return;
+        }
+        const { error: updErr } = await admin
           .from("compliance_checks")
           .update({
             status: "error",
             summary: `Compliance check failed: ${error.message.slice(0, 500)}`,
             progress_current: null,
+            completed_at: new Date().toISOString(),
           } as never)
           .eq("id", (check as { id: string }).id);
+        if (updErr) {
+          console.error(
+            `[runComplianceCheck.onFailure] update failed for check ${(check as { id: string }).id}: ${updErr.message}`
+          );
+        } else {
+          console.error(
+            `[runComplianceCheck.onFailure] check ${(check as { id: string }).id} -> error: ${error.message}`
+          );
+        }
+      } catch (e) {
+        console.error(
+          `[runComplianceCheck.onFailure] handler threw: ${(e as Error).message}`
+        );
       }
-      console.error(`[runComplianceCheck] Failed: ${error.message}`);
     },
   },
   { event: "compliance/check.requested" },

@@ -24,7 +24,13 @@ export async function analyseCompliance(
     system: COMPLIANCE_SYSTEM_PROMPT,
     messages: [{ role: "user", content: query }],
     cacheUserPrefix: cachedPrefix,
-    maxTokens: 4096,
+    // 8192 = claude-sonnet-4-6's max output (registry maxOutput). 4096 was
+    // truncating verbose categories (Section J / energy_efficiency emits many
+    // findings) mid-JSON → the response had no closing ``` fence and failed
+    // every extractJson strategy → ModelNonJsonResponseError, killing the whole
+    // run (Karen, live, 2026-06-20). A truncated COMPLIANCE result must never be
+    // silently accepted, so we max the ceiling rather than salvage partial JSON.
+    maxTokens: 8192,
     orgId: options?.orgId,
     checkId: options?.checkId,
   });
