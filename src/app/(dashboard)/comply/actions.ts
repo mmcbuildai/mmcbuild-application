@@ -393,12 +393,12 @@ async function authorizeFindingResolution(findingId: string) {
 
   if (!profile) return { error: "Profile not found" as const };
 
-  if (
-    profile.role !== "owner" &&
-    profile.role !== "admin" &&
-    profile.role !== "builder"
-  ) {
-    return { error: "Only owners, admins, or the builder can resolve findings" as const };
+  // Any member of the finding's org may record a resolution EXCEPT a read-only
+  // "viewer" — org-ownership (verified below) is the real boundary. This admits
+  // owner/admin/builder/architect/project_manager/trade and beta testers (role
+  // "beta", stored via cast outside the enum), while keeping viewers read-only.
+  if ((profile.role as string) === "viewer") {
+    return { error: "Viewers cannot resolve findings" as const };
   }
 
   const admin = createAdminClient();
