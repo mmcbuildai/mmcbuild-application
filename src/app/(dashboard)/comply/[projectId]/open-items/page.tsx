@@ -2,9 +2,14 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getComplianceReport, getProjectChecks } from "../../actions";
+import { getProjectPlans } from "@/app/(dashboard)/projects/actions";
 import { SeverityBadge } from "@/components/comply/severity-badge";
 import { RemediationBadge } from "@/components/comply/remediation-badge";
 import { OpenItemActions } from "@/components/comply/open-item-actions";
+import {
+  RecheckButton,
+  type RecheckPlanOption,
+} from "@/components/comply/recheck-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Download, AlertCircle } from "lucide-react";
@@ -111,6 +116,39 @@ export default async function OpenItemsPage({
   const ready = allFindingsConverged(actionable);
   const remaining = unresolvedCount(actionable);
 
+  // Phase-3 re-check: the latest check is the parent of the next re-check.
+  const latestCheck = report.check as unknown as {
+    id: string;
+    plan_id: string;
+  };
+
+  // Offer the builder the current plan plus any other ready plans they may have
+  // uploaded as updated drawings (the real plan-upload flow lives on the project
+  // page; this surfaces those uploads as a re-check option).
+  const plans = (await getProjectPlans(projectId)) as Array<{
+    id: string;
+    file_name: string;
+    status: string;
+    created_at: string;
+  }>;
+  const planOptions: RecheckPlanOption[] = plans
+    .filter((p) => p.status === "ready" || p.id === latestCheck.plan_id)
+    .map((p) => ({
+      id: p.id,
+      file_name: p.file_name,
+      created_at: p.created_at,
+      isCurrent: p.id === latestCheck.plan_id,
+    }));
+  // Guarantee the current plan is present even if it is no longer "ready".
+  if (!planOptions.some((p) => p.isCurrent)) {
+    planOptions.unshift({
+      id: latestCheck.plan_id,
+      file_name: "Current drawings",
+      created_at: latest.created_at,
+      isCurrent: true,
+    });
+  }
+
   return (
     <OpenItemsShell projectId={projectId} projectName={project.name}>
       {actionable.length === 0 ? (
@@ -133,31 +171,45 @@ export default async function OpenItemsPage({
                       All items resolved — ready to re-check
                     </p>
                     <p className="text-sm text-green-800">
-                      Every non-compliant item is resolved or waived. Run a fresh
-                      compliance check to confirm the updated plan passes.
+                      Every non-compliant item is resolved or waived. Run a
+                      linked re-check to confirm the updated plan passes — you
+                      will see what cleared, what is still open, and anything new.
                     </p>
                   </div>
                 </div>
-                <Button asChild className="min-h-11 shrink-0">
-                  <Link href={`/comply/${projectId}`}>Run a new check</Link>
-                </Button>
+                <RecheckButton
+                  parentCheckId={latestCheck.id}
+                  projectId={projectId}
+                  planOptions={planOptions}
+                  variant="default"
+                  label="Re-check compliance"
+                />
               </div>
             </div>
           ) : (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-                <div>
-                  <p className="text-base font-semibold text-amber-900">
-                    {remaining} item{remaining === 1 ? "" : "s"} still need
-                    {remaining === 1 ? "s" : ""} a decision
-                  </p>
-                  <p className="text-sm text-amber-800">
-                    Mark each item resolved (updated drawings or evidence) or
-                    waive it with a reason. The re-check unlocks once every item
-                    is resolved or waived.
-                  </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                  <div>
+                    <p className="text-base font-semibold text-amber-900">
+                      {remaining} item{remaining === 1 ? "" : "s"} still need
+                      {remaining === 1 ? "s" : ""} a decision
+                    </p>
+                    <p className="text-sm text-amber-800">
+                      Mark each item resolved (updated drawings or evidence) or
+                      waive it with a reason. You can still run a re-check now —
+                      it links to this report and shows the v1 → v2 delta.
+                    </p>
+                  </div>
                 </div>
+                <RecheckButton
+                  parentCheckId={latestCheck.id}
+                  projectId={projectId}
+                  planOptions={planOptions}
+                  variant="outline"
+                  label="Re-check anyway"
+                />
               </div>
             </div>
           )}

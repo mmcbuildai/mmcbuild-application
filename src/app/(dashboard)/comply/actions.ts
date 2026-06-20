@@ -101,6 +101,145 @@ export async function requestComplianceCheck(
   return { success: true, checkId: (check as { id: string }).id };
 }
 
+/**
+ * Re-check (Comply Phase 3): re-run compliance against the (optionally updated)
+ * design, producing a NEW check chained to the parent (parent_check_id +
+ * version). Builder-initiated — we do NOT hard-block on convergence here; the
+ * Phase-2 readiness banner only PROMOTES the re-check when items are
+ * resolved/waived, but the action itself trusts the builder.
+ *
+ * REGULATED: verifies the user's org owns the parent check, and a re-check
+ * consumes a usage run exactly like a fresh check.
+ */
+export async function recheckCompliance(
+  parentCheckId: string,
+  opts?: { newPlanId?: string }
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile) {
+    return { error: "Profile not found" };
+  }
+
+  const admin = createAdminClient();
+
+  // Load the parent check and verify org ownership before anything else.
+  const { data: parent, error: parentError } = await admin
+    .from("compliance_checks")
+    .select("id, project_id, org_id, plan_id, questionnaire_id, version")
+    .eq("id", parentCheckId)
+    .single();
+
+  if (parentError || !parent) {
+    return { error: "Parent check not found" };
+  }
+
+  const parentCheck = parent as unknown as {
+    id: string;
+    project_id: string;
+    org_id: string;
+    plan_id: string;
+    questionnaire_id: string | null;
+    version: number | null;
+  };
+
+  if (parentCheck.org_id !== profile.org_id) {
+    return { error: "Parent check not found" };
+  }
+
+  // If the builder attached updated drawings, verify the new plan belongs to the
+  // same org + project (never re-check against a plan from another org).
+  let planId = parentCheck.plan_id;
+  if (opts?.newPlanId) {
+    const { data: newPlan } = await admin
+      .from("plans")
+      .select("id, org_id, project_id")
+      .eq("id", opts.newPlanId)
+      .single();
+
+    const np = newPlan as { id: string; org_id: string; project_id: string } | null;
+    if (!np || np.org_id !== profile.org_id || np.project_id !== parentCheck.project_id) {
+      return { error: "Selected plan not found for this project" };
+    }
+    planId = np.id;
+  }
+
+  // Paywall — a re-check consumes a run, same as a normal check (verified at the
+  // Server Action layer, not just middleware — REGULATED tier).
+  const usage = await checkAndIncrementUsage(profile.org_id);
+  if (!usage.allowed) {
+    return {
+      error: "usage_limit_reached",
+      usageCount: usage.newCount,
+      usageLimit: usage.limit,
+      tier: usage.tier,
+    };
+  }
+
+  // Load questionnaire data for context (carried from the parent).
+  let questionnaireData: Record<string, unknown> = {};
+  if (parentCheck.questionnaire_id) {
+    const { data: qr } = await admin
+      .from("questionnaire_responses")
+      .select("responses")
+      .eq("id", parentCheck.questionnaire_id)
+      .single();
+
+    if (qr) {
+      questionnaireData = (qr as { responses: Record<string, unknown> }).responses;
+    }
+  }
+
+  // Create the chained re-check record.
+  const { data: check, error } = await admin
+    .from("compliance_checks")
+    .insert({
+      project_id: parentCheck.project_id,
+      org_id: profile.org_id,
+      plan_id: planId,
+      questionnaire_id: parentCheck.questionnaire_id,
+      status: "queued",
+      created_by: profile.id,
+      parent_check_id: parentCheck.id,
+      version: (parentCheck.version ?? 1) + 1,
+    } as never)
+    .select("id")
+    .single();
+
+  if (error) {
+    return { error: `Failed to create re-check: ${error.message}` };
+  }
+
+  // Fire the pipeline (non-blocking) — same event shape as a fresh check.
+  try {
+    await inngest.send({
+      name: "compliance/check.requested",
+      data: {
+        projectId: parentCheck.project_id,
+        planId,
+        questionnaireData,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send Inngest event:", e);
+  }
+
+  return { success: true, checkId: (check as { id: string }).id };
+}
+
 export async function getComplianceReport(checkId: string) {
   const supabase = await createClient();
   const {
@@ -355,6 +494,55 @@ export async function deleteComplianceCheck(checkId: string) {
   if (error) return { error: `Failed to delete check: ${error.message}` };
 
   return { success: true };
+}
+
+// Lightweight loader for the v1 -> v2 re-check delta (Comply Phase 3). Returns
+// the ACTIONABLE (non-compliant / critical) findings for a check, org-guarded.
+// Used by the report page to compute the delta against the parent check without
+// pulling the full response/lifecycle rollup of getComplianceReport.
+export async function getActionableFindingsForCheck(checkId: string): Promise<{
+  id: string;
+  ncc_section: string;
+  category: string;
+  title: string;
+  severity: string;
+}[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) return [];
+
+  const admin = createAdminClient();
+
+  // Org guard via the check.
+  const { data: check } = await admin
+    .from("compliance_checks")
+    .select("org_id")
+    .eq("id", checkId)
+    .single();
+  if (!check || (check as { org_id: string }).org_id !== profile.org_id) return [];
+
+  const { data: findings } = await admin
+    .from("compliance_findings")
+    .select("id, ncc_section, category, title, severity")
+    .eq("check_id", checkId)
+    .in("severity", ["non_compliant", "critical"]);
+
+  return (findings ?? []) as unknown as {
+    id: string;
+    ncc_section: string;
+    category: string;
+    title: string;
+    severity: string;
+  }[];
 }
 
 export async function getProjectChecks(projectId: string) {

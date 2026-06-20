@@ -1,10 +1,15 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getComplianceReport } from "../../../actions";
+import {
+  getComplianceReport,
+  getActionableFindingsForCheck,
+} from "../../../actions";
 import { getProjectContributors } from "@/app/(dashboard)/projects/actions";
 import { ComplianceReport } from "@/components/comply/compliance-report";
 import { CheckProgress } from "@/components/comply/check-progress";
 import { WorkflowTabs } from "@/components/comply/workflow-tabs";
+import { CheckDeltaPanel } from "@/components/comply/check-delta-panel";
+import { computeCheckDelta } from "@/lib/comply/check-delta";
 import type { RemediationResponse } from "@/components/comply/finding-review-card";
 
 export default async function CheckPage({
@@ -29,6 +34,8 @@ export default async function CheckPage({
     completed_at: string | null;
     progress_current: string | null;
     progress_completed: string[] | null;
+    parent_check_id: string | null;
+    version: number | null;
   };
 
   const findings = (result.findings ?? []) as unknown as {
@@ -70,6 +77,39 @@ export default async function CheckPage({
     ? await getProjectContributors(projectId)
     : [];
 
+  // Phase 3: if this check is a re-check (chained to a parent), compute the
+  // v1 -> v2 delta over the ACTIONABLE findings of both checks.
+  let delta:
+    | ReturnType<
+        typeof computeCheckDelta<{
+          id: string;
+          ncc_section: string;
+          category: string;
+          title: string;
+        }>
+      >
+    | null = null;
+  if (check.status === "completed" && check.parent_check_id) {
+    const [parentActionable, childActionable] = await Promise.all([
+      getActionableFindingsForCheck(check.parent_check_id),
+      getActionableFindingsForCheck(check.id),
+    ]);
+    delta = computeCheckDelta(
+      parentActionable.map((f) => ({
+        id: f.id,
+        ncc_section: f.ncc_section,
+        category: f.category,
+        title: f.title,
+      })),
+      childActionable.map((f) => ({
+        id: f.id,
+        ncc_section: f.ncc_section,
+        category: f.category,
+        title: f.title,
+      }))
+    );
+  }
+
   return (
     <div className="max-w-4xl space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -91,6 +131,10 @@ export default async function CheckPage({
           </Link>
         )}
       </div>
+
+      {check.status === "completed" && delta && (
+        <CheckDeltaPanel version={check.version ?? 2} delta={delta} />
+      )}
 
       {check.status === "completed" ? (
         hasWorkflow ? (

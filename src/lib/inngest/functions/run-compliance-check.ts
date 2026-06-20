@@ -19,6 +19,7 @@ import { EXECUTION_PHASES, getCategoryPhase } from "@/lib/ai/agent/compliance-ag
 import { getFewShotExamples } from "@/lib/ai/feedback/prompt-enricher";
 import { calibrateConfidence } from "@/lib/ai/feedback/confidence-calibrator";
 import { createReportVersion } from "@/lib/report-versions";
+import { carryForwardWaivers } from "@/lib/comply/check-delta";
 
 const ENABLE_CROSS_VALIDATION = process.env.ENABLE_CROSS_VALIDATION !== "false";
 const CROSS_VALIDATION_TIER = parseInt(process.env.CROSS_VALIDATION_TIER ?? "2", 10);
@@ -116,7 +117,7 @@ export const runComplianceCheck = inngest.createFunction(
       const admin = createAdminClient();
       const { data, error } = await admin
         .from("compliance_checks")
-        .select("id, org_id, plan_id, questionnaire_id")
+        .select("id, org_id, plan_id, questionnaire_id, parent_check_id")
         .eq("project_id", projectId)
         .eq("plan_id", planId)
         .eq("status", "queued")
@@ -128,7 +129,15 @@ export const runComplianceCheck = inngest.createFunction(
         throw new Error(`Compliance check not found: ${error?.message}`);
       }
 
-      return data as { id: string; org_id: string; plan_id: string; questionnaire_id: string | null };
+      // parent_check_id is added by migration 00064 and may not yet be in the
+      // generated Supabase types — cast through unknown.
+      return data as unknown as {
+        id: string;
+        org_id: string;
+        plan_id: string;
+        questionnaire_id: string | null;
+        parent_check_id: string | null;
+      };
     });
 
     // 2. Update status to processing
@@ -319,6 +328,96 @@ export const runComplianceCheck = inngest.createFunction(
         }
       }
     });
+
+    // 8b. Carry parent WAIVERS forward (Comply Phase 3 re-check).
+    // A finding the builder WAIVED in the parent check must not reappear as a
+    // fresh open item in this re-check — auto-apply the parent's waiver to the
+    // matching child finding (matched by ncc_section + category). Resolutions
+    // via updated_drawings/evidence do NOT carry: those re-verify by this check.
+    //
+    // Best-effort: a failure here must NEVER fail the whole check. The worst
+    // case is a waived item re-shows as open, which the builder can re-waive.
+    if (check.parent_check_id) {
+      await step.run("carry-forward-waivers", async () => {
+        try {
+          const admin = createAdminClient();
+
+          const { data: parentWaived, error: parentErr } = await admin
+            .from("compliance_findings")
+            .select("ncc_section, category, resolution_type, waiver_reason, resolved_by")
+            .eq("check_id", check.parent_check_id as string)
+            .eq("resolution_type", "waiver");
+
+          if (parentErr) {
+            console.error(
+              `[runComplianceCheck.carry-forward-waivers] parent load failed: ${parentErr.message}`
+            );
+            return { carried: 0 };
+          }
+          if (!parentWaived || parentWaived.length === 0) {
+            return { carried: 0 };
+          }
+
+          const { data: childFindings, error: childErr } = await admin
+            .from("compliance_findings")
+            .select("id, ncc_section, category")
+            .eq("check_id", check.id);
+
+          if (childErr || !childFindings) {
+            console.error(
+              `[runComplianceCheck.carry-forward-waivers] child load failed: ${childErr?.message}`
+            );
+            return { carried: 0 };
+          }
+
+          const carryForwards = carryForwardWaivers(
+            parentWaived as unknown as {
+              ncc_section: string;
+              category: string;
+              resolution_type: string | null;
+              waiver_reason: string | null;
+              resolved_by: string | null;
+            }[],
+            childFindings as unknown as {
+              id: string;
+              ncc_section: string;
+              category: string;
+            }[]
+          );
+
+          const nowIso = new Date().toISOString();
+          let carried = 0;
+          for (const cf of carryForwards) {
+            const { error: updErr } = await admin
+              .from("compliance_findings")
+              .update({
+                resolution_type: "waiver",
+                waiver_reason: cf.waiverReason,
+                resolved_by: cf.resolvedBy,
+                resolved_at: nowIso,
+              } as never)
+              .eq("id", cf.childFindingId);
+            if (updErr) {
+              console.error(
+                `[runComplianceCheck.carry-forward-waivers] update failed for finding ${cf.childFindingId}: ${updErr.message}`
+              );
+            } else {
+              carried++;
+            }
+          }
+
+          console.log(
+            `[runComplianceCheck.carry-forward-waivers] carried ${carried}/${carryForwards.length} waivers from parent ${check.parent_check_id}`
+          );
+          return { carried };
+        } catch (e) {
+          console.error(
+            `[runComplianceCheck.carry-forward-waivers] threw (non-fatal): ${(e as Error).message}`
+          );
+          return { carried: 0 };
+        }
+      });
+    }
 
     // 9. Generate summary
     const summary = await step.run("generate-summary", async () => {
