@@ -21,6 +21,13 @@ interface QuestionnaireFormProps {
   existingResponses?: Record<string, unknown> | null;
   siteIntel?: SiteIntelPrefill | null;
   /**
+   * Values derived from the project's extracted design (SpatialLayout). Used to
+   * pre-populate a FRESH questionnaire only; existing responses always win.
+   * Pre-filled fields stay freely editable and are badged "Extracted from your
+   * design" (mirrors the address-driven climate/bal/wind prefill).
+   */
+  designPrefill?: Record<string, string> | null;
+  /**
    * Draft projects show a single "Save & Activate" on the final step (the
    * questionnaire is the last wizard tab); the separate WizardNav activate
    * button is suppressed for drafts so there is only one action (SCRUM-268).
@@ -117,12 +124,39 @@ const STEPS = [
   "Access & Livable Housing (H5/H8)",
 ];
 
+/** Field provenance — drives the prefill badges. */
+type FieldSource = "extracted" | "manual";
+
+/**
+ * Badge shown next to a field label indicating where its value came from.
+ * - "extracted": the value was pre-filled from the uploaded design (green).
+ * - "manual" (only when the field is still empty): a prompt to fill it in.
+ */
+function SourceBadge({ source, empty }: { source?: FieldSource; empty: boolean }) {
+  if (source === "extracted") {
+    return (
+      <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+        Extracted from your design
+      </span>
+    );
+  }
+  if (source === "manual" && empty) {
+    return (
+      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        Fill in yourself
+      </span>
+    );
+  }
+  return null;
+}
+
 function SelectField({
   label,
   value,
   onChange,
   options,
   autoTag,
+  source,
   placeholder = "Select if known",
 }: {
   label: string;
@@ -130,6 +164,7 @@ function SelectField({
   onChange: (v: string) => void;
   options: readonly string[] | readonly number[];
   autoTag?: boolean;
+  source?: FieldSource;
   placeholder?: string;
 }) {
   return (
@@ -141,6 +176,7 @@ function SelectField({
             Auto-derived
           </span>
         )}
+        <SourceBadge source={source} empty={!value} />
       </div>
       <select
         className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
@@ -216,6 +252,7 @@ function TextField({
   min,
   max,
   helper,
+  source,
 }: {
   label: string;
   value: string;
@@ -225,10 +262,14 @@ function TextField({
   min?: number;
   max?: number;
   helper?: string;
+  source?: FieldSource;
 }) {
   return (
     <div>
-      <Label>{label}</Label>
+      <div className="flex items-center gap-2">
+        <Label>{label}</Label>
+        <SourceBadge source={source} empty={!value} />
+      </div>
       <Input
         type={type}
         min={min}
@@ -249,23 +290,28 @@ function CheckboxField({
   checked,
   onChange,
   helper,
+  source,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   helper?: string;
+  source?: FieldSource;
 }) {
   return (
     <div>
-      <label className="inline-flex w-fit cursor-pointer select-none items-center gap-2">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-gray-300"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <span className="text-sm">{label}</span>
-      </label>
+      <div className="flex items-center gap-2">
+        <label className="inline-flex w-fit cursor-pointer select-none items-center gap-2">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-gray-300"
+            checked={checked}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+          <span className="text-sm">{label}</span>
+        </label>
+        <SourceBadge source={source} empty={!checked} />
+      </div>
       {helper && (
         <p className="ml-6 mt-0.5 text-xs text-muted-foreground">{helper}</p>
       )}
@@ -277,6 +323,7 @@ export function QuestionnaireForm({
   projectId,
   existingResponses,
   siteIntel,
+  designPrefill,
   isDraft = false,
 }: QuestionnaireFormProps) {
   const router = useRouter();
@@ -285,6 +332,12 @@ export function QuestionnaireForm({
   const [error, setError] = useState<string | null>(null);
 
   const defaults = (existingResponses ?? {}) as Record<string, string>;
+
+  // Design-extracted prefill applies ONLY to a fresh, never-saved questionnaire
+  // (same guard as autoClimate/autoBal/autoWind). On any saved questionnaire the
+  // user's own answers win and no field is badged "extracted".
+  const prefill = (!existingResponses ? designPrefill : null) ?? {};
+  const extractedKeys = new Set(Object.keys(prefill));
 
   const autoClimate =
     !existingResponses && siteIntel?.climate_zone
@@ -302,24 +355,25 @@ export function QuestionnaireForm({
     building_typology: defaults.building_typology ?? "",
     building_class: defaults.building_class ?? "",
     construction_type: defaults.construction_type ?? "",
-    storeys: defaults.storeys ?? "",
-    floor_area: defaults.floor_area ?? "",
+    storeys: defaults.storeys ?? prefill.storeys ?? "",
+    floor_area: defaults.floor_area ?? prefill.floor_area ?? "",
     soil_classification: defaults.soil_classification ?? "",
     footing_type: defaults.footing_type ?? "",
     wind_classification: defaults.wind_classification ?? autoWind ?? "",
     terrain_category: defaults.terrain_category ?? "",
-    roof_material: defaults.roof_material ?? "",
-    wall_cladding: defaults.wall_cladding ?? "",
+    roof_material: defaults.roof_material ?? prefill.roof_material ?? "",
+    wall_cladding: defaults.wall_cladding ?? prefill.wall_cladding ?? "",
     dpc_type: defaults.dpc_type ?? "",
     sarking: defaults.sarking ?? "false",
     subfloor_ventilation: defaults.subfloor_ventilation ?? "false",
     distance_to_boundary: defaults.distance_to_boundary ?? "",
-    attached_dwelling: defaults.attached_dwelling ?? "false",
+    attached_dwelling: defaults.attached_dwelling ?? prefill.attached_dwelling ?? "false",
     garage_location: defaults.garage_location ?? "",
     smoke_alarm_type: defaults.smoke_alarm_type ?? "",
     party_wall_frl: defaults.party_wall_frl ?? "",
-    wet_area_count: defaults.wet_area_count ?? "",
-    ceiling_height_habitable: defaults.ceiling_height_habitable ?? "",
+    wet_area_count: defaults.wet_area_count ?? prefill.wet_area_count ?? "",
+    ceiling_height_habitable:
+      defaults.ceiling_height_habitable ?? prefill.ceiling_height_habitable ?? "",
     ceiling_height_non_habitable: defaults.ceiling_height_non_habitable ?? "",
     exhaust_fans: defaults.exhaust_fans ?? "false",
     natural_ventilation_method: defaults.natural_ventilation_method ?? "",
@@ -334,11 +388,11 @@ export function QuestionnaireForm({
     climate_zone: defaults.climate_zone ?? autoClimate ?? "",
     bal_rating: defaults.bal_rating ?? autoBal ?? "",
     site_conditions: defaults.site_conditions ?? "",
-    has_swimming_pool: defaults.has_swimming_pool ?? "false",
+    has_swimming_pool: defaults.has_swimming_pool ?? prefill.has_swimming_pool ?? "false",
     has_heating_appliance: defaults.has_heating_appliance ?? "false",
     heating_type: defaults.heating_type ?? "",
-    has_stairs: defaults.has_stairs ?? "false",
-    has_balcony_deck: defaults.has_balcony_deck ?? "false",
+    has_stairs: defaults.has_stairs ?? prefill.has_stairs ?? "false",
+    has_balcony_deck: defaults.has_balcony_deck ?? prefill.has_balcony_deck ?? "false",
     max_fall_height: defaults.max_fall_height ?? "",
     has_step_free_entry: defaults.has_step_free_entry ?? "false",
     accessible_bathroom: defaults.accessible_bathroom ?? "false",
@@ -502,6 +556,7 @@ export function QuestionnaireForm({
                 onChange={(v) => update("submission_timeline", v)}
                 options={SUBMISSION_TIMELINES}
                 placeholder="When are you targeting council submission?"
+                source={extractedKeys.has("submission_timeline") ? "extracted" : "manual"}
               />
             </>
           )}
@@ -514,18 +569,21 @@ export function QuestionnaireForm({
                 onChange={(v) => update("building_typology", v)}
                 options={BUILDING_TYPOLOGIES}
                 placeholder="Select if known"
+                source={extractedKeys.has("building_typology") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Building Classification (NCC)"
                 value={responses.building_class}
                 onChange={(v) => update("building_class", v)}
                 options={BUILDING_CLASSES}
+                source={extractedKeys.has("building_class") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Construction Type"
                 value={responses.construction_type}
                 onChange={(v) => update("construction_type", v)}
                 options={CONSTRUCTION_TYPES}
+                source={extractedKeys.has("construction_type") ? "extracted" : "manual"}
               />
             </>
           )}
@@ -539,6 +597,7 @@ export function QuestionnaireForm({
                 max={10}
                 value={responses.storeys}
                 onChange={(v) => update("storeys", v)}
+                source={extractedKeys.has("storeys") ? "extracted" : "manual"}
               />
               <TextField
                 label="Total Floor Area (m²)"
@@ -546,6 +605,7 @@ export function QuestionnaireForm({
                 min={1}
                 value={responses.floor_area}
                 onChange={(v) => update("floor_area", v)}
+                source={extractedKeys.has("floor_area") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Soil Classification (AS 2870)"
@@ -553,6 +613,7 @@ export function QuestionnaireForm({
                 onChange={(v) => update("soil_classification", v)}
                 options={SOIL_CLASSIFICATIONS}
                 placeholder="To be confirmed"
+                source={extractedKeys.has("soil_classification") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Expected Footing Type"
@@ -560,6 +621,7 @@ export function QuestionnaireForm({
                 onChange={(v) => update("footing_type", v)}
                 options={FOOTING_TYPES}
                 placeholder="Select if known — MMC product selection may change this"
+                source={extractedKeys.has("footing_type") ? "extracted" : "manual"}
               />
               <LockedAutoField
                 label="Wind Classification (AS 4055)"
@@ -573,6 +635,7 @@ export function QuestionnaireForm({
                 value={responses.terrain_category}
                 onChange={(v) => update("terrain_category", v)}
                 options={TERRAIN_CATEGORIES}
+                source={extractedKeys.has("terrain_category") ? "extracted" : "manual"}
               />
             </>
           )}
@@ -584,28 +647,33 @@ export function QuestionnaireForm({
                 value={responses.roof_material}
                 onChange={(v) => update("roof_material", v)}
                 options={ROOF_MATERIALS}
+                source={extractedKeys.has("roof_material") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Wall Cladding"
                 value={responses.wall_cladding}
                 onChange={(v) => update("wall_cladding", v)}
                 options={WALL_CLADDINGS}
+                source={extractedKeys.has("wall_cladding") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Damp-Proof Course / Waterproofing Membrane"
                 value={responses.dpc_type}
                 onChange={(v) => update("dpc_type", v)}
                 options={DPC_TYPES}
+                source={extractedKeys.has("dpc_type") ? "extracted" : "manual"}
               />
               <CheckboxField
                 label="Roof sarking installed (optional)"
                 checked={responses.sarking === "true"}
                 onChange={(v) => update("sarking", String(v))}
+                source={extractedKeys.has("sarking") ? "extracted" : "manual"}
               />
               <CheckboxField
                 label="Sub-floor ventilation (optional)"
                 checked={responses.subfloor_ventilation === "true"}
                 onChange={(v) => update("subfloor_ventilation", String(v))}
+                source={extractedKeys.has("subfloor_ventilation") ? "extracted" : "manual"}
               />
             </>
           )}
@@ -619,12 +687,14 @@ export function QuestionnaireForm({
                 placeholder="e.g., 1.5"
                 value={responses.distance_to_boundary}
                 onChange={(v) => update("distance_to_boundary", v)}
+                source={extractedKeys.has("distance_to_boundary") ? "extracted" : "manual"}
               />
               {canHavePartyWall && (
                 <CheckboxField
                   label="Attached dwelling (party wall)"
                   checked={responses.attached_dwelling === "true"}
                   onChange={(v) => update("attached_dwelling", String(v))}
+                  source={extractedKeys.has("attached_dwelling") ? "extracted" : "manual"}
                 />
               )}
               <SelectField
@@ -632,12 +702,14 @@ export function QuestionnaireForm({
                 value={responses.garage_location}
                 onChange={(v) => update("garage_location", v)}
                 options={GARAGE_LOCATIONS}
+                source={extractedKeys.has("garage_location") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Smoke Alarm Type"
                 value={responses.smoke_alarm_type}
                 onChange={(v) => update("smoke_alarm_type", v)}
                 options={SMOKE_ALARM_TYPES}
+                source={extractedKeys.has("smoke_alarm_type") ? "extracted" : "manual"}
               />
               {canHavePartyWall && responses.attached_dwelling === "true" && (
                 <TextField
@@ -645,6 +717,7 @@ export function QuestionnaireForm({
                   placeholder="e.g., 60/60/60"
                   value={responses.party_wall_frl}
                   onChange={(v) => update("party_wall_frl", v)}
+                  source={extractedKeys.has("party_wall_frl") ? "extracted" : "manual"}
                 />
               )}
             </>
@@ -658,6 +731,7 @@ export function QuestionnaireForm({
                 min={0}
                 value={responses.wet_area_count}
                 onChange={(v) => update("wet_area_count", v)}
+                source={extractedKeys.has("wet_area_count") ? "extracted" : "manual"}
               />
               <TextField
                 label="Ceiling Height — Habitable Rooms (m)"
@@ -667,6 +741,7 @@ export function QuestionnaireForm({
                 placeholder="2.4"
                 value={responses.ceiling_height_habitable}
                 onChange={(v) => update("ceiling_height_habitable", v)}
+                source={extractedKeys.has("ceiling_height_habitable") ? "extracted" : "manual"}
               />
               <TextField
                 label="Ceiling Height — Non-habitable Rooms (m)"
@@ -676,17 +751,20 @@ export function QuestionnaireForm({
                 placeholder="2.1"
                 value={responses.ceiling_height_non_habitable}
                 onChange={(v) => update("ceiling_height_non_habitable", v)}
+                source={extractedKeys.has("ceiling_height_non_habitable") ? "extracted" : "manual"}
               />
               <CheckboxField
                 label="Exhaust fans to all wet areas"
                 checked={responses.exhaust_fans === "true"}
                 onChange={(v) => update("exhaust_fans", String(v))}
+                source={extractedKeys.has("exhaust_fans") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Natural Ventilation Method"
                 value={responses.natural_ventilation_method}
                 onChange={(v) => update("natural_ventilation_method", v)}
                 options={VENTILATION_METHODS}
+                source={extractedKeys.has("natural_ventilation_method") ? "extracted" : "manual"}
               />
             </>
           )}
@@ -698,6 +776,7 @@ export function QuestionnaireForm({
                 value={responses.energy_pathway}
                 onChange={(v) => update("energy_pathway", v)}
                 options={ENERGY_PATHWAYS}
+                source={extractedKeys.has("energy_pathway") ? "extracted" : "manual"}
               />
               <TextField
                 label="Ceiling Insulation R-value"
@@ -706,6 +785,7 @@ export function QuestionnaireForm({
                 placeholder="e.g., 6.0"
                 value={responses.insulation_ceiling_r}
                 onChange={(v) => update("insulation_ceiling_r", v)}
+                source={extractedKeys.has("insulation_ceiling_r") ? "extracted" : "manual"}
               />
               <TextField
                 label="Wall Insulation R-value"
@@ -714,6 +794,7 @@ export function QuestionnaireForm({
                 placeholder="e.g., 2.5"
                 value={responses.insulation_wall_r}
                 onChange={(v) => update("insulation_wall_r", v)}
+                source={extractedKeys.has("insulation_wall_r") ? "extracted" : "manual"}
               />
               <TextField
                 label="Floor Insulation R-value"
@@ -722,23 +803,27 @@ export function QuestionnaireForm({
                 placeholder="e.g., 1.0 (0 if slab on ground)"
                 value={responses.insulation_floor_r}
                 onChange={(v) => update("insulation_floor_r", v)}
+                source={extractedKeys.has("insulation_floor_r") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Glazing Type"
                 value={responses.glazing_type}
                 onChange={(v) => update("glazing_type", v)}
                 options={GLAZING_TYPES}
+                source={extractedKeys.has("glazing_type") ? "extracted" : "manual"}
               />
               <SelectField
                 label="Hot Water System"
                 value={responses.hot_water_system}
                 onChange={(v) => update("hot_water_system", v)}
                 options={HOT_WATER_SYSTEMS}
+                source={extractedKeys.has("hot_water_system") ? "extracted" : "manual"}
               />
               <CheckboxField
                 label="Solar PV installed"
                 checked={responses.has_solar_pv === "true"}
                 onChange={(v) => update("has_solar_pv", String(v))}
+                source={extractedKeys.has("has_solar_pv") ? "extracted" : "manual"}
               />
               {responses.energy_pathway === "NatHERS" && (
                 <TextField
@@ -749,6 +834,7 @@ export function QuestionnaireForm({
                   placeholder="e.g., 7.0"
                   value={responses.nathers_rating}
                   onChange={(v) => update("nathers_rating", v)}
+                  source={extractedKeys.has("nathers_rating") ? "extracted" : "manual"}
                 />
               )}
             </>
@@ -776,16 +862,19 @@ export function QuestionnaireForm({
                 value={responses.site_conditions}
                 onChange={(v) => update("site_conditions", v)}
                 helper="Used to flag flood overlay, slope, and setback constraints during compliance and 3D layout."
+                source={extractedKeys.has("site_conditions") ? "extracted" : "manual"}
               />
               <CheckboxField
                 label="Swimming pool on site"
                 checked={responses.has_swimming_pool === "true"}
                 onChange={(v) => update("has_swimming_pool", String(v))}
+                source={extractedKeys.has("has_swimming_pool") ? "extracted" : "manual"}
               />
               <CheckboxField
                 label="Heating appliance (wood heater, gas fire, etc.)"
                 checked={responses.has_heating_appliance === "true"}
                 onChange={(v) => update("has_heating_appliance", String(v))}
+                source={extractedKeys.has("has_heating_appliance") ? "extracted" : "manual"}
               />
               {responses.has_heating_appliance === "true" && (
                 <SelectField
@@ -793,6 +882,7 @@ export function QuestionnaireForm({
                   value={responses.heating_type}
                   onChange={(v) => update("heating_type", v)}
                   options={HEATING_TYPES}
+                  source={extractedKeys.has("heating_type") ? "extracted" : "manual"}
                 />
               )}
             </>
@@ -804,11 +894,13 @@ export function QuestionnaireForm({
                 label="Has stairs"
                 checked={responses.has_stairs === "true"}
                 onChange={(v) => update("has_stairs", String(v))}
+                source={extractedKeys.has("has_stairs") ? "extracted" : "manual"}
               />
               <CheckboxField
                 label="Has balcony or deck"
                 checked={responses.has_balcony_deck === "true"}
                 onChange={(v) => update("has_balcony_deck", String(v))}
+                source={extractedKeys.has("has_balcony_deck") ? "extracted" : "manual"}
               />
               {responses.has_balcony_deck === "true" && (
                 <TextField
@@ -818,17 +910,20 @@ export function QuestionnaireForm({
                   placeholder="e.g., 1.0"
                   value={responses.max_fall_height}
                   onChange={(v) => update("max_fall_height", v)}
+                  source={extractedKeys.has("max_fall_height") ? "extracted" : "manual"}
                 />
               )}
               <CheckboxField
                 label="Step-free entry provided"
                 checked={responses.has_step_free_entry === "true"}
                 onChange={(v) => update("has_step_free_entry", String(v))}
+                source={extractedKeys.has("has_step_free_entry") ? "extracted" : "manual"}
               />
               <CheckboxField
                 label="Accessible bathroom (Livable Housing)"
                 checked={responses.accessible_bathroom === "true"}
                 onChange={(v) => update("accessible_bathroom", String(v))}
+                source={extractedKeys.has("accessible_bathroom") ? "extracted" : "manual"}
               />
               <TextField
                 label="Minimum Door Width (mm)"
@@ -837,6 +932,7 @@ export function QuestionnaireForm({
                 placeholder="820"
                 value={responses.min_door_width}
                 onChange={(v) => update("min_door_width", v)}
+                source={extractedKeys.has("min_door_width") ? "extracted" : "manual"}
               />
               <TextField
                 label="Minimum Corridor Width (mm)"
@@ -845,6 +941,7 @@ export function QuestionnaireForm({
                 placeholder="1000"
                 value={responses.min_corridor_width}
                 onChange={(v) => update("min_corridor_width", v)}
+                source={extractedKeys.has("min_corridor_width") ? "extracted" : "manual"}
               />
             </>
           )}

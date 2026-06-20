@@ -8,6 +8,8 @@ import { deriveSiteIntel } from "@/lib/site-intel";
 import { getStaticMapUrl } from "@/lib/services/mapbox";
 import { inngest } from "@/lib/inngest/client";
 import { getSampleDesign } from "@/lib/beta/sample-designs";
+import { buildDesignPrefill } from "@/lib/comply/questionnaire-prefill";
+import type { SpatialLayout } from "@/lib/build/spatial/types";
 
 async function getProfile() {
   const supabase = await createClient();
@@ -928,6 +930,63 @@ export async function getProjectQuestionnaire(projectId: string) {
     .single();
 
   return data;
+}
+
+/**
+ * Builds the design-driven questionnaire prefill for a project from the latest
+ * design extraction that carries a spatial layout. Mirrors the address-driven
+ * site-intel prefill: the values are offered as editable defaults the UI badges
+ * as "Extracted from your design". Auth-guarded like the other project reads.
+ *
+ * Prefers a `completed` extraction but falls back to ANY row that has a
+ * non-null `spatial_layout` (the geometry is what matters, not the status).
+ */
+export async function getProjectDesignPrefill(
+  projectId: string,
+): Promise<Record<string, string>> {
+  // Auth + org guard (matches the other project reads in this file).
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { data: project } = await admin
+    .from("projects")
+    .select("org_id")
+    .eq("id", projectId)
+    .single();
+
+  if (!project || project.org_id !== profile.org_id) {
+    return {};
+  }
+
+  // Prefer a completed extraction; fall back to any row with spatial_layout.
+  const { data: completedRow } = await admin
+    .from("design_checks")
+    .select("spatial_layout")
+    .eq("project_id", projectId)
+    .eq("status", "completed")
+    .not("spatial_layout", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let layout = (completedRow as { spatial_layout: SpatialLayout | null } | null)
+    ?.spatial_layout;
+
+  if (!layout) {
+    const { data: anyRow } = await admin
+      .from("design_checks")
+      .select("spatial_layout")
+      .eq("project_id", projectId)
+      .not("spatial_layout", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    layout = (anyRow as { spatial_layout: SpatialLayout | null } | null)
+      ?.spatial_layout;
+  }
+
+  return buildDesignPrefill(layout);
 }
 
 // ============================================================

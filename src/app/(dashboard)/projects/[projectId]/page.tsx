@@ -26,6 +26,7 @@ import {
   getProjectQuestionnaire,
   getProjectCertifications,
   getProjectContributors,
+  getProjectDesignPrefill,
 } from "../actions";
 import {
   ArrowLeft,
@@ -104,9 +105,13 @@ export default async function ProjectOverviewPage({
     ? await getProjectContributors(projectId)
     : null;
 
-  const [questionnaire, qSiteIntel] = tab === "questionnaire"
-    ? await Promise.all([getProjectQuestionnaire(projectId), getProjectSiteIntel(projectId)])
-    : [null, null];
+  const [questionnaire, qSiteIntel, designPrefill] = tab === "questionnaire"
+    ? await Promise.all([
+        getProjectQuestionnaire(projectId),
+        getProjectSiteIntel(projectId),
+        getProjectDesignPrefill(projectId),
+      ])
+    : [null, null, null];
 
   const modules = [
     {
@@ -282,6 +287,7 @@ export default async function ProjectOverviewPage({
                     }
                   : null
               }
+              designPrefill={designPrefill}
             />
           </div>
           {/* The questionnaire form owns the single "Save & Activate" action on
