@@ -36,10 +36,10 @@ const WALL_CLADDINGS = [
 type RoofMaterial = (typeof ROOF_MATERIALS)[number];
 type WallCladding = (typeof WALL_CLADDINGS)[number];
 
-const WET_AREA_RE = /bath|ensuite|laundry|\bwc\b|powder|toilet/i;
-const STAIR_RE = /stair/i;
-const BALCONY_DECK_RE = /balcony|deck/i;
-const POOL_RE = /\bpool\b/i;
+export const WET_AREA_RE = /bath|ensuite|laundry|\bwc\b|powder|toilet/i;
+export const STAIR_RE = /stair/i;
+export const BALCONY_DECK_RE = /balcony|deck/i;
+export const POOL_RE = /\bpool\b/i;
 
 /** A room's best descriptive string for keyword matching. */
 function roomLabel(room: Room): string {
@@ -51,7 +51,9 @@ function anyRoomMatches(rooms: Room[], re: RegExp): boolean {
 }
 
 /** Normalise an extracted roof material string to a questionnaire option. */
-function normaliseRoofMaterial(raw: string | undefined): RoofMaterial | null {
+export function normaliseRoofMaterial(
+  raw: string | undefined,
+): RoofMaterial | null {
   if (!raw) return null;
   const v = raw.toLowerCase();
   if (v.includes("colorbond")) return "Metal (Colorbond)";
@@ -64,7 +66,9 @@ function normaliseRoofMaterial(raw: string | undefined): RoofMaterial | null {
 }
 
 /** Normalise an extracted wall cladding string to a questionnaire option. */
-function normaliseWallCladding(raw: string | undefined): WallCladding | null {
+export function normaliseWallCladding(
+  raw: string | undefined,
+): WallCladding | null {
   if (!raw) return null;
   const v = raw.toLowerCase();
   if (v.includes("brick_veneer") || v.includes("brick veneer")) return "Brick veneer";
@@ -150,6 +154,108 @@ export function buildDesignPrefill(
   const fc = layout.storey_details?.[0]?.floor_to_ceiling_m;
   if (typeof fc === "number" && fc >= 2.1 && fc <= 4) {
     out.ceiling_height_habitable = String(fc);
+  }
+
+  return out;
+}
+
+/**
+ * The compact, questionnaire-relevant attribute object produced by the
+ * lightweight on-upload vision extraction (`extract-design-attributes` Inngest
+ * function), stored on `plans.design_attributes`. This is NOT the full 3D
+ * SpatialLayout — it carries only the handful of fields the Comply
+ * questionnaire prefill needs, so the questionnaire can be pre-populated for
+ * users who run Comply against their design BEFORE running the Build/3D module.
+ */
+export interface DesignAttributes {
+  storeys?: number;
+  floor_area_m2?: number;
+  rooms?: { name?: string; type?: string }[];
+  has_party_wall?: boolean;
+  roof_material?: string;
+  wall_cladding?: string;
+  ceiling_height_habitable_m?: number;
+}
+
+/** A lightweight room's best descriptive string for keyword matching. */
+function attrRoomLabel(room: { name?: string; type?: string }): string {
+  return `${room.type ?? ""} ${room.name ?? ""}`;
+}
+
+/**
+ * Maps the lightweight `DesignAttributes` (extracted on upload) to the SAME
+ * questionnaire keys `buildDesignPrefill` produces, reusing the shared
+ * normalisers and wet/stair/balcony/pool regexes so the mapping logic is not
+ * duplicated. The questionnaire prefill reads this as a FALLBACK when there is
+ * no full 3D spatial layout for the project.
+ *
+ * Conservative like `buildDesignPrefill`: a key is omitted entirely whenever
+ * the attribute isn't confidently derivable, so the "Extracted from your
+ * design" badge stays honest. Pure — no I/O, no side effects.
+ */
+export function buildDesignPrefillFromAttributes(
+  attrs: DesignAttributes | null | undefined,
+): Record<string, string> {
+  if (!attrs) return {};
+
+  const out: Record<string, string> = {};
+  const rooms = Array.isArray(attrs.rooms) ? attrs.rooms : [];
+
+  // Storeys
+  if (typeof attrs.storeys === "number" && attrs.storeys >= 1) {
+    out.storeys = String(attrs.storeys);
+  }
+
+  // Total floor area (rounded; positive only)
+  if (typeof attrs.floor_area_m2 === "number" && attrs.floor_area_m2 > 0) {
+    out.floor_area = String(Math.round(attrs.floor_area_m2));
+  }
+
+  // Wet area count (rooms whose name/type matches the wet-area pattern)
+  const wetCount = rooms.filter((r) => WET_AREA_RE.test(attrRoomLabel(r))).length;
+  if (wetCount > 0) {
+    out.wet_area_count = String(wetCount);
+  }
+
+  // Attached dwelling (party wall present)
+  if (attrs.has_party_wall === true) {
+    out.attached_dwelling = "true";
+  }
+
+  // Roof material
+  const roof = normaliseRoofMaterial(attrs.roof_material);
+  if (roof) {
+    out.roof_material = roof;
+  }
+
+  // Wall cladding
+  const cladding = normaliseWallCladding(attrs.wall_cladding);
+  if (cladding) {
+    out.wall_cladding = cladding;
+  }
+
+  // Stairs (multi-storey or a stair-named room)
+  if (
+    (typeof attrs.storeys === "number" && attrs.storeys > 1) ||
+    rooms.some((r) => STAIR_RE.test(attrRoomLabel(r)))
+  ) {
+    out.has_stairs = "true";
+  }
+
+  // Balcony / deck
+  if (rooms.some((r) => BALCONY_DECK_RE.test(attrRoomLabel(r)))) {
+    out.has_balcony_deck = "true";
+  }
+
+  // Swimming pool
+  if (rooms.some((r) => POOL_RE.test(attrRoomLabel(r)))) {
+    out.has_swimming_pool = "true";
+  }
+
+  // Habitable ceiling height (sanity-bounded, same window as buildDesignPrefill)
+  const ch = attrs.ceiling_height_habitable_m;
+  if (typeof ch === "number" && ch >= 2.1 && ch <= 4) {
+    out.ceiling_height_habitable = String(ch);
   }
 
   return out;

@@ -9,6 +9,7 @@ export const maxDuration = 300;
 import { inngest } from "@/lib/inngest/client";
 import { testFunction } from "@/lib/inngest/functions/test-function";
 import { processPlan } from "@/lib/inngest/functions/process-plan";
+import { extractDesignAttributes } from "@/lib/inngest/functions/extract-design-attributes";
 import { runComplianceCheck } from "@/lib/inngest/functions/run-compliance-check";
 import { processKbDocument } from "@/lib/inngest/functions/process-kb-document";
 import { classifyRdCommit } from "@/lib/inngest/functions/classify-rd-commit";
@@ -29,7 +30,7 @@ import { reapStuckJobs } from "@/lib/inngest/functions/reap-stuck-jobs";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [testFunction, processPlan, runComplianceCheck, processKbDocument, classifyRdCommit, processCertification, sendRemediationEmail, runDesignOptimisation, runCostEstimation, ingestCostRates, sendEnquiryNotification, sendReviewNotification, generateTrainingContent, issueTrainingCertificate, syncStripeSubscription, syncHubspotListing, runTest3DExtractionFn, notifyNewProfessional, reapStuckJobs],
+  functions: [testFunction, processPlan, extractDesignAttributes, runComplianceCheck, processKbDocument, classifyRdCommit, processCertification, sendRemediationEmail, runDesignOptimisation, runCostEstimation, ingestCostRates, sendEnquiryNotification, sendReviewNotification, generateTrainingContent, issueTrainingCertificate, syncStripeSubscription, syncHubspotListing, runTest3DExtractionFn, notifyNewProfessional, reapStuckJobs],
   // Force Inngest to call back to the production URL instead of the
   // deployment-specific URL which is behind Vercel Deployment Protection.
   serveHost: process.env.NEXT_PUBLIC_APP_URL || undefined,

@@ -8,7 +8,11 @@ import { deriveSiteIntel } from "@/lib/site-intel";
 import { getStaticMapUrl } from "@/lib/services/mapbox";
 import { inngest } from "@/lib/inngest/client";
 import { getSampleDesign } from "@/lib/beta/sample-designs";
-import { buildDesignPrefill } from "@/lib/comply/questionnaire-prefill";
+import {
+  buildDesignPrefill,
+  buildDesignPrefillFromAttributes,
+  type DesignAttributes,
+} from "@/lib/comply/questionnaire-prefill";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 
 async function getProfile() {
@@ -940,6 +944,12 @@ export async function getProjectQuestionnaire(projectId: string) {
  *
  * Prefers a `completed` extraction but falls back to ANY row that has a
  * non-null `spatial_layout` (the geometry is what matters, not the status).
+ *
+ * When NO 3D spatial layout exists yet — the common case, because most users
+ * run Comply against their design before ever running the Build/3D module —
+ * it falls back to the lightweight `plans.design_attributes` extracted on
+ * upload (`buildDesignPrefillFromAttributes`), so the questionnaire is still
+ * pre-populated.
  */
 export async function getProjectDesignPrefill(
   projectId: string,
@@ -986,7 +996,26 @@ export async function getProjectDesignPrefill(
       ?.spatial_layout;
   }
 
-  return buildDesignPrefill(layout);
+  const spatialPrefill = buildDesignPrefill(layout);
+  if (Object.keys(spatialPrefill).length > 0) {
+    return spatialPrefill;
+  }
+
+  // No 3D spatial layout yielded anything. Fall back to the lightweight
+  // attributes extracted from the plan on upload (the common Comply-first path).
+  const { data: planRow } = await admin
+    .from("plans")
+    .select("design_attributes")
+    .eq("project_id", projectId)
+    .not("design_attributes", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const attrs = (planRow as { design_attributes: DesignAttributes | null } | null)
+    ?.design_attributes;
+
+  return buildDesignPrefillFromAttributes(attrs);
 }
 
 // ============================================================
