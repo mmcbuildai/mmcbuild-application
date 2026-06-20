@@ -125,7 +125,54 @@ export async function getComplianceReport(checkId: string) {
     return { error: "Failed to load findings" };
   }
 
-  return { check, findings: findings ?? [] };
+  const findingRows = (findings ?? []) as unknown as { id: string }[];
+
+  // Attach contributor responses (notes + uploaded file) to each finding so the
+  // builder can read the engineer's reply, not just see a status badge. Load every
+  // responded share token for these findings and group by finding_id (most-recent first).
+  let findingsWithResponses = findingRows as unknown as Record<string, unknown>[];
+  if (findingRows.length > 0) {
+    const findingIds = findingRows.map((f) => f.id);
+
+    const { data: tokens } = await admin
+      .from("finding_share_tokens" as never)
+      .select(
+        "id, finding_id, contributor_id, email_to, remediation_status, response_notes, response_file_path, response_file_name, responded_at"
+      )
+      .in("finding_id", findingIds)
+      .not("responded_at", "is", null)
+      .order("responded_at", { ascending: false });
+
+    const responseRows = (tokens ?? []) as unknown as RemediationResponse[];
+
+    const byFinding = new Map<string, RemediationResponse[]>();
+    for (const r of responseRows) {
+      const list = byFinding.get(r.finding_id) ?? [];
+      list.push(r);
+      byFinding.set(r.finding_id, list);
+    }
+
+    findingsWithResponses = findingRows.map((f) => ({
+      ...(f as Record<string, unknown>),
+      responses: byFinding.get(f.id) ?? [],
+    }));
+  }
+
+  return { check, findings: findingsWithResponses };
+}
+
+// A contributor's reply to a shared finding, as surfaced to the authenticated
+// builder. Mirrors the responded columns on `finding_share_tokens`.
+export interface RemediationResponse {
+  id: string;
+  finding_id: string;
+  contributor_id: string;
+  email_to: string;
+  remediation_status: string;
+  response_notes: string | null;
+  response_file_path: string | null;
+  response_file_name: string | null;
+  responded_at: string | null;
 }
 
 export async function submitFeedback(

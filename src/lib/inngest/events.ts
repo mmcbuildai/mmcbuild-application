@@ -82,6 +82,14 @@ export type Events = {
       recipientName: string;
     };
   };
+  "finding/remediation.responded": {
+    data: {
+      shareTokenId: string;
+      findingId: string;
+      status: string;
+      recipientEmail: string;
+    };
+  };
   "cost/rates.ingest-requested": {
     data: {
       sourceId: string;

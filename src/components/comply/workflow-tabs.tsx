@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ComplianceReport } from "./compliance-report";
 import { WorkflowReport } from "./workflow-report";
 import { ActionItems } from "./action-items";
+import type { RemediationResponse } from "./finding-review-card";
 
 interface Finding {
   id: string;
@@ -28,6 +29,7 @@ interface Finding {
   sent_at: string | null;
   remediation_status: string | null;
   remediation_responded_at: string | null;
+  responses?: RemediationResponse[];
 }
 
 interface Contributor {

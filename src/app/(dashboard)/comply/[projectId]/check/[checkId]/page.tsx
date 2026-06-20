@@ -5,6 +5,7 @@ import { getProjectContributors } from "@/app/(dashboard)/projects/actions";
 import { ComplianceReport } from "@/components/comply/compliance-report";
 import { CheckProgress } from "@/components/comply/check-progress";
 import { WorkflowTabs } from "@/components/comply/workflow-tabs";
+import type { RemediationResponse } from "@/components/comply/finding-review-card";
 
 export default async function CheckPage({
   params,
@@ -53,6 +54,7 @@ export default async function CheckPage({
     sent_at: string | null;
     remediation_status: string | null;
     remediation_responded_at: string | null;
+    responses?: RemediationResponse[];
   }[];
 
   // Detect workflow findings (review_status IS NOT NULL) vs legacy

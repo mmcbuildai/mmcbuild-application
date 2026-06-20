@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   UserPlus,
+  Download,
 } from "lucide-react";
 import {
   reviewFinding,
@@ -30,6 +31,20 @@ interface Contributor {
   contact_name: string;
   company_name: string | null;
   contact_email: string | null;
+}
+
+// A contributor's reply to a shared finding (notes + uploaded file), surfaced
+// to the authenticated builder. Mirrors the responded `finding_share_tokens` cols.
+export interface RemediationResponse {
+  id: string;
+  finding_id: string;
+  contributor_id: string;
+  email_to: string;
+  remediation_status: string;
+  response_notes: string | null;
+  response_file_path: string | null;
+  response_file_name: string | null;
+  responded_at: string | null;
 }
 
 interface ReviewFinding {
@@ -54,6 +69,7 @@ interface ReviewFinding {
   sent_at: string | null;
   remediation_status: string | null;
   remediation_responded_at: string | null;
+  responses?: RemediationResponse[];
 }
 
 interface FindingReviewCardProps {
@@ -217,22 +233,63 @@ export function FindingReviewCard({
               </div>
             )}
 
-            {/* Remediation response display */}
-            {finding.remediation_status && finding.remediation_status !== "awaiting" && (
-              <div className="rounded-md bg-purple-50 border border-purple-200 p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-medium text-purple-800">
-                    Contributor Response
-                  </p>
-                  <RemediationBadge status={finding.remediation_status} />
-                </div>
-                {finding.remediation_responded_at && (
-                  <p className="text-xs text-purple-600">
-                    Responded{" "}
-                    {new Date(finding.remediation_responded_at).toLocaleString("en-AU")}
-                  </p>
-                )}
+            {/* Remediation response display — full reply (notes + file), not just a badge */}
+            {finding.responses && finding.responses.length > 0 ? (
+              <div className="space-y-3">
+                {finding.responses.map((response) => (
+                  <div
+                    key={response.id}
+                    className="rounded-md bg-purple-50 border border-purple-200 p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                      <p className="text-xs font-medium text-purple-800 break-all">
+                        Response from {response.email_to}
+                      </p>
+                      <RemediationBadge status={response.remediation_status} />
+                    </div>
+                    {response.responded_at && (
+                      <p className="text-xs text-purple-600">
+                        Responded{" "}
+                        {new Date(response.responded_at).toLocaleString("en-AU")}
+                      </p>
+                    )}
+                    {response.response_notes && (
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-purple-900">
+                        {response.response_notes}
+                      </p>
+                    )}
+                    {response.response_file_path && (
+                      <a
+                        href={`/api/remediation/download/${response.id}`}
+                        className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-md border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-800 hover:bg-purple-100"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        {response.response_file_name ?? "Download attachment"}
+                      </a>
+                    )}
+                  </div>
+                ))}
               </div>
+            ) : (
+              finding.remediation_status &&
+              finding.remediation_status !== "awaiting" && (
+                <div className="rounded-md bg-purple-50 border border-purple-200 p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-medium text-purple-800">
+                      Contributor Response
+                    </p>
+                    <RemediationBadge status={finding.remediation_status} />
+                  </div>
+                  {finding.remediation_responded_at && (
+                    <p className="text-xs text-purple-600">
+                      Responded{" "}
+                      {new Date(finding.remediation_responded_at).toLocaleString("en-AU")}
+                    </p>
+                  )}
+                </div>
+              )
             )}
 
             {finding.sent_at && (

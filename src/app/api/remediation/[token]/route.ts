@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { inngest } from "@/lib/inngest/client";
 import type { RemediationStatus } from "@/lib/supabase/types";
 
 export async function GET(
@@ -82,7 +83,7 @@ export async function POST(
   // Validate token
   const { data: shareToken } = await admin
     .from("finding_share_tokens" as never)
-    .select("id, finding_id, expires_at")
+    .select("id, finding_id, email_to, expires_at")
     .eq("token", token)
     .single();
 
@@ -90,7 +91,12 @@ export async function POST(
     return NextResponse.json({ error: "Invalid link" }, { status: 404 });
   }
 
-  const st = shareToken as { id: string; finding_id: string; expires_at: string };
+  const st = shareToken as {
+    id: string;
+    finding_id: string;
+    email_to: string;
+    expires_at: string;
+  };
 
   if (new Date(st.expires_at) < new Date()) {
     return NextResponse.json({ error: "This link has expired" }, { status: 410 });
@@ -145,6 +151,23 @@ export async function POST(
     actor_id: null,
     details: { status, notes: notes ?? null, respondent: "external_contributor" },
   } as never);
+
+  // Notify the builder that a response arrived (non-blocking — never fail the
+  // contributor's submission on a notification hiccup). The token value is NOT
+  // passed; the function re-loads what it needs by shareTokenId.
+  try {
+    await inngest.send({
+      name: "finding/remediation.responded",
+      data: {
+        shareTokenId: st.id,
+        findingId: st.finding_id,
+        status,
+        recipientEmail: st.email_to,
+      },
+    });
+  } catch (e) {
+    console.error("Failed to send remediation-response notification event:", e);
+  }
 
   return NextResponse.json({ success: true });
 }

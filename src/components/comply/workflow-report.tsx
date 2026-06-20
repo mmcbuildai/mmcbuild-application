@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FindingReviewCard } from "./finding-review-card";
+import { FindingReviewCard, type RemediationResponse } from "./finding-review-card";
 import { DisciplineBadge } from "./project-contributors";
 import { DISCIPLINE_LABELS, type ContributorDiscipline } from "@/lib/ai/types";
 import { Send } from "lucide-react";
@@ -33,6 +33,7 @@ interface ReviewFinding {
   sent_at: string | null;
   remediation_status: string | null;
   remediation_responded_at: string | null;
+  responses?: RemediationResponse[];
 }
 
 interface Contributor {
