@@ -76,9 +76,18 @@ export const extractDesignAttributes = inngest.createFunction(
       }
     },
   },
-  { event: "plan/uploaded" },
+  // Triggered on a fresh upload AND by the backfill event for existing plans.
+  [{ event: "plan/uploaded" }, { event: "plan/attributes.requested" }],
   async ({ event, step }) => {
-    const { projectId, fileName, uploadedBy, planId: eventPlanId } = event.data;
+    // event.data is a union of the two triggers — the backfill carries only
+    // planId, the upload carries projectId/fileName/uploadedBy. Read defensively.
+    const data = event.data as {
+      projectId?: string;
+      fileName?: string;
+      uploadedBy?: string;
+      planId?: string;
+    };
+    const { projectId, fileName, uploadedBy, planId: eventPlanId } = data;
 
     // 1. Find the plan record (mirror processPlan's find-plan-record step).
     const plan = await step.run("find-plan-record", async () => {
@@ -104,6 +113,14 @@ export const extractDesignAttributes = inngest.createFunction(
           );
         }
         return data as unknown as PlanRow;
+      }
+
+      // No planId → the upload path, which always carries these. (The backfill
+      // path always supplies planId and returns above.)
+      if (!projectId || !fileName || !uploadedBy) {
+        throw new Error(
+          "plan/uploaded event missing projectId/fileName/uploadedBy",
+        );
       }
 
       const { data, error } = await admin

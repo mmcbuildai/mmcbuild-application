@@ -7,6 +7,14 @@ export type Events = {
       uploadedBy: string;
     };
   };
+  // Backfill trigger: re-run the lightweight design-attribute extraction on an
+  // EXISTING plan (by id) WITHOUT re-running the full upload pipeline. Consumed
+  // by extractDesignAttributes alongside plan/uploaded.
+  "plan/attributes.requested": {
+    data: {
+      planId: string;
+    };
+  };
   "compliance/check.requested": {
     data: {
       projectId: string;
