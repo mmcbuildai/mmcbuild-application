@@ -11,6 +11,7 @@
 // ADMIN_EMAILS (comma-separated) extends it for any operators added later.
 export const DEFAULT_OPERATOR_EMAILS = [
   "dennis@corporateaisolutions.com",
+  "mcmdennis@gmail.com",
   "karen.engel@mmcbuild.com.au",
   "karthik.rao@mmcbuild.com.au",
   // Karen's other accounts — she reviews Beta Activity from these too, so they
