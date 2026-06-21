@@ -150,18 +150,29 @@ export const extractDesignAttributes = inngest.createFunction(
       return { planId: plan.id, skipped: true, reason: `no vision path for kind=${kind}` };
     }
 
-    // 3. Download the plan file (mirror processPlan's download).
+    // 3. Download the plan file (mirror processPlan's download). A genuinely
+    //    missing file (e.g. an orphaned record whose storage object wasn't
+    //    migrated across) is a clean SKIP — returning null instead of throwing
+    //    so it doesn't retry-storm + flood the failure log. design_attributes
+    //    stays null and the questionnaire falls back to "fill it in yourself".
     const fileBase64 = await step.run("download-plan-file", async () => {
       const admin = createAdminClient();
       const { data, error } = await admin.storage
         .from("plan-uploads")
         .download(plan.file_path);
       if (error || !data) {
-        throw new Error(`Failed to download file: ${error?.message}`);
+        console.error(
+          `[extractDesignAttributes] file missing for plan ${plan.id} (${plan.file_path}): ${error?.message} — skipping`,
+        );
+        return null;
       }
       const arrayBuffer = await data.arrayBuffer();
       return Buffer.from(arrayBuffer).toString("base64");
     });
+
+    if (!fileBase64) {
+      return { planId: plan.id, skipped: true, reason: "file not found in storage" };
+    }
 
     // 4. One focused vision call → compact DesignAttributes JSON.
     const attributes = await step.run("extract-attributes", async () => {
@@ -185,9 +196,10 @@ export const extractDesignAttributes = inngest.createFunction(
                 },
               ],
               pdf: { data: buffer },
-              // Small output — a compact attribute object, never prose — so the
-              // JSON never truncates (the recent 4096-cap truncation lesson).
-              maxTokens: 2048,
+              // 8192 (the model's max output). A multi-page architectural set
+              // can yield a long rooms[] array; 2048 truncated it mid-JSON →
+              // extractJson threw → silent null (the comply maxTokens lesson).
+              maxTokens: 8192,
             })
           : await callVisionModel("plan_vision", {
               system: ATTRIBUTE_EXTRACTION_PROMPT,
@@ -204,7 +216,7 @@ export const extractDesignAttributes = inngest.createFunction(
                   mimeType: contentTypeForKind(kind, plan.file_name),
                 },
               ],
-              maxTokens: 2048,
+              maxTokens: 8192,
             });
 
       const text = result.text?.trim();
