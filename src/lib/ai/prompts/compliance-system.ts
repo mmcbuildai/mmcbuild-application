@@ -21,6 +21,36 @@ IMPORTANT DISCLAIMERS:
 
 Always respond with valid JSON matching the requested schema. Do not include any text outside the JSON response.`;
 
+/**
+ * The NCC volume that governs a building, from its classification. This is the
+ * single most useful "mechanical" narrowing in the whole run (Karen, 2026-06-20):
+ * the energy-efficiency analysis was burning time + tokens checking Section J of
+ * Volume One (commercial) on a residential plan, then reconciling that it didn't
+ * apply, until it timed out. Telling the model the volume UP FRONT removes that
+ * wasted pass on every category.
+ *
+ *   Class 1 (houses) + Class 10 (sheds/structures) → Volume Two (Housing Provisions)
+ *   Class 2–9 (apartments, boarding/hotel, commercial) → Volume One
+ *   Unknown/blank → default to Volume Two (this tool is built for residential)
+ *
+ * Pure + exported for unit testing.
+ */
+export function nccVolumeDirective(buildingClass: string): string {
+  const match = buildingClass.toLowerCase().match(/class\s*(\d+)/);
+  const classNum = match ? parseInt(match[1], 10) : null;
+  const isVolumeTwo = classNum === 1 || classNum === 10 || classNum === null;
+
+  if (isVolumeTwo) {
+    return `APPLICABLE NCC VOLUME — READ FIRST:
+This is a ${buildingClass || "Class 1a"} building, governed by NCC Volume Two (Housing Provisions). Assess compliance ONLY against Volume Two. Do NOT apply, retrieve, or spend analysis on Volume One provisions (e.g. Section J and other commercial parts) — they do not apply to this building, and considering them wastes effort and produces incorrect "wrong volume applied" findings.
+`;
+  }
+
+  return `APPLICABLE NCC VOLUME — READ FIRST:
+This is a ${buildingClass} building, governed by NCC Volume One (NOT Volume Two). IMPORTANT: MMC Comply's checks are tuned for NCC Volume Two (residential, Class 1/10). Apply Volume One provisions where you can, but raise an ADVISORY finding stating that a full NCC Volume One assessment by a registered building surveyor is required, and do NOT present Volume Two Housing-Provisions results as authoritative for this building.
+`;
+}
+
 export const COMPLIANCE_USER_CONTEXT_TEMPLATE = (data: Record<string, string | number | boolean>) => {
   const v = (key: string, fallback = "Not specified") => {
     const val = data[key];
@@ -28,7 +58,8 @@ export const COMPLIANCE_USER_CONTEXT_TEMPLATE = (data: Record<string, string | n
     return String(val);
   };
 
-  return `PROJECT DETAILS:
+  return `${nccVolumeDirective(v("building_class", "Class 1a"))}
+PROJECT DETAILS:
 
 CLASSIFICATION & GENERAL:
 - Building Classification: ${v("building_class", "Class 1a")}
