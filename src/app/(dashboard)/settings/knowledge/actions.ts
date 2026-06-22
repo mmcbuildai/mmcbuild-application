@@ -27,6 +27,31 @@ async function getProfile() {
   return profile as { id: string; org_id: string; role: string };
 }
 
+/**
+ * Non-throwing admin check for the Knowledge UI. `getProfile()` THROWS for a
+ * non-admin, which crashes the page into the app error boundary (Karen's demo
+ * pressed "Knowledge" and got an application error). The page calls this first
+ * to block gracefully instead.
+ */
+export async function isKnowledgeAdmin(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .single();
+
+  return (
+    !!profile && ["owner", "admin"].includes((profile as { role: string }).role)
+  );
+}
+
 export async function createKnowledgeBase(formData: FormData) {
   const profile = await getProfile();
   const admin = createAdminClient();

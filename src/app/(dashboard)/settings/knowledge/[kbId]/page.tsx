@@ -1,10 +1,11 @@
-import { getKnowledgeBase, listKbDocuments } from "../actions";
+import { getKnowledgeBase, listKbDocuments, isKnowledgeAdmin } from "../actions";
 import { KbDocumentUpload } from "@/components/knowledge/kb-document-upload";
 import { KbDocumentTable } from "@/components/knowledge/kb-document-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default async function KnowledgeBaseDetailPage({
   params,
@@ -12,6 +13,9 @@ export default async function KnowledgeBaseDetailPage({
   params: Promise<{ kbId: string }>;
 }) {
   const { kbId } = await params;
+  // Admin-only; non-admins go to the list, which blocks gracefully (the actions
+  // below throw for non-admins, which would crash the page otherwise).
+  if (!(await isKnowledgeAdmin())) redirect("/settings/knowledge");
   const kb = await getKnowledgeBase(kbId);
   const documents = await listKbDocuments(kbId);
 

@@ -77,6 +77,13 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
     (item) => bypassGate || isModuleLaunched(item.moduleId),
   );
 
+  // Knowledge bases are admin-only — hide the link from non-admins so they don't
+  // land on the access-blocked page.
+  const isAdmin = role === "owner" || role === "admin";
+  const visibleBottomNav = bottomNav.filter(
+    (item) => isAdmin || item.href !== "/settings/knowledge",
+  );
+
   return (
     <aside
       className={cn(
@@ -185,7 +192,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
         <OrgSwitcher />
 
         <div className="border-t border-white/10 px-3 py-2 space-y-0.5">
-          {bottomNav.map((item) => {
+          {visibleBottomNav.map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (
               <Link

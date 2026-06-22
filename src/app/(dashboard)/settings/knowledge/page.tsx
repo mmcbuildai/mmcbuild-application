@@ -1,4 +1,4 @@
-import { listKnowledgeBases } from "./actions";
+import { listKnowledgeBases, isKnowledgeAdmin } from "./actions";
 import { KbCreateDialog } from "@/components/knowledge/kb-create-dialog";
 import {
   Card,
@@ -12,6 +12,31 @@ import { ArrowRight, Database } from "lucide-react";
 import Link from "next/link";
 
 export default async function KnowledgeBasesPage() {
+  // Knowledge bases are admin-only. Block gracefully for non-admins (beta
+  // testers, viewers) instead of letting listKnowledgeBases() throw into the
+  // app error boundary.
+  if (!(await isKnowledgeAdmin())) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Knowledge Bases</h1>
+          <p className="text-muted-foreground">
+            Reference documents the AI draws on for compliance analysis.
+          </p>
+        </div>
+        <Card className="flex flex-col items-center justify-center py-12 text-center">
+          <Database className="mb-4 h-12 w-12 text-muted-foreground" />
+          <h3 className="text-lg font-medium">Admin access required</h3>
+          <p className="mb-1 max-w-md text-sm text-muted-foreground">
+            Knowledge bases are managed by your organisation&rsquo;s owners and
+            admins. Ask an admin if there&rsquo;s a reference document you&rsquo;d
+            like added.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   const knowledgeBases = await listKnowledgeBases();
 
   return (
