@@ -18,7 +18,7 @@ import { CopyProjectButton } from "@/components/projects/copy-project-button";
 import { ProjectTabs, type ProjectTab } from "@/components/projects/project-tabs";
 import { DocumentsTab } from "@/components/projects/documents-tab";
 import { ProjectContributors } from "@/components/projects/project-contributors";
-import { QuestionnaireForm } from "@/components/projects/questionnaire-form";
+import { QuestionnairePrefillGate } from "@/components/projects/questionnaire-prefill-gate";
 import { WizardNav } from "@/components/projects/wizard-nav";
 import {
   getProjectSiteIntel,
@@ -26,7 +26,7 @@ import {
   getProjectQuestionnaire,
   getProjectCertifications,
   getProjectContributors,
-  getProjectDesignPrefill,
+  getDesignPrefillState,
 } from "../actions";
 import {
   ArrowLeft,
@@ -105,11 +105,11 @@ export default async function ProjectOverviewPage({
     ? await getProjectContributors(projectId)
     : null;
 
-  const [questionnaire, qSiteIntel, designPrefill] = tab === "questionnaire"
+  const [questionnaire, qSiteIntel, prefillState] = tab === "questionnaire"
     ? await Promise.all([
         getProjectQuestionnaire(projectId),
         getProjectSiteIntel(projectId),
-        getProjectDesignPrefill(projectId),
+        getDesignPrefillState(projectId),
       ])
     : [null, null, null];
 
@@ -272,7 +272,7 @@ export default async function ProjectOverviewPage({
       {tab === "questionnaire" && (
         <>
           <div className="max-w-2xl">
-            <QuestionnaireForm
+            <QuestionnairePrefillGate
               projectId={projectId}
               isDraft={isDraft}
               existingResponses={
@@ -287,7 +287,8 @@ export default async function ProjectOverviewPage({
                     }
                   : null
               }
-              designPrefill={designPrefill}
+              initialPrefill={prefillState?.prefill ?? {}}
+              initiallyPending={prefillState?.pending ?? false}
             />
           </div>
           {/* The questionnaire form owns the single "Save & Activate" action on

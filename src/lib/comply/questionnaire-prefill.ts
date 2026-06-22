@@ -263,3 +263,27 @@ export function buildDesignPrefillFromAttributes(
 
   return out;
 }
+
+/**
+ * Pure decision for the questionnaire hold-back gate: should we wait-and-poll
+ * for an in-flight design extraction before rendering the form?
+ *
+ * `pending` is true ONLY when the prefill is currently empty AND an extraction
+ * that would plausibly still yield attributes is in flight — a vision-capable
+ * plan (pdf/image) whose `design_attributes` hasn't been written yet, with no
+ * `design_checks.spatial_layout` landed either. In every other case it is false
+ * so the gate renders the form immediately and never traps the user.
+ *
+ * Factored out of `getDesignPrefillState` so the gate logic is unit-testable
+ * without a database.
+ */
+export function isPrefillPending(args: {
+  prefill: Record<string, string>;
+  hasPendingVisionPlan: boolean;
+  hasSpatialLayout: boolean;
+}): boolean {
+  if (Object.keys(args.prefill).length > 0) return false;
+  if (!args.hasPendingVisionPlan) return false;
+  if (args.hasSpatialLayout) return false;
+  return true;
+}

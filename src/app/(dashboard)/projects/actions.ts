@@ -11,6 +11,7 @@ import { getSampleDesign } from "@/lib/beta/sample-designs";
 import {
   buildDesignPrefill,
   buildDesignPrefillFromAttributes,
+  isPrefillPending,
   type DesignAttributes,
 } from "@/lib/comply/questionnaire-prefill";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
@@ -1016,6 +1017,77 @@ export async function getProjectDesignPrefill(
     ?.design_attributes;
 
   return buildDesignPrefillFromAttributes(attrs);
+}
+
+/**
+ * Combines the design prefill (see getProjectDesignPrefill) with a `pending`
+ * flag so the questionnaire's hold-back gate knows whether to wait-and-poll for
+ * an in-flight extraction before rendering the form.
+ *
+ * `pending` is true ONLY when the prefill is currently empty AND an extraction
+ * that would plausibly still yield attributes is in flight — i.e. there is a
+ * vision-capable plan (file_kind 'pdf'/'image') whose `design_attributes` is
+ * still NULL, and no `design_checks.spatial_layout` exists yet. In every other
+ * case (prefill already non-empty, no vision-capable plan, extraction already
+ * landed, or only non-vision plans like DWG) `pending` is false so the gate
+ * renders the form immediately and never traps the user.
+ */
+export async function getDesignPrefillState(
+  projectId: string,
+): Promise<{ prefill: Record<string, string>; pending: boolean }> {
+  // Auth + org guard (matches getProjectDesignPrefill).
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { data: project } = await admin
+    .from("projects")
+    .select("org_id")
+    .eq("id", projectId)
+    .single();
+
+  if (!project || project.org_id !== profile.org_id) {
+    return { prefill: {}, pending: false };
+  }
+
+  // Reuse the existing prefill logic (also re-runs its own auth/org guard).
+  const prefill = await getProjectDesignPrefill(projectId);
+  if (Object.keys(prefill).length > 0) {
+    return { prefill, pending: false };
+  }
+
+  // Empty prefill — is an extraction plausibly still coming? A vision-capable
+  // plan (pdf/image) whose design_attributes hasn't been written yet means the
+  // on-upload extraction may not have finished.
+  const { data: pendingPlans } = await admin
+    .from("plans")
+    .select("id")
+    .eq("project_id", projectId)
+    .in("file_kind", ["pdf", "image"] as const)
+    .is("design_attributes", null)
+    .limit(1);
+
+  const hasPendingVisionPlan = !!pendingPlans && pendingPlans.length > 0;
+  if (!hasPendingVisionPlan) {
+    return { prefill, pending: false };
+  }
+
+  // The 3D spatial layout is the other prefill source; if it already existed the
+  // prefill above would have been non-empty, but guard explicitly: only treat as
+  // pending when no spatial_layout has landed yet either.
+  const { data: layoutRow } = await admin
+    .from("design_checks")
+    .select("id")
+    .eq("project_id", projectId)
+    .not("spatial_layout", "is", null)
+    .limit(1)
+    .maybeSingle();
+
+  const hasSpatialLayout = !!layoutRow;
+
+  return {
+    prefill,
+    pending: isPrefillPending({ prefill, hasPendingVisionPlan, hasSpatialLayout }),
+  };
 }
 
 // ============================================================
