@@ -112,25 +112,43 @@ export default async function CheckPage({
 
   return (
     <div className="max-w-4xl space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <Link
-            href={`/comply/${projectId}`}
-            className="text-sm text-muted-foreground hover:underline"
-          >
-            &larr; Back to Comply
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold">Compliance Report</h1>
-        </div>
-        {check.status === "completed" && hasActionable && (
-          <Link
-            href={`/comply/${projectId}/open-items`}
-            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
-          >
-            Open items board
-          </Link>
-        )}
+      <div>
+        <Link
+          href={`/comply/${projectId}`}
+          className="text-sm text-muted-foreground hover:underline"
+        >
+          &larr; Back to Comply
+        </Link>
+        <h1 className="mt-2 text-2xl font-bold">Compliance Report</h1>
       </div>
+
+      {/* Prominent, explained entry to the remediation workflow — the corner
+          link nobody read. Only when there are findings to action. */}
+      {check.status === "completed" && hasActionable && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold">
+                Next step — work your open items
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                The <strong>Open-Items board</strong> is where you action every
+                non-compliant finding: send it to an engineer or consultant for
+                remediation, track their responses, then mark each one{" "}
+                <strong>resolved</strong> or <strong>waived</strong> — and once
+                they all are, re-run the check to confirm. This is your workflow
+                for clearing the report.
+              </p>
+            </div>
+            <Link
+              href={`/comply/${projectId}/open-items`}
+              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Open the Open-Items board &rarr;
+            </Link>
+          </div>
+        </div>
+      )}
 
       {check.status === "completed" && delta && (
         <CheckDeltaPanel version={check.version ?? 2} delta={delta} />

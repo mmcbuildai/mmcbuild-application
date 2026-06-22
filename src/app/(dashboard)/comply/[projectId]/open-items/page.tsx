@@ -3,46 +3,22 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getComplianceReport, getProjectChecks } from "../../actions";
 import { getProjectPlans } from "@/app/(dashboard)/projects/actions";
-import { SeverityBadge } from "@/components/comply/severity-badge";
-import { RemediationBadge } from "@/components/comply/remediation-badge";
-import { OpenItemActions } from "@/components/comply/open-item-actions";
 import {
   RecheckButton,
   type RecheckPlanOption,
 } from "@/components/comply/recheck-button";
+import {
+  OpenItemsBoard,
+  type OpenItemFinding,
+} from "@/components/comply/open-items-board";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Download, AlertCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle } from "lucide-react";
 import {
   computeFindingLifecycle,
   allFindingsConverged,
   unresolvedCount,
-  type FindingLifecycle,
 } from "@/lib/comply/finding-lifecycle";
-import type { RemediationResponse } from "@/components/comply/finding-review-card";
-
-interface OpenItemFinding {
-  id: string;
-  ncc_section: string;
-  category: string;
-  title: string;
-  description: string;
-  severity: "compliant" | "advisory" | "non_compliant" | "critical";
-  remediation_status: string | null;
-  resolution_type: string | null;
-  resolution_note: string | null;
-  waiver_reason: string | null;
-  resolved_at: string | null;
-  responses?: RemediationResponse[];
-  lifecycle?: FindingLifecycle;
-}
-
-const LIFECYCLE_GROUPS: { key: FindingLifecycle; label: string; hint: string }[] = [
-  { key: "open", label: "Open", hint: "No contributor reply yet — awaiting remediation" },
-  { key: "responded", label: "Responded", hint: "Contributor replied — review and accept or waive" },
-  { key: "resolved", label: "Resolved", hint: "Accepted via updated drawings or evidence" },
-  { key: "waived", label: "Waived", hint: "Accepted as-is with a recorded reason" },
-];
 
 export default async function OpenItemsPage({
   params,
@@ -97,21 +73,16 @@ export default async function OpenItemsPage({
     redirect(`/comply/${projectId}`);
   }
 
-  const allFindings = (report.findings ?? []) as unknown as OpenItemFinding[];
+  const allFindings = (report.findings ?? []) as unknown as Omit<
+    OpenItemFinding,
+    "lifecycle"
+  >[];
 
   // Actionable = non-compliant or critical (mirrors workflow-tabs `hasFlagged`).
-  const actionable = allFindings.filter(
-    (f) => f.severity === "non_compliant" || f.severity === "critical"
-  );
-
-  // Group by lifecycle.
-  const byLifecycle = new Map<FindingLifecycle, OpenItemFinding[]>();
-  for (const f of actionable) {
-    const l = f.lifecycle ?? computeFindingLifecycle(f);
-    const list = byLifecycle.get(l) ?? [];
-    list.push(f);
-    byLifecycle.set(l, list);
-  }
+  // Attach the computed lifecycle so the client board can filter/group by it.
+  const actionable: OpenItemFinding[] = allFindings
+    .filter((f) => f.severity === "non_compliant" || f.severity === "critical")
+    .map((f) => ({ ...f, lifecycle: computeFindingLifecycle(f) }));
 
   const ready = allFindingsConverged(actionable);
   const remaining = unresolvedCount(actionable);
@@ -214,33 +185,8 @@ export default async function OpenItemsPage({
             </div>
           )}
 
-          {/* Grouped findings */}
-          {LIFECYCLE_GROUPS.map((group) => {
-            const items = byLifecycle.get(group.key) ?? [];
-            if (items.length === 0) return null;
-            return (
-              <section key={group.key} className="space-y-3">
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    {group.label}{" "}
-                    <span className="text-sm font-normal text-muted-foreground">
-                      ({items.length})
-                    </span>
-                  </h2>
-                  <p className="text-sm text-muted-foreground">{group.hint}</p>
-                </div>
-                <div className="space-y-3">
-                  {items.map((finding) => (
-                    <OpenItemCard
-                      key={finding.id}
-                      finding={finding}
-                      lifecycle={group.key}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+          {/* Filterable, sortable board (severity / issue type / status). */}
+          <OpenItemsBoard findings={actionable} />
         </>
       )}
     </OpenItemsShell>
@@ -277,106 +223,5 @@ function OpenItemsShell({
       </div>
       {children}
     </div>
-  );
-}
-
-function OpenItemCard({
-  finding,
-  lifecycle,
-}: {
-  finding: OpenItemFinding;
-  lifecycle: FindingLifecycle;
-}) {
-  return (
-    <Card>
-      <CardContent className="space-y-3 py-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs text-muted-foreground">
-            {finding.ncc_section}
-          </span>
-          <SeverityBadge severity={finding.severity} />
-          {finding.remediation_status && (
-            <RemediationBadge status={finding.remediation_status} />
-          )}
-        </div>
-
-        <div>
-          <p className="text-base font-medium">{finding.title}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {finding.description}
-          </p>
-        </div>
-
-        {/* Phase-1 contributor responses (notes + uploaded file). */}
-        {finding.responses && finding.responses.length > 0 && (
-          <div className="space-y-3">
-            {finding.responses.map((response) => (
-              <div
-                key={response.id}
-                className="rounded-md border border-purple-200 bg-purple-50 p-3"
-              >
-                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                  <p className="break-all text-xs font-medium text-purple-800">
-                    Response from {response.email_to}
-                  </p>
-                  <RemediationBadge status={response.remediation_status} />
-                </div>
-                {response.responded_at && (
-                  <p className="text-xs text-purple-600">
-                    Responded{" "}
-                    {new Date(response.responded_at).toLocaleString("en-AU")}
-                  </p>
-                )}
-                {response.response_notes && (
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-purple-900">
-                    {response.response_notes}
-                  </p>
-                )}
-                {response.response_file_path && (
-                  <a
-                    href={`/api/remediation/download/${response.id}`}
-                    className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-md border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-800 hover:bg-purple-100"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    {response.response_file_name ?? "Download attachment"}
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Recorded builder verdict (for resolved/waived). */}
-        {lifecycle === "resolved" && (
-          <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm">
-            <p className="font-medium text-green-900">
-              Resolved via{" "}
-              {finding.resolution_type === "evidence"
-                ? "evidence / certificate"
-                : "updated drawings"}
-            </p>
-            {finding.resolution_note && (
-              <p className="mt-1 whitespace-pre-wrap text-green-800">
-                {finding.resolution_note}
-              </p>
-            )}
-          </div>
-        )}
-        {lifecycle === "waived" && (
-          <div className="rounded-md border border-gray-300 bg-gray-50 p-3 text-sm">
-            <p className="font-medium text-gray-900">Waived</p>
-            {finding.waiver_reason && (
-              <p className="mt-1 whitespace-pre-wrap text-gray-700">
-                {finding.waiver_reason}
-              </p>
-            )}
-          </div>
-        )}
-
-        <OpenItemActions findingId={finding.id} lifecycle={lifecycle} />
-      </CardContent>
-    </Card>
   );
 }
