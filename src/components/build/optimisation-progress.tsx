@@ -176,7 +176,7 @@ export function OptimisationProgress({
 
         {status === "processing" && (
           <p className="text-xs text-muted-foreground">
-            AI is reviewing your plans for prefabrication and modern construction opportunities. This can take a couple of minutes — you can leave this page open.
+            AI is reviewing your plans for prefabrication and modern construction opportunities. This typically takes a few minutes — up to ~8 for large or complex plans — you can leave this page open.
           </p>
         )}
       </CardContent>

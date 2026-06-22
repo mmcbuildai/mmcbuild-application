@@ -289,18 +289,17 @@ export async function inviteUser(
     return { error: "This email is already a member of your organisation" };
   }
 
-  // Check no pending invite for this email
-  const { data: existingInvite } = await admin
+  // A lingering pending invite for this email must NOT block re-inviting. The
+  // admin may have "deleted" the person elsewhere, or a row lingered from an
+  // existing-account invite (which keeps the pending row). Clear any stale
+  // pending row and re-create below, so a re-invite always works (acts as a
+  // resend) instead of a confusing "duplicate" error (Karen, beta 2026-06-20).
+  await admin
     .from("org_invitations")
-    .select("id")
+    .delete()
     .eq("org_id", profile.org_id)
     .eq("email", email.trim().toLowerCase())
-    .eq("status", "pending")
-    .single();
-
-  if (existingInvite) {
-    return { error: "A pending invitation already exists for this email" };
-  }
+    .eq("status", "pending");
 
   // Create invitation record
   const { data: createdInvite, error: insertError } = await admin

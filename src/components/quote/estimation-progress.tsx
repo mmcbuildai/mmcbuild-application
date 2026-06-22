@@ -143,7 +143,8 @@ export function EstimationProgress({
             <p className="text-xs text-muted-foreground">
               The AI agent is working through 6 phases of cost estimation,
               looking up reference rates and comparing traditional vs MMC alternatives.
-              This typically takes 2-4 minutes.
+              This typically takes 5–8 minutes, and longer for large or complex
+              plans — you can leave this page open.
             </p>
             <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
               <div
