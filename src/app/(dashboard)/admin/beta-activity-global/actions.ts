@@ -296,13 +296,29 @@ export async function startDummyBetaSession(): Promise<{
 
   const admin = createAdminClient();
 
-  // The operator's org — the demo tester lives here so it shows on this board.
-  const { data: opProfile } = await admin
-    .from("profiles")
-    .select("org_id")
-    .eq("user_id", user.id)
-    .single();
-  const orgId = (opProfile as { org_id?: string } | null)?.org_id ?? null;
+  // The demo lives in its OWN dedicated org (not the operator's), so a reset can
+  // wipe EVERY module's state — projects, the Direct listing (org-scoped, one
+  // per org), Train progress — without ever touching the operator's real org.
+  // Find-or-create by a stable name. Still appears on the all-orgs beta board.
+  const DEMO_ORG_NAME = "Beta Demo (preview)";
+  let demoOrg = (
+    await admin
+      .from("organisations")
+      .select("id")
+      .eq("name", DEMO_ORG_NAME)
+      .maybeSingle()
+  ).data as { id: string } | null;
+  if (!demoOrg) {
+    demoOrg = (
+      await admin
+        .from("organisations")
+        .insert({ name: DEMO_ORG_NAME } as never)
+        .select("id")
+        .single()
+    ).data as { id: string } | null;
+  }
+  const orgId = demoOrg?.id ?? null;
+  if (!orgId) return { error: "Couldn't set up the demo org" };
 
   // 1. Find or create the demo auth user (confirmed; the mailbox need not exist
   //    because we hand back the sign-in link directly).
@@ -330,14 +346,22 @@ export async function startDummyBetaSession(): Promise<{
     dummyId = data.user.id;
   }
 
-  // 2. Ensure a beta profile + membership in the operator's org.
+  // 2. Ensure a beta profile in the DEMO org. If an earlier version created the
+  //    profile in the operator's org, move it here so all its state is isolated.
   const { data: prof } = await admin
     .from("profiles")
-    .select("id")
+    .select("id, org_id")
     .eq("user_id", dummyId)
     .maybeSingle();
   let dummyProfileId = (prof as { id?: string } | null)?.id ?? null;
-  if (!dummyProfileId && orgId) {
+  if (dummyProfileId) {
+    if ((prof as { org_id?: string }).org_id !== orgId) {
+      await admin
+        .from("profiles")
+        .update({ org_id: orgId } as never)
+        .eq("id", dummyProfileId);
+    }
+  } else {
     const { data: created } = await admin
       .from("profiles")
       .insert({
@@ -351,10 +375,12 @@ export async function startDummyBetaSession(): Promise<{
       .select("id")
       .single();
     dummyProfileId = (created as { id?: string } | null)?.id ?? null;
-    await ensureMembership(admin, dummyId, orgId, "beta", "beta", {
-      setActive: true,
-    });
   }
+  // Always (re)assert membership + active org so the demo signs into the demo
+  // org, even for a pre-existing demo account moved from the operator's org.
+  await ensureMembership(admin, dummyId, orgId, "beta", "beta", {
+    setActive: true,
+  });
 
   // 3. Reset to a clean newbie: delete the demo's projects (storage + cascade)
   //    and all its beta module progress.
@@ -378,6 +404,15 @@ export async function startDummyBetaSession(): Promise<{
     }
   }
   await db().from("beta_feedback").delete().eq("user_id", dummyId);
+
+  // Direct (MMC Direct): the org-scoped listing. Safe to clear by org now that
+  // the demo has its own org — this never touches the operator's listing.
+  await admin.from("professionals").delete().eq("org_id", orgId);
+
+  // Train: the demo's enrollments (cascades certificates + lesson_completions).
+  if (dummyProfileId) {
+    await admin.from("enrollments").delete().eq("profile_id", dummyProfileId);
+  }
 
   // 4. One-time sign-in. Build a token_hash link to OUR /auth/callback (NOT the
   //    default action_link, which returns the session in the URL fragment via
