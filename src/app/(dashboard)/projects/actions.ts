@@ -365,6 +365,14 @@ export async function updateProject(
     name?: string;
     address?: string;
     status?: string;
+    // Geocoded coordinates from the address autocomplete. When present, we save
+    // them AND derive site intel — so an address set/changed after creation
+    // populates the Site Intelligence card + the climate/wind/BAL prefill.
+    lat?: number | null;
+    lng?: number | null;
+    suburb?: string | null;
+    state?: string | null;
+    postcode?: string | null;
   }
 ) {
   const profile = await getProfile();
@@ -385,12 +393,22 @@ export async function updateProject(
     return { error: "Project name cannot be empty" };
   }
 
+  const lat =
+    typeof data.lat === "number" && isFinite(data.lat) ? data.lat : null;
+  const lng =
+    typeof data.lng === "number" && isFinite(data.lng) ? data.lng : null;
+
   const updateData: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
   if (data.name !== undefined) updateData.name = data.name.trim();
   if (data.address !== undefined) updateData.address = data.address.trim() || null;
   if (data.status !== undefined) updateData.status = data.status;
+  if (data.lat !== undefined) updateData.lat = lat;
+  if (data.lng !== undefined) updateData.lng = lng;
+  if (data.suburb !== undefined) updateData.suburb = data.suburb || null;
+  if (data.state !== undefined) updateData.state = data.state || null;
+  if (data.postcode !== undefined) updateData.postcode = data.postcode || null;
 
   const { error } = await admin
     .from("projects")
@@ -398,6 +416,46 @@ export async function updateProject(
     .eq("id", projectId);
 
   if (error) return { error: `Failed to update project: ${error.message}` };
+
+  // Derive + (re)store site intel when a geocoded address was provided, so it
+  // works even when the address is set/changed AFTER creation (previously only
+  // createProject derived — editing the address did nothing). Best-effort.
+  if (lat != null && lng != null) {
+    try {
+      const intel = await deriveSiteIntel({
+        lat,
+        lng,
+        address: (data.address ?? "").trim(),
+        suburb: data.suburb ?? null,
+        state: data.state ?? null,
+        postcode: data.postcode ?? null,
+      });
+      const staticMapUrl = getStaticMapUrl(lat, lng);
+      // project_site_intel is 1:1 with the project — replace any existing row.
+      await admin.from("project_site_intel").delete().eq("project_id", projectId);
+      await admin.from("project_site_intel").insert({
+        project_id: projectId,
+        org_id: profile.org_id,
+        latitude: lat,
+        longitude: lng,
+        formatted_address: (data.address ?? "").trim() || null,
+        suburb: data.suburb || null,
+        postcode: data.postcode || null,
+        state: data.state || null,
+        climate_zone: intel.climate_zone,
+        wind_region: intel.wind_region,
+        bal_rating: intel.bal_rating,
+        council_name: intel.council_name,
+        council_code: intel.council_code,
+        zoning: intel.zoning,
+        overlays: {},
+        static_map_url: staticMapUrl || null,
+        derived_at: new Date().toISOString(),
+      } as never);
+    } catch (e) {
+      console.error("[updateProject] Site intel derivation failed:", e);
+    }
+  }
 
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);

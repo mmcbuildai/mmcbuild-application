@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AddressAutocomplete } from "@/components/common/address-autocomplete";
+import type { GeocodedAddress } from "@/lib/services/mapbox";
 import {
   Dialog,
   DialogContent,
@@ -47,20 +49,33 @@ export function EditProjectDialog({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // A newly-picked geocoded address (null = address unchanged).
+  const geocodedRef = useRef<GeocodedAddress | null>(null);
 
   function handleSubmit(formData: FormData) {
     setError(null);
-    const data = {
+    const data: Parameters<typeof updateProject>[1] = {
       name: formData.get("name") as string,
-      address: formData.get("address") as string,
       status: formData.get("status") as string,
     };
+    // Only send the address + coords when the user picked a new one from the
+    // autocomplete — that's what lets updateProject derive site intel.
+    const geo = geocodedRef.current;
+    if (geo) {
+      data.address = geo.formatted_address;
+      data.lat = geo.latitude;
+      data.lng = geo.longitude;
+      data.suburb = geo.suburb ?? null;
+      data.state = geo.state ?? null;
+      data.postcode = geo.postcode ?? null;
+    }
 
     startTransition(async () => {
       const result = await updateProject(projectId, data);
       if (result.error) {
         setError(result.error);
       } else {
+        geocodedRef.current = null;
         setOpen(false);
         router.refresh();
       }
@@ -94,11 +109,18 @@ export function EditProjectDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-address">Address</Label>
-            <Input
-              id="edit-address"
-              name="address"
+            <AddressAutocomplete
               defaultValue={address ?? ""}
+              placeholder="Start typing an Australian address…"
+              onSelect={(geo) => {
+                geocodedRef.current = geo;
+              }}
             />
+            <p className="text-xs text-muted-foreground">
+              Pick an address from the list to auto-derive site intelligence
+              (climate zone, wind region, BAL, council). Leave it as-is to keep
+              the current address.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="edit-status">Status</Label>
