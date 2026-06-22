@@ -54,10 +54,15 @@ async function autoTickRunTasks(
   profileId: string,
 ) {
   for (const [moduleId, sig] of Object.entries(RUN_SIGNAL)) {
+    // Only a COMPLETED run ticks the task. A row exists the moment a run is
+    // queued/processing, so counting any row marked the task done as soon as the
+    // user *started* a run (Karen, beta) — the task must reflect completion, not
+    // that they picked the module. All three run tables use status 'completed'.
     const { count } = await db()
       .from(sig.table)
       .select("id", { count: "exact", head: true })
-      .eq("created_by", profileId);
+      .eq("created_by", profileId)
+      .eq("status", "completed");
     if (!count || count === 0) continue;
 
     const { data: row } = await db()

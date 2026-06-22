@@ -118,7 +118,7 @@ export default async function CheckPage({
             href={`/comply/${projectId}`}
             className="text-sm text-muted-foreground hover:underline"
           >
-            &larr; Back to Project
+            &larr; Back to Comply
           </Link>
           <h1 className="mt-2 text-2xl font-bold">Compliance Report</h1>
         </div>

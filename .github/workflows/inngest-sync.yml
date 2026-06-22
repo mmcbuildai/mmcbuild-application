@@ -1,0 +1,33 @@
+name: Inngest Sync
+
+# Re-register Inngest functions after every successful PRODUCTION deploy.
+#
+# Why this exists: the Vercel→Inngest auto-sync was NOT firing on deploy, so
+# every newly-added Inngest function (or trigger change) silently never ran
+# until someone manually PUT /api/inngest (cost hours on 2026-06-22: the design-
+# attribute extraction + the stuck-job reaper were both dark until forced).
+#
+# Vercel's GitHub integration emits a `deployment_status` event when a deploy
+# finishes; on a successful Production deploy we PUT the serve endpoint, which
+# makes the app re-register all its functions with Inngest Cloud. The PUT is
+# idempotent (no-op when nothing changed) and needs no secrets — the endpoint
+# authenticates to Inngest with the app's own server-side signing key.
+on:
+  deployment_status:
+
+jobs:
+  sync:
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment_status.environment == 'Production'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-sync Inngest functions
+        run: |
+          set -euo pipefail
+          echo "Production deploy succeeded — re-syncing Inngest functions…"
+          code=$(curl -sS -X PUT -m 60 -o /tmp/sync.out -w "%{http_code}" \
+            "https://app.mmcbuild.com.au/api/inngest")
+          echo "HTTP $code"
+          cat /tmp/sync.out
+          test "$code" = "200"

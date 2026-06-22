@@ -263,7 +263,7 @@ function OpenItemsShell({
           href={`/comply/${projectId}`}
           className="text-sm text-muted-foreground hover:underline"
         >
-          &larr; Back to Project
+          &larr; Back to Comply
         </Link>
         <h1 className="mt-2 text-2xl font-bold">Open Items — {projectName}</h1>
         {/* Explanatory header (PRODUCT_STANDARDS §5). */}
