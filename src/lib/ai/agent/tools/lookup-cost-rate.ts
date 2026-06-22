@@ -209,6 +209,27 @@ export async function executeLookupCostRate(
   const mergedRates = [...orgRates, ...nonOverriddenGlobal];
 
   if (mergedRates.length === 0) {
+    // META-SEARCH: an element-specific miss should NOT make the agent re-probe
+    // the same category with element variations (the #1 cause of slow, expensive
+    // cost runs — Karen, 2026-06-20). Return EVERY available rate in the category
+    // in this one call so the agent picks the closest, and tell it not to search
+    // again. Only runs when an element filter was the thing that missed.
+    if (input.element) {
+      const catOrg = orgId
+        ? await queryOrgOverrides(orgId, input.category, state)
+        : [];
+      const catGlobal = await queryGlobalRates(input.category, state);
+      const catOverrideElements = new Set(catOrg.map((r) => r.element));
+      const catMerged = [
+        ...catOrg,
+        ...catGlobal.filter((r) => !catOverrideElements.has(r.element)),
+      ];
+      if (catMerged.length > 0) {
+        const lines = catMerged.map((r) => formatRateLine(r));
+        return `No exact rate for element "${input.element}" in "${input.category}". Here are ALL available "${input.category}" rates — pick the closest match, or estimate the rate yourself (rate_source_name "AI Estimated"). Do NOT call lookup_cost_rate for this category again:\n${lines.join("\n")}`;
+      }
+    }
+
     // Fall back to NSW rates
     if (state !== "NSW") {
       const nswGlobal = await queryGlobalRates(input.category, "NSW", input.element);
@@ -226,11 +247,13 @@ export async function executeLookupCostRate(
       }
     }
 
+    // Nothing in the tables for this category at all → estimate + a "to be
+    // confirmed" placeholder, and do NOT keep searching for what isn't there.
     return JSON.stringify({
       rates: [],
       source_name: "AI Estimated",
       source_detail: null,
-      message: `No reference rates found for category "${input.category}"${input.element ? ` element "${input.element}"` : ""}. Use your market knowledge to estimate.`,
+      message: `No reference rates exist for category "${input.category}"${input.element ? ` (element "${input.element}")` : ""}. Estimate the rate from market knowledge and set rate_source_name to "AI Estimated" (a "to be confirmed" placeholder is fine). Do NOT call lookup_cost_rate for this category again — the data is not in the tables.`,
     });
   }
 
