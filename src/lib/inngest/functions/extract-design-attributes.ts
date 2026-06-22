@@ -37,7 +37,10 @@ Return JSON in EXACTLY this shape (omit any field you cannot determine confident
 {
   "storeys": <integer number of above-ground storeys>,
   "floor_area_m2": <total internal floor area in square metres, number>,
-  "rooms": [{ "name": "<label as written on the plan>", "type": "<bedroom|bathroom|ensuite|laundry|wc|powder|kitchen|living|garage|stair|balcony|deck|pool|other>" }],
+  "wet_area_count": <integer count of wet rooms across the whole plan: bathrooms, ensuites, laundries, WCs, powder rooms>,
+  "has_stairs": <true if the dwelling has internal stairs, else false>,
+  "has_balcony_deck": <true if there is a balcony or deck, else false>,
+  "has_swimming_pool": <true if there is a swimming pool, else false>,
   "has_party_wall": <true if the dwelling shares a wall with an adjoining dwelling (attached/duplex/townhouse), else false>,
   "roof_material": "<e.g. concrete tile, terracotta tile, Colorbond metal, Zincalume, slate, asphalt shingle>",
   "wall_cladding": "<e.g. brick veneer, double brick, fibre cement, timber weatherboard, metal cladding, render, AAC/Hebel>",
@@ -46,7 +49,7 @@ Return JSON in EXACTLY this shape (omit any field you cannot determine confident
 
 Rules:
 - The final message must contain ONLY the JSON object — no preamble, no markdown fences. Start with { and end with }.
-- Keep "rooms" to the labelled rooms you can see; do not invent rooms.
+- Return COUNTS and true/false flags only — do NOT list individual rooms (a long room list overflows the response).
 - Leave a field out entirely if the plan does not clearly support it.`;
 
 /** File kinds that have a direct vision path (PDF read natively, image rasterised). */

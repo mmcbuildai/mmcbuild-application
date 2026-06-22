@@ -5,19 +5,14 @@ import {
 } from "@/lib/comply/questionnaire-prefill";
 
 describe("buildDesignPrefillFromAttributes", () => {
-  it("maps a full attribute object to the questionnaire keys", () => {
+  it("maps a full aggregate attribute object to the questionnaire keys", () => {
     const attrs: DesignAttributes = {
       storeys: 2,
       floor_area_m2: 184.6,
-      rooms: [
-        { name: "Living", type: "living" },
-        { name: "Master Bedroom", type: "bedroom" },
-        { name: "Ensuite", type: "ensuite" },
-        { name: "Bathroom", type: "bathroom" },
-        { name: "Laundry", type: "laundry" },
-        { name: "Balcony", type: "balcony" },
-        { name: "Stair", type: "stair" },
-      ],
+      wet_area_count: 3,
+      has_stairs: true,
+      has_balcony_deck: true,
+      has_swimming_pool: false,
       has_party_wall: true,
       roof_material: "Colorbond metal",
       wall_cladding: "brick veneer",
@@ -29,11 +24,11 @@ describe("buildDesignPrefillFromAttributes", () => {
     expect(out).toEqual({
       storeys: "2",
       floor_area: "185", // rounded from 184.6
-      wet_area_count: "3", // ensuite + bathroom + laundry
+      wet_area_count: "3",
       attached_dwelling: "true",
       roof_material: "Metal (Colorbond)",
       wall_cladding: "Brick veneer",
-      has_stairs: "true", // storeys > 1 (and a stair room)
+      has_stairs: "true",
       has_balcony_deck: "true",
       ceiling_height_habitable: "2.7",
     });
@@ -59,56 +54,35 @@ describe("buildDesignPrefillFromAttributes", () => {
   });
 
   it("sets attached_dwelling only when has_party_wall is true", () => {
-    expect(
-      buildDesignPrefillFromAttributes({ has_party_wall: true }),
-    ).toEqual({ attached_dwelling: "true" });
-    expect(
-      buildDesignPrefillFromAttributes({ has_party_wall: false }),
-    ).toEqual({});
+    expect(buildDesignPrefillFromAttributes({ has_party_wall: true })).toEqual({
+      attached_dwelling: "true",
+    });
+    expect(buildDesignPrefillFromAttributes({ has_party_wall: false })).toEqual({});
     expect(buildDesignPrefillFromAttributes({})).toEqual({});
   });
 
-  it("derives has_stairs from storeys > 1 even with no stair-named room", () => {
-    const out = buildDesignPrefillFromAttributes({
-      storeys: 2,
-      rooms: [{ name: "Bedroom", type: "bedroom" }],
-    });
+  it("derives has_stairs from storeys > 1 even without the flag", () => {
+    const out = buildDesignPrefillFromAttributes({ storeys: 2 });
     expect(out.storeys).toBe("2");
     expect(out.has_stairs).toBe("true");
   });
 
-  it("derives has_stairs from a stair-named room on a single storey", () => {
-    const out = buildDesignPrefillFromAttributes({
-      storeys: 1,
-      rooms: [{ name: "Stairwell", type: "other" }],
-    });
+  it("derives has_stairs from the flag on a single storey", () => {
+    const out = buildDesignPrefillFromAttributes({ storeys: 1, has_stairs: true });
     expect(out.has_stairs).toBe("true");
   });
 
-  it("does not set has_stairs for a single-storey plan with no stair room", () => {
-    const out = buildDesignPrefillFromAttributes({
-      storeys: 1,
-      rooms: [{ name: "Kitchen", type: "kitchen" }],
-    });
+  it("does not set has_stairs for a single-storey plan with no stair flag", () => {
+    const out = buildDesignPrefillFromAttributes({ storeys: 1, has_stairs: false });
     expect(out.has_stairs).toBeUndefined();
   });
 
-  it("counts wet areas by room name/type and omits when zero", () => {
-    expect(
-      buildDesignPrefillFromAttributes({
-        rooms: [
-          { name: "Powder Room", type: "powder" },
-          { name: "WC", type: "wc" },
-          { name: "Living", type: "living" },
-        ],
-      }),
-    ).toEqual({ wet_area_count: "2" });
-
-    expect(
-      buildDesignPrefillFromAttributes({
-        rooms: [{ name: "Living", type: "living" }],
-      }),
-    ).toEqual({});
+  it("uses wet_area_count directly and omits when zero/absent", () => {
+    expect(buildDesignPrefillFromAttributes({ wet_area_count: 2 })).toEqual({
+      wet_area_count: "2",
+    });
+    expect(buildDesignPrefillFromAttributes({ wet_area_count: 0 })).toEqual({});
+    expect(buildDesignPrefillFromAttributes({})).toEqual({});
   });
 
   it("omits floor_area when not positive and ceiling height when out of range", () => {
@@ -126,11 +100,15 @@ describe("buildDesignPrefillFromAttributes", () => {
     ).toEqual({});
   });
 
-  it("derives has_swimming_pool from a pool-named room", () => {
+  it("derives has_swimming_pool / has_balcony_deck from their flags", () => {
     expect(
-      buildDesignPrefillFromAttributes({
-        rooms: [{ name: "Swimming Pool", type: "pool" }],
-      }),
+      buildDesignPrefillFromAttributes({ has_swimming_pool: true }),
     ).toEqual({ has_swimming_pool: "true" });
+    expect(
+      buildDesignPrefillFromAttributes({ has_balcony_deck: true }),
+    ).toEqual({ has_balcony_deck: "true" });
+    expect(
+      buildDesignPrefillFromAttributes({ has_swimming_pool: false, has_balcony_deck: false }),
+    ).toEqual({});
   });
 });

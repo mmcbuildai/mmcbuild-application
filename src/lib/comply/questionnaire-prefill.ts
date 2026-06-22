@@ -170,16 +170,21 @@ export function buildDesignPrefill(
 export interface DesignAttributes {
   storeys?: number;
   floor_area_m2?: number;
-  rooms?: { name?: string; type?: string }[];
+  /**
+   * AGGREGATES, not a raw room list. The on-upload extraction returns counts +
+   * flags directly (not a per-room array): a full rooms[] array on a multi-page
+   * architectural set overran the model output cap → `output_too_large` (every
+   * real plan failed, 2026-06-22). Aggregates bound the output to a fixed handful
+   * of fields, so the extraction can never blow the cap.
+   */
+  wet_area_count?: number;
+  has_stairs?: boolean;
+  has_balcony_deck?: boolean;
+  has_swimming_pool?: boolean;
   has_party_wall?: boolean;
   roof_material?: string;
   wall_cladding?: string;
   ceiling_height_habitable_m?: number;
-}
-
-/** A lightweight room's best descriptive string for keyword matching. */
-function attrRoomLabel(room: { name?: string; type?: string }): string {
-  return `${room.type ?? ""} ${room.name ?? ""}`;
 }
 
 /**
@@ -199,7 +204,6 @@ export function buildDesignPrefillFromAttributes(
   if (!attrs) return {};
 
   const out: Record<string, string> = {};
-  const rooms = Array.isArray(attrs.rooms) ? attrs.rooms : [];
 
   // Storeys
   if (typeof attrs.storeys === "number" && attrs.storeys >= 1) {
@@ -211,10 +215,9 @@ export function buildDesignPrefillFromAttributes(
     out.floor_area = String(Math.round(attrs.floor_area_m2));
   }
 
-  // Wet area count (rooms whose name/type matches the wet-area pattern)
-  const wetCount = rooms.filter((r) => WET_AREA_RE.test(attrRoomLabel(r))).length;
-  if (wetCount > 0) {
-    out.wet_area_count = String(wetCount);
+  // Wet area count (aggregate from the extraction; positive only)
+  if (typeof attrs.wet_area_count === "number" && attrs.wet_area_count > 0) {
+    out.wet_area_count = String(attrs.wet_area_count);
   }
 
   // Attached dwelling (party wall present)
@@ -234,21 +237,21 @@ export function buildDesignPrefillFromAttributes(
     out.wall_cladding = cladding;
   }
 
-  // Stairs (multi-storey or a stair-named room)
+  // Stairs (the extracted flag, or implied by more than one storey)
   if (
-    (typeof attrs.storeys === "number" && attrs.storeys > 1) ||
-    rooms.some((r) => STAIR_RE.test(attrRoomLabel(r)))
+    attrs.has_stairs === true ||
+    (typeof attrs.storeys === "number" && attrs.storeys > 1)
   ) {
     out.has_stairs = "true";
   }
 
   // Balcony / deck
-  if (rooms.some((r) => BALCONY_DECK_RE.test(attrRoomLabel(r)))) {
+  if (attrs.has_balcony_deck === true) {
     out.has_balcony_deck = "true";
   }
 
   // Swimming pool
-  if (rooms.some((r) => POOL_RE.test(attrRoomLabel(r)))) {
+  if (attrs.has_swimming_pool === true) {
     out.has_swimming_pool = "true";
   }
 
