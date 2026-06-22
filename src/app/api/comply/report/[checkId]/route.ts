@@ -34,13 +34,6 @@ export async function GET(
     return NextResponse.json({ error: "Check not found" }, { status: 404 });
   }
 
-  if (check.status !== "completed") {
-    return NextResponse.json(
-      { error: "Report not yet completed" },
-      { status: 400 }
-    );
-  }
-
   // Load project
   const { data: project } = await admin
     .from("projects")
@@ -54,6 +47,20 @@ export async function GET(
     .select("*")
     .eq("check_id", checkId)
     .order("sort_order", { ascending: true });
+
+  // Export is allowed as long as the run produced findings — a user can export a
+  // report WITH unresolved/non-compliant items (e.g. to take to a meeting), and
+  // even an errored run with partial findings is exportable. Block only when the
+  // check is genuinely not ready (still running / nothing produced yet), with an
+  // honest reason rather than a generic "failed".
+  const hasFindings = (findings?.length ?? 0) > 0;
+  if (check.status !== "completed" && !hasFindings) {
+    const reason =
+      check.status === "queued" || check.status === "processing"
+        ? "The compliance check is still running — wait for it to finish before exporting."
+        : "This compliance check didn't produce a report (the run failed before any findings were generated). Re-run the check, then export.";
+    return NextResponse.json({ error: reason }, { status: 400 });
+  }
 
   const reportInput = {
     projectName: project?.name ?? "Untitled Project",

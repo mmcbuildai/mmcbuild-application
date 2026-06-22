@@ -19,7 +19,17 @@ export function ExportButton({ checkId }: ExportButtonProps) {
         : `/api/comply/report/${checkId}`;
       const res = await fetch(url);
       if (!res.ok) {
-        throw new Error("Failed to generate report");
+        // Surface the real reason from the route (Diagnostic Integrity) rather
+        // than a generic "failed".
+        let reason = `Failed to export ${format.toUpperCase()} report. Please try again.`;
+        try {
+          const body = await res.json();
+          if (body?.error) reason = body.error;
+        } catch {
+          // non-JSON body — keep the generic message
+        }
+        alert(reason);
+        return;
       }
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
