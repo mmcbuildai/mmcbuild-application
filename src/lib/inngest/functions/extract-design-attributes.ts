@@ -70,23 +70,6 @@ export const extractDesignAttributes = inngest.createFunction(
             planId ? ` for plan ${planId}` : ""
           }: ${error?.message}`,
         );
-        // Diagnostic: stamp WHY it failed onto the plan so the cause is
-        // queryable without the Inngest UI. Only when no real attributes were
-        // written (.is null), so a success is never clobbered. The prefill
-        // mapper reads named fields, so an `_extraction_error` marker yields no
-        // prefill (correct) — it just makes the failure visible.
-        if (planId) {
-          const admin = createAdminClient();
-          await admin
-            .from("plans")
-            .update({
-              design_attributes: {
-                _extraction_error: (error?.message ?? "unknown").slice(0, 500),
-              },
-            } as never)
-            .eq("id", planId)
-            .is("design_attributes", null);
-        }
       } catch {
         // Never throw from onFailure.
       }
