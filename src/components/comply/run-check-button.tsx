@@ -31,7 +31,13 @@ export function RunCheckButton({
       );
 
       if ("error" in result) {
-        setError(result.error ?? "Unknown error");
+        // Prefer a human-readable `message` when the action provides one (e.g.
+        // the building-classification hard gate) over the bare error code.
+        setError(
+          (result as { message?: string }).message ??
+            result.error ??
+            "Unknown error",
+        );
         return;
       }
 

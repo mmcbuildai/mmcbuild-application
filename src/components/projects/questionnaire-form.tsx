@@ -157,6 +157,8 @@ function SelectField({
   options,
   autoTag,
   source,
+  required,
+  helper,
   placeholder = "Select if known",
 }: {
   label: string;
@@ -165,12 +167,22 @@ function SelectField({
   options: readonly string[] | readonly number[];
   autoTag?: boolean;
   source?: FieldSource;
+  required?: boolean;
+  helper?: string;
   placeholder?: string;
 }) {
   return (
     <div>
-      <div className="flex items-center gap-2">
-        <Label>{label}</Label>
+      <div className="flex flex-wrap items-center gap-2">
+        <Label>
+          {label}
+          {required && <span className="text-red-600"> *</span>}
+        </Label>
+        {required && !value && (
+          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+            Required to run Comply
+          </span>
+        )}
         {autoTag && (
           <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
             Auto-derived
@@ -190,6 +202,9 @@ function SelectField({
           </option>
         ))}
       </select>
+      {helper && (
+        <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
+      )}
     </div>
   );
 }
@@ -577,6 +592,8 @@ export function QuestionnaireForm({
                 onChange={(v) => update("building_class", v)}
                 options={BUILDING_CLASSES}
                 source={extractedKeys.has("building_class") ? "extracted" : "manual"}
+                required
+                helper="Required — this decides which NCC volume your plan is assessed against: Class 1 or 10 (houses / structures) use Volume Two (Housing Provisions); Class 2–9 (apartments, boarding houses, commercial) use Volume One. A compliance check cannot run until this is set."
               />
               <SelectField
                 label="Construction Type"

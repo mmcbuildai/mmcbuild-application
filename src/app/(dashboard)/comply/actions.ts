@@ -39,18 +39,8 @@ export async function requestComplianceCheck(
     return { error: "Profile not found" };
   }
 
-  // Paywall check — atomic usage increment
-  const usage = await checkAndIncrementUsage(profile.org_id);
-  if (!usage.allowed) {
-    return {
-      error: "usage_limit_reached",
-      usageCount: usage.newCount,
-      usageLimit: usage.limit,
-      tier: usage.tier,
-    };
-  }
-
-  // Load questionnaire data for context
+  // Load questionnaire data for context (before the paywall, so the hard gate
+  // below never consumes a paid run).
   let questionnaireData: Record<string, unknown> = {};
   if (questionnaireId) {
     const admin = createAdminClient();
@@ -63,6 +53,31 @@ export async function requestComplianceCheck(
     if (qr) {
       questionnaireData = (qr as { responses: Record<string, unknown> }).responses;
     }
+  }
+
+  // HARD GATE — the Building Classification MUST be set by the user. It decides
+  // which NCC volume the plan is assessed against (Class 1/10 → Volume Two,
+  // Housing Provisions; Class 2–9 → Volume One). A wrong/blank class assesses
+  // the plan against the wrong code, so this is a correctness gate, not a
+  // convenience default. Block here AND mark the field required in the UI.
+  const buildingClass = String(questionnaireData.building_class ?? "").trim();
+  if (!buildingClass) {
+    return {
+      error: "building_class_required",
+      message:
+        "Set the Building Classification (NCC) in the project questionnaire before running a compliance check. It determines which NCC volume your plan is assessed against — Class 1 or 10 (houses / structures) are assessed under Volume Two (Housing Provisions); Class 2–9 (apartments, boarding houses, commercial) under Volume One. Without it the check would apply the wrong code.",
+    };
+  }
+
+  // Paywall check — atomic usage increment
+  const usage = await checkAndIncrementUsage(profile.org_id);
+  if (!usage.allowed) {
+    return {
+      error: "usage_limit_reached",
+      usageCount: usage.newCount,
+      usageLimit: usage.limit,
+      tier: usage.tier,
+    };
   }
 
   // Create compliance check record
