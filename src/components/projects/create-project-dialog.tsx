@@ -102,7 +102,23 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
     setSampleLoading(sampleId);
     setSubmitError(null);
     try {
-      const res = await createProjectFromSample(sampleId, name);
+      // Carry the picked address through to the sample path so it isn't dropped
+      // (previously a sample project had no address → no site intel).
+      const geo = geocodedRef.current;
+      const res = await createProjectFromSample(
+        sampleId,
+        name,
+        geo
+          ? {
+              address: geo.formatted_address,
+              lat: geo.latitude,
+              lng: geo.longitude,
+              suburb: geo.suburb ?? null,
+              state: geo.state ?? null,
+              postcode: geo.postcode ?? null,
+            }
+          : null,
+      );
       if (res.error) {
         setSubmitError(res.error);
         return;

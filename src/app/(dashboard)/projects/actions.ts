@@ -727,6 +727,17 @@ export async function registerPlan(
 export async function createProjectFromSample(
   sampleId: string,
   projectName?: string,
+  // The geocoded address the user picked before choosing a sample. Previously
+  // DROPPED on this path — so entering an address then clicking a sample left
+  // the project with no address and no site intel (Karen/Dennis, 2026-06-22).
+  geo?: {
+    address: string;
+    lat: number;
+    lng: number;
+    suburb?: string | null;
+    state?: string | null;
+    postcode?: string | null;
+  } | null,
 ) {
   const profile = await getProfile();
   const admin = createAdminClient();
@@ -741,6 +752,12 @@ export async function createProjectFromSample(
     .insert({
       org_id: profile.org_id,
       name,
+      address: geo?.address ?? null,
+      lat: geo?.lat ?? null,
+      lng: geo?.lng ?? null,
+      suburb: geo?.suburb ?? null,
+      state: geo?.state ?? null,
+      postcode: geo?.postcode ?? null,
       status: "draft",
       created_by: profile.id,
     } as never)
@@ -784,6 +801,44 @@ export async function createProjectFromSample(
   );
   if (res.error) {
     return { error: res.error, projectId };
+  }
+
+  // Derive site intel from the picked address (best-effort) so the Site
+  // Intelligence card + the climate/BAL prefill populate on the sample path too.
+  if (geo && isFinite(geo.lat) && isFinite(geo.lng)) {
+    try {
+      const intel = await deriveSiteIntel({
+        lat: geo.lat,
+        lng: geo.lng,
+        address: geo.address,
+        suburb: geo.suburb ?? null,
+        state: geo.state ?? null,
+        postcode: geo.postcode ?? null,
+      });
+      const staticMapUrl = getStaticMapUrl(geo.lat, geo.lng);
+      await admin.from("project_site_intel").delete().eq("project_id", projectId);
+      await admin.from("project_site_intel").insert({
+        project_id: projectId,
+        org_id: profile.org_id,
+        latitude: geo.lat,
+        longitude: geo.lng,
+        formatted_address: geo.address,
+        suburb: geo.suburb ?? null,
+        postcode: geo.postcode ?? null,
+        state: geo.state ?? null,
+        climate_zone: intel.climate_zone,
+        wind_region: intel.wind_region,
+        bal_rating: intel.bal_rating,
+        council_name: intel.council_name,
+        council_code: intel.council_code,
+        zoning: intel.zoning,
+        overlays: {},
+        static_map_url: staticMapUrl || null,
+        derived_at: new Date().toISOString(),
+      } as never);
+    } catch (e) {
+      console.error("[createProjectFromSample] Site intel derivation failed:", e);
+    }
   }
 
   return { success: true, projectId };
