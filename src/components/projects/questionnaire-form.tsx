@@ -374,7 +374,7 @@ export function QuestionnaireForm({
     floor_area: defaults.floor_area ?? prefill.floor_area ?? "",
     soil_classification: defaults.soil_classification ?? "",
     footing_type: defaults.footing_type ?? "",
-    wind_classification: defaults.wind_classification ?? autoWind ?? "",
+    wind_classification: defaults.wind_classification ?? "",
     terrain_category: defaults.terrain_category ?? "",
     roof_material: defaults.roof_material ?? prefill.roof_material ?? "",
     wall_cladding: defaults.wall_cladding ?? prefill.wall_cladding ?? "",
@@ -640,12 +640,21 @@ export function QuestionnaireForm({
                 placeholder="Select if known — MMC product selection may change this"
                 source={extractedKeys.has("footing_type") ? "extracted" : "manual"}
               />
-              <LockedAutoField
+              <SelectField
                 label="Wind Classification (AS 4055)"
                 value={responses.wind_classification}
-                autoValue={autoWind}
                 options={WIND_CLASSIFICATIONS}
                 onChange={(v) => update("wind_classification", v)}
+                source={
+                  extractedKeys.has("wind_classification")
+                    ? "extracted"
+                    : "manual"
+                }
+                helper={
+                  autoWind
+                    ? `Site wind class (AS 4055) — assess from terrain, shielding and topography. It is NOT the same as the wind region. Your address's wind region (AS 1170.2) is ${autoWind} (regions A/B → N classes, C/D → cyclonic C classes).`
+                    : "Site wind class (AS 4055) — assess from terrain, shielding and topography for the site."
+                }
               />
               <SelectField
                 label="Terrain Category"
