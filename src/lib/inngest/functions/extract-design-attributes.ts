@@ -25,11 +25,7 @@ import { callVisionModel } from "@/lib/build/spatial/vision-call";
 import { extractJson } from "@/lib/ai/extract-json";
 import type { DesignAttributes } from "@/lib/comply/questionnaire-prefill";
 import type { PlanFileKind } from "@/lib/plans/file-kind";
-import {
-  contentTypeForKind,
-  decodedBase64Bytes,
-  MIN_READABLE_PLAN_BYTES,
-} from "@/lib/plans/file-kind";
+import { contentTypeForKind, MIN_READABLE_PLAN_BYTES } from "@/lib/plans/file-kind";
 
 const ATTRIBUTE_EXTRACTION_PROMPT = `You are a building-plan reader. From the supplied architectural plan, extract ONLY the high-level attributes a building-compliance questionnaire needs. Do NOT attempt full geometry — return a single compact JSON object and nothing else.
 
@@ -170,12 +166,15 @@ export const extractDesignAttributes = inngest.createFunction(
       return { planId: plan.id, skipped: true, reason: `no vision path for kind=${kind}` };
     }
 
-    // 3. Download the plan file (mirror processPlan's download). A genuinely
-    //    missing file (e.g. an orphaned record whose storage object wasn't
-    //    migrated across) is a clean SKIP — returning null instead of throwing
-    //    so it doesn't retry-storm + flood the failure log. design_attributes
-    //    stays null and the questionnaire falls back to "fill it in yourself".
-    const fileBase64 = await step.run("download-plan-file", async () => {
+    // 3. Download + extract in ONE step. The PDF bytes must NEVER be RETURNED
+    //    from a step.run: Inngest memoizes every step's output, and a ~1MB+ PDF
+    //    (base64 ~1.4MB) exceeds the step-output size limit → "output_too_large"
+    //    — which failed every real plan before the vision call even ran
+    //    (2026-06-22). Keep the bytes inside the step; return only the small
+    //    attribute object. processPlan downloads + ingests in one step for the
+    //    same reason. Returns null when the file is genuinely missing (orphaned
+    //    record) → the caller skips cleanly (no throw, no retry-storm).
+    const attributes = await step.run("download-and-extract", async () => {
       const admin = createAdminClient();
       const { data, error } = await admin.storage
         .from("plan-uploads")
@@ -186,23 +185,12 @@ export const extractDesignAttributes = inngest.createFunction(
         );
         return null;
       }
-      const arrayBuffer = await data.arrayBuffer();
-      return Buffer.from(arrayBuffer).toString("base64");
-    });
+      const buffer = Buffer.from(await data.arrayBuffer());
 
-    if (!fileBase64) {
-      return { planId: plan.id, skipped: true, reason: "file not found in storage" };
-    }
-
-    // 4. One focused vision call → compact DesignAttributes JSON.
-    const attributes = await step.run("extract-attributes", async () => {
-      // Never send a blank/near-empty document to the model (CLAUDE.md rule):
-      // it produces a misleading refusal. Fail fast → best-effort onFailure →
-      // design_attributes stays null and the questionnaire falls back cleanly.
-      if (decodedBase64Bytes(fileBase64) < MIN_READABLE_PLAN_BYTES) {
+      // Never send a blank/near-empty document to the model (CLAUDE.md rule).
+      if (buffer.byteLength < MIN_READABLE_PLAN_BYTES) {
         throw new Error("No readable plan provided for attribute extraction");
       }
-      const buffer = Buffer.from(fileBase64, "base64");
 
       const result =
         kind === "pdf"
@@ -216,9 +204,6 @@ export const extractDesignAttributes = inngest.createFunction(
                 },
               ],
               pdf: { data: buffer },
-              // 8192 (the model's max output). A multi-page architectural set
-              // can yield a long rooms[] array; 2048 truncated it mid-JSON →
-              // extractJson threw → silent null (the comply maxTokens lesson).
               maxTokens: 8192,
             })
           : await callVisionModel("plan_vision", {
@@ -247,6 +232,10 @@ export const extractDesignAttributes = inngest.createFunction(
       // response — that propagates to onFailure (best-effort), never to the user.
       return extractJson<DesignAttributes>(text);
     });
+
+    if (attributes === null) {
+      return { planId: plan.id, skipped: true, reason: "file not found in storage" };
+    }
 
     // 5. Persist the compact attribute object on the plan row.
     await step.run("store-design-attributes", async () => {
