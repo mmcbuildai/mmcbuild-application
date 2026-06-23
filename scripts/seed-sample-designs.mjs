@@ -40,8 +40,8 @@ const admin = createClient(url, key, { auth: { persistSession: false } });
 
 // dest (must match sample-designs.ts samplePath) -> source path to copy from.
 const SAMPLES = {
-  "samples/gladesville-two-storey.pdf":
-    "fef03b67-2f82-4250-93de-87ded6e297ef/0484d6cf-7d4a-49f2-9f83-858c5cf0e236/1781779368183_1780977413263_260603_Architectural_Drawings.pdf",
+  // Gladesville (5-storey boarding house) intentionally excluded — too large/
+  // complex for the 3D extractor; we only seed samples that render cleanly.
   "samples/manor-home.pdf":
     "00000000-0000-0000-0000-000000000000/77c7a695-e030-4240-a021-6190aecea78d/1777592776488_MH01_Manor_Homes_01_by_Studio_Johnston-01.pdf",
   "samples/terrace.pdf":

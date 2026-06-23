@@ -26,17 +26,11 @@ export interface SampleDesign {
 }
 
 export const SAMPLE_DESIGNS: SampleDesign[] = [
-  {
-    id: "gladesville",
-    name: "5-storey boarding house (Class 3)",
-    description:
-      "A large, dense 5-storey Class 3 boarding house (Gladesville). Multi-unit and multi-page — good for testing NCC Volume One compliance and large-set extraction. Note: this is NOT a simple house.",
-    samplePath:
-      "fef03b67-2f82-4250-93de-87ded6e297ef/0484d6cf-7d4a-49f2-9f83-858c5cf0e236/1781779368183_1780977413263_260603_Architectural_Drawings.pdf",
-    fileName: "Sample — 5-storey boarding house (Gladesville).pdf",
-    fileKind: "pdf",
-    sizeBytes: 37_668_141,
-  },
+  // NOTE: the 5-storey Gladesville boarding-house sample was removed 2026-06-23.
+  // 3D "Show my design" is part of the guided beta test, and that plan is too
+  // large/complex for the residential-tuned extractor to render — offering a
+  // design we know fails the 3D step is a dead end for testers. Only keep
+  // samples that extract cleanly across 3D / Comply / Quote (see file header).
   {
     id: "terrace",
     name: "2-storey terrace house (Class 1)",
