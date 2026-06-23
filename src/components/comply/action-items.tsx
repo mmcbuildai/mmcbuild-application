@@ -1,10 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, X, Pencil, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+const SEVERITY_ORDER: Record<string, number> = {
+  critical: 0,
+  non_compliant: 1,
+  advisory: 2,
+  compliant: 3,
+};
+
+function prettyLabel(c: string): string {
+  return c.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
 import {
   Card,
   CardContent,
@@ -81,8 +92,18 @@ export function ActionItems({
     string | null
   >(null);
 
+  // Filters (mirror the Open-Items board) so a large action list is navigable.
+  const [severity, setSeverity] = useState<string>("all");
+  const [category, setCategory] = useState<string>("all");
+  const [stateFilter, setStateFilter] = useState<string>("all");
+
   const flagged = findings.filter(
     (f) => f.severity === "non_compliant" || f.severity === "critical"
+  );
+
+  const categories = useMemo(
+    () => Array.from(new Set(flagged.map((f) => f.category))).sort(),
+    [flagged]
   );
 
   // Derive actioned state from both local optimistic state and server state
@@ -100,6 +121,23 @@ export function ActionItems({
     (f) => getItemState(f) !== "pending"
   ).length;
   const allDone = actionedCount === flagged.length;
+
+  // Apply filters + sort most-critical-first. Not memoised because the state
+  // filter reads getItemState (which depends on optimistic actionStates).
+  const filtered = flagged
+    .filter((f) => {
+      if (severity !== "all" && f.severity !== severity) return false;
+      if (category !== "all" && f.category !== category) return false;
+      if (stateFilter !== "all" && getItemState(f) !== stateFilter) return false;
+      return true;
+    })
+    .sort(
+      (a, b) =>
+        (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9)
+    );
+
+  const filtersActive =
+    severity !== "all" || category !== "all" || stateFilter !== "all";
 
   function handleDismiss(findingId: string) {
     setPendingId(findingId);
@@ -208,9 +246,84 @@ export function ActionItems({
         </Card>
       )}
 
+      {/* Filters (severity / issue type / action state). */}
+      {flagged.length > 0 && (
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Severity
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              value={severity}
+              onChange={(e) => setSeverity(e.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="critical">Critical</option>
+              <option value="non_compliant">Non-compliant</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Issue type
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              <option value="all">All</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {prettyLabel(c)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Action state
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              value={stateFilter}
+              onChange={(e) => setStateFilter(e.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="sent">Sent for remediation</option>
+              <option value="amended">Amended</option>
+              <option value="dismissed">Dismissed</option>
+            </select>
+          </label>
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={() => {
+                setSeverity("all");
+                setCategory("all");
+                setStateFilter("all");
+              }}
+              className="h-9 self-end rounded-md px-2 text-sm text-primary hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
+      {flagged.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Showing {filtered.length} of {flagged.length} item
+          {flagged.length === 1 ? "" : "s"}.
+        </p>
+      )}
+
+      {flagged.length > 0 && filtered.length === 0 && (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            No action items match these filters.
+          </CardContent>
+        </Card>
+      )}
+
       {/* Finding cards */}
       <div className="space-y-3">
-        {flagged.map((finding) => {
+        {filtered.map((finding) => {
           const state = getItemState(finding);
           const isActioned = state !== "pending";
           const isThisPending = pendingId === finding.id && isPending;
