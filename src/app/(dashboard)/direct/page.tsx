@@ -1,4 +1,5 @@
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 import { ProfessionalCard } from "@/components/direct/professional-card";
 import { DirectorySearch } from "@/components/direct/directory-search";
 import { DirectoryPagination } from "@/components/direct/directory-pagination";
@@ -51,6 +52,7 @@ export default async function DirectPage({
 
   return (
     <div className="space-y-6">
+      <BetaTaskPanel moduleId="direct" />
       <ExplainerVideo module="direct" videoUrl="/videos/direct-explainer.mp4" />
 
       <div className="space-y-6">

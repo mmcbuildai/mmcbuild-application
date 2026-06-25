@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
 import { Button } from "@/components/ui/button";
 import { CourseSearch } from "@/components/train/course-search";
+import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 import { CourseCard } from "@/components/train/course-card";
 import { searchCourses } from "./actions";
 import { createClient } from "@/lib/supabase/server";
@@ -52,6 +53,7 @@ export default async function TrainPage({
   return (
     <div>
       <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto space-y-6">
+        <BetaTaskPanel moduleId="train" />
         <ExplainerVideo module="train" videoUrl="/videos/train-explainer.mp4" />
 
         <div className="flex items-center justify-between mb-6">
