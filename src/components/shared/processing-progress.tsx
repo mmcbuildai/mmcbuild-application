@@ -198,6 +198,16 @@ export function ProcessingProgress({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done, status]);
 
+  // Safety net: if the host poll stalls (e.g. a transient auth hiccup returns no
+  // result), re-sync the server view periodically so a finished job surfaces
+  // without a manual refresh. Hosts render by server-read status + onComplete,
+  // so a slow router.refresh() resolves it. Cheap; stops once done.
+  useEffect(() => {
+    if (done) return;
+    const safety = setInterval(() => router.refresh(), 30000);
+    return () => clearInterval(safety);
+  }, [done, router]);
+
   const armNotify = async () => {
     if (typeof Notification === "undefined") {
       setNotifyState("unsupported");

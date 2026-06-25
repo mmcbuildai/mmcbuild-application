@@ -188,6 +188,18 @@ export function CheckProgress({
     return () => clearInterval(interval);
   }, [checkId, status, router]);
 
+  // Safety net for the poll. getComplianceReport can transiently return {error}
+  // (e.g. a getUser() hiccup on a long run); if that persists, the 3s poll above
+  // silently stalls and the page spins forever even though the job finished —
+  // only a manual refresh fixed it (the reported bug). This slow server-side
+  // re-sync swaps the page to the finished report within ~30s regardless, since
+  // the page renders by the server-read check.status. Cheap; stops on completion.
+  useEffect(() => {
+    if (status === "completed" || status === "error") return;
+    const safety = setInterval(() => router.refresh(), 30000);
+    return () => clearInterval(safety);
+  }, [status, router]);
+
   const formatElapsed = (secs: number) => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
