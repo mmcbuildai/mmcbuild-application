@@ -56,7 +56,7 @@ export function RecheckButton({
   // Other ready plans the builder could have uploaded as updated drawings.
   const updatedPlans = planOptions.filter((p) => !p.isCurrent);
 
-  function run() {
+  function run(scope: "resolved" | "full") {
     setError(null);
     startTransition(async () => {
       // Only pass newPlanId when the builder picked a plan other than the one
@@ -66,12 +66,16 @@ export function RecheckButton({
           ? selectedPlanId
           : undefined;
 
-      const result = await recheckCompliance(parentCheckId, { newPlanId });
+      const result = await recheckCompliance(parentCheckId, { newPlanId, scope });
 
       if ("error" in result && result.error) {
         if (result.error === "usage_limit_reached") {
           setError(
             "You've reached your compliance check limit. Upgrade your plan to run a re-check."
+          );
+        } else if (result.error === "no_resolved_items") {
+          setError(
+            "No resolved items to re-verify yet. Resolve at least one finding (mark it fixed with updated drawings or evidence), or run a Full re-check below."
           );
         } else {
           setError(result.error);
@@ -105,10 +109,16 @@ export function RecheckButton({
           <DialogHeader>
             <DialogTitle>Re-check compliance</DialogTitle>
             <DialogDescription>
-              This runs a fresh compliance check linked to the current report so
-              you can see what cleared, what is still open, and anything new.
-              Items you waived carry forward automatically. This consumes one
+              This runs a compliance check linked to the current report so you can
+              see what cleared, what is still open, and anything new. Items you
+              waived carry forward automatically. A re-check consumes one
               compliance check from your plan.
+              <span className="mt-2 block">
+                <strong>Re-check resolved items</strong> re-verifies only the
+                domains where you marked findings fixed — faster and focused.
+                <strong> Full re-check</strong> re-runs every domain (use it after
+                changing the drawings, or for a complete pass).
+              </span>
             </DialogDescription>
           </DialogHeader>
 
@@ -181,11 +191,20 @@ export function RecheckButton({
               </Button>
               <Button
                 type="button"
+                variant="outline"
                 className="min-h-11"
-                onClick={run}
+                onClick={() => run("full")}
                 disabled={isPending}
               >
-                {isPending ? "Starting re-check..." : "Run re-check"}
+                {isPending ? "Starting..." : "Full re-check"}
+              </Button>
+              <Button
+                type="button"
+                className="min-h-11"
+                onClick={() => run("resolved")}
+                disabled={isPending}
+              >
+                {isPending ? "Starting..." : "Re-check resolved items"}
               </Button>
             </div>
           </div>

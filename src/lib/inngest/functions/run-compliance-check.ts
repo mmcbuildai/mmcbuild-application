@@ -110,7 +110,14 @@ export const runComplianceCheck = inngest.createFunction(
   },
   { event: "compliance/check.requested" },
   async ({ event, step }) => {
-    const { projectId, planId, questionnaireData } = event.data;
+    const { projectId, planId, questionnaireData, recheckCategories } =
+      event.data;
+    // A scoped re-check carries a non-empty subset of NCC category keys; only
+    // those are re-analysed, the rest are carried forward from the parent.
+    const scopedCategories =
+      Array.isArray(recheckCategories) && recheckCategories.length > 0
+        ? new Set(recheckCategories)
+        : null;
 
     // 1. Load compliance check record
     const check = await step.run("load-check", async () => {
@@ -220,7 +227,12 @@ export const runComplianceCheck = inngest.createFunction(
         skip.push("livable_housing", "health_amenity", "safe_movement");
       }
 
-      return categories.filter((c) => !skip.includes(c));
+      const applicable = categories.filter((c) => !skip.includes(c));
+      // Scoped re-check: restrict to the requested domains (still honouring the
+      // skip rules above). Other domains are carried forward, not re-analysed.
+      return scopedCategories
+        ? applicable.filter((c) => scopedCategories.has(c))
+        : applicable;
     });
 
     // 6. Analysis — agentic (phased parallel) or standard (sequential)
@@ -328,6 +340,88 @@ export const runComplianceCheck = inngest.createFunction(
         }
       }
     });
+
+    // 8a. Scoped re-check: carry forward the findings for every domain we did
+    // NOT re-analyse, verbatim (including their resolution state), so the new
+    // report is COMPLETE — freshly re-verified domains + unchanged domains. Only
+    // runs on a scoped re-check chained to a parent. Best-effort within its own
+    // step: a failure here must never fail the whole check.
+    if (scopedCategories && check.parent_check_id) {
+      await step.run("carry-forward-unchecked-findings", async () => {
+        try {
+          const admin = createAdminClient();
+          const { data: parentFindings, error: pErr } = await admin
+            .from("compliance_findings")
+            .select("*")
+            .eq("check_id", check.parent_check_id as string);
+          if (pErr || !parentFindings) {
+            console.error(
+              `[runComplianceCheck.carry-forward-unchecked] parent load failed: ${pErr?.message}`,
+            );
+            return { carried: 0 };
+          }
+
+          // Continue the sort order after the freshly-analysed findings.
+          const { count } = await admin
+            .from("compliance_findings")
+            .select("id", { count: "exact", head: true })
+            .eq("check_id", check.id);
+          let sortOrder = count ?? 0;
+
+          let carried = 0;
+          for (const r of parentFindings as Record<string, unknown>[]) {
+            // Domains we re-analysed already have fresh findings — skip them.
+            if (scopedCategories.has(r.category as string)) continue;
+            const { error: insErr } = await admin
+              .from("compliance_findings")
+              .insert({
+                check_id: check.id,
+                ncc_section: r.ncc_section,
+                category: r.category,
+                title: r.title,
+                description: r.description,
+                recommendation: r.recommendation,
+                severity: r.severity,
+                confidence: r.confidence,
+                ncc_citation: r.ncc_citation,
+                page_references: r.page_references,
+                sort_order: sortOrder++,
+                validation_tier: r.validation_tier,
+                agreement_score: r.agreement_score,
+                secondary_model: r.secondary_model,
+                was_reconciled: r.was_reconciled,
+                source_chunk_ids: r.source_chunk_ids,
+                responsible_discipline: r.responsible_discipline,
+                remediation_action: r.remediation_action,
+                review_status: r.review_status,
+                // Preserve the carried-forward domain's resolution state — it was
+                // NOT re-checked, so its last-known verdict stands.
+                resolution_type: r.resolution_type,
+                resolution_note: r.resolution_note,
+                waiver_reason: r.waiver_reason,
+                resolved_by: r.resolved_by,
+                resolved_at: r.resolved_at,
+              } as never);
+            if (insErr) {
+              console.error(
+                `[runComplianceCheck.carry-forward-unchecked] insert failed: ${insErr.message}`,
+              );
+            } else {
+              carried++;
+            }
+          }
+          console.log(
+            `[runComplianceCheck.carry-forward-unchecked] carried ${carried} findings from parent ${check.parent_check_id}`,
+          );
+          return { carried };
+        } catch (e) {
+          console.error(
+            `[runComplianceCheck.carry-forward-unchecked] threw (non-fatal): ${(e as Error).message}`,
+          );
+          return { carried: 0 };
+        }
+      });
+    }
 
     // 8b. Carry parent WAIVERS forward (Comply Phase 3 re-check).
     // A finding the builder WAIVED in the parent check must not reappear as a

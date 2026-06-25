@@ -20,6 +20,13 @@ export type Events = {
       projectId: string;
       planId: string;
       questionnaireData: Record<string, unknown>;
+      /**
+       * Scoped re-check (Comply Phase 3): when present, ONLY these NCC category
+       * keys are re-analysed; every other domain's findings are carried forward
+       * verbatim from the parent check. Omitted for a fresh check or a full
+       * re-check. Empty/undefined ⇒ analyse everything.
+       */
+      recheckCategories?: string[];
     };
   };
   "design/optimisation.requested": {

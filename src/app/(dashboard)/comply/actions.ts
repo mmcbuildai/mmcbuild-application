@@ -128,7 +128,7 @@ export async function requestComplianceCheck(
  */
 export async function recheckCompliance(
   parentCheckId: string,
-  opts?: { newPlanId?: string }
+  opts?: { newPlanId?: string; scope?: "resolved" | "full" }
 ) {
   const supabase = await createClient();
   const {
@@ -192,6 +192,36 @@ export async function recheckCompliance(
     planId = np.id;
   }
 
+  // Decide scope. Default is "resolved": re-verify ONLY the domains the builder
+  // marked resolved (resolution_type updated_drawings / evidence) and carry the
+  // rest forward — far cheaper/faster than re-running all 14 NCC domains.
+  // "full" (or attaching updated drawings, where any domain could change) runs
+  // everything. Computed BEFORE the usage charge so "nothing to re-verify" never
+  // consumes a run.
+  const scope: "resolved" | "full" =
+    opts?.newPlanId ? "full" : opts?.scope ?? "resolved";
+  let recheckCategories: string[] | undefined;
+  if (scope === "resolved") {
+    const { data: resolved } = await admin
+      .from("compliance_findings")
+      .select("category")
+      .eq("check_id", parentCheck.id)
+      .in("resolution_type", ["updated_drawings", "evidence"]);
+    const cats = Array.from(
+      new Set(
+        ((resolved ?? []) as { category: string | null }[])
+          .map((r) => r.category)
+          .filter((c): c is string => Boolean(c)),
+      ),
+    );
+    if (cats.length === 0) {
+      // Nothing was resolved → a scoped re-check has nothing to verify. Guide the
+      // builder rather than silently running (and charging) a full check.
+      return { error: "no_resolved_items" };
+    }
+    recheckCategories = cats;
+  }
+
   // Paywall — a re-check consumes a run, same as a normal check (verified at the
   // Server Action layer, not just middleware — REGULATED tier).
   const usage = await checkAndIncrementUsage(profile.org_id);
@@ -246,6 +276,8 @@ export async function recheckCompliance(
         projectId: parentCheck.project_id,
         planId,
         questionnaireData,
+        // Undefined for a full re-check ⇒ pipeline analyses everything.
+        recheckCategories,
       },
     });
   } catch (e) {
