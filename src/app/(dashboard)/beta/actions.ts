@@ -406,3 +406,55 @@ export async function submitFeedback(
   revalidatePath("/beta");
   return { success: true };
 }
+
+/**
+ * Per-page beta feedback (issue #4): a beta tester tells us about an issue on the
+ * page they're on; logged against the user + tagged with the page URL for
+ * follow-up. Beta-only path; a separate live-user path comes later. Inserts via
+ * the service-role `db()`; degrades gracefully if the table isn't applied yet so
+ * the tester's words are never lost to a silent crash.
+ */
+export async function submitPageFeedback(input: {
+  message: string;
+  pageUrl: string;
+  pagePath?: string;
+}): Promise<{ ok?: boolean; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const message = (input.message ?? "").trim();
+  if (message.length < 3) return { error: "Please add a little more detail." };
+  if (message.length > 4000) return { error: "That's a bit long — please shorten it." };
+
+  const { data: profile } = await db()
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  try {
+    const { error } = await db()
+      .from("beta_page_feedback")
+      .insert({
+        user_id: user.id,
+        org_id: (profile as { org_id?: string } | null)?.org_id ?? null,
+        page_url: (input.pageUrl ?? "").slice(0, 1000),
+        page_path: input.pagePath ? input.pagePath.slice(0, 500) : null,
+        message,
+      });
+    if (error) {
+      console.error("[submitPageFeedback] insert failed:", error.message);
+      return {
+        error:
+          "Couldn't save your feedback just now — please try the Report a problem button.",
+      };
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error("[submitPageFeedback] threw:", (e as Error).message);
+    return { error: "Couldn't save your feedback just now — please try again." };
+  }
+}
