@@ -55,6 +55,9 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
   const totalMmc = estimate.total_mmc ?? 0;
   const savingsPct = estimate.total_savings_pct ?? 0;
   const totalSavings = totalTraditional - totalMmc;
+  // Line items the engine couldn't price (provisional / TBC) — surfaced honestly
+  // rather than counted as $0, which would understate the real cost.
+  const tbcCount = lineItems.filter((li) => li.traditional_total == null).length;
 
   // Aggregate data sources
   const sourceCountMap = new Map<string, number>();
@@ -93,6 +96,14 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
           positive
         />
       </div>
+      {tbcCount > 0 && (
+        <p className="-mt-3 text-xs text-amber-600">
+          {tbcCount} item{tbcCount === 1 ? "" : "s"} marked{" "}
+          <span className="font-medium">TBC</span> — provisional elements the
+          estimate couldn&rsquo;t price yet, so they are not included in the
+          totals above.
+        </p>
+      )}
 
       {/* Comparison chart */}
       <div className="rounded-lg border bg-white p-4">

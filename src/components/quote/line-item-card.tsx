@@ -63,7 +63,11 @@ export function LineItemCard({ item }: LineItemCardProps) {
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right">
               <p className="text-sm font-bold">
-                ${(item.traditional_total ?? 0).toLocaleString()}
+                {item.traditional_total == null ? (
+                  <span className="text-amber-600">TBC</span>
+                ) : (
+                  `$${item.traditional_total.toLocaleString()}`
+                )}
               </p>
               {hasMmc && savings > 0 && (
                 <p className="text-xs text-green-600">
