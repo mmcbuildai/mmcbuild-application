@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail, MessageSquare, Phone } from "lucide-react";
+import { Mail, Phone } from "lucide-react";
 
 export default function SupportPage() {
   return (
@@ -21,21 +21,6 @@ export default function SupportPage() {
             </p>
             <p className="text-sm text-muted-foreground mt-2">
               We aim to respond within 24 business hours.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              Live Chat
-            </CardTitle>
-            <CardDescription>Chat with our team during business hours</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Live chat is available Monday-Friday, 9am-5pm AEST.
             </p>
           </CardContent>
         </Card>

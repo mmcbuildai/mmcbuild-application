@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/supabase/db";
 import { createClient } from "@/lib/supabase/server";
+import { getResend, FROM_EMAIL } from "@/lib/email/resend";
 import { revalidatePath } from "next/cache";
 import type { ModuleId } from "@/lib/stripe/plans";
 import {
@@ -451,6 +452,32 @@ export async function submitPageFeedback(input: {
         error:
           "Couldn't save your feedback just now — please try the Report a problem button.",
       };
+    }
+
+    // Best-effort: alert the operators so feedback gets actioned, not just stored.
+    // Never fail the submission on an email error.
+    try {
+      const to = [
+        process.env.KAREN_EMAIL || "karen.engel@mmcbuild.com.au",
+        process.env.KARTHIK_EMAIL || "karthik.rao@mmcbuild.com.au",
+      ];
+      const isCourse = message.startsWith("[Course request]");
+      await getResend().emails.send({
+        from: FROM_EMAIL,
+        to,
+        subject: isCourse
+          ? "MMC Build — new course request"
+          : `MMC Build — beta feedback on ${input.pagePath ?? "a page"}`,
+        text:
+          `${isCourse ? "Course request" : "Beta feedback"} from ${user.email ?? user.id}\n\n` +
+          `Page: ${input.pageUrl}\n\n` +
+          `${message}`,
+      });
+    } catch (e) {
+      console.error(
+        "[submitPageFeedback] alert email failed (non-fatal):",
+        (e as Error).message,
+      );
     }
     return { ok: true };
   } catch (e) {

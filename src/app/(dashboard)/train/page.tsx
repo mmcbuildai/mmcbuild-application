@@ -57,15 +57,23 @@ export default async function TrainPage({
         <BetaTaskPanel moduleId="train" />
         <ExplainerVideo module="train" videoUrl="/videos/train-explainer.mp4" />
 
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">Course Catalog</h2>
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h2 className="text-xl font-semibold">Course Catalog</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              More courses coming soon — tell us below what would help you most.
+            </p>
+          </div>
           <div className="flex gap-2">
-            <Link href="/train/dashboard">
-              <Button variant="outline" size="sm">
-                <LayoutDashboard className="mr-1 h-3.5 w-3.5" />
-                My Learning
-              </Button>
-            </Link>
+            {/* My Learning is out of scope for beta-1 — hidden for beta testers. */}
+            {role !== "beta" && (
+              <Link href="/train/dashboard">
+                <Button variant="outline" size="sm">
+                  <LayoutDashboard className="mr-1 h-3.5 w-3.5" />
+                  My Learning
+                </Button>
+              </Link>
+            )}
             {isAdmin && (
               <Link href="/train/admin">
                 <Button variant="outline" size="sm">
