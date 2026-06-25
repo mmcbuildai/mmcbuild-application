@@ -2,41 +2,87 @@ import type { ModuleId } from "@/lib/stripe/plans";
 
 /**
  * The per-module beta test tasks. Single source of truth shared by the beta
- * dashboard (renders them as a checklist) and the server actions (validate that
- * EVERY task is ticked before a module can be marked complete). The order is the
- * task index persisted in beta_feedback.completed_tasks, so DO NOT reorder or
- * remove entries without a data migration — append only.
+ * dashboard + in-context checklist (render the labels) and the server actions
+ * (validate every task is ticked before a module completes; auto-tick the ones
+ * the system can detect).
+ *
+ * Each task is a CONCRETE action the tester actually performs inside the module
+ * — a doing-word, not "review/check that…". Where the action leaves a detectable
+ * trace, it AUTO-TICKS (TASK_AUTO_SIGNALS, parallel-indexed) so the tester sees
+ * the box tick itself the moment they do it; the rest they tick by hand.
+ *
+ * The index is persisted in beta_feedback.completed_tasks. Reworked 2026-06-25
+ * (concrete verbs + auto-tick) — early beta, so existing partial ticks simply
+ * re-derive via auto-tick on next load; the demo account resets anyway.
  */
 export const TESTING_TASKS: Record<ModuleId, string[]> = {
   comply: [
-    "Upload a PDF building plan and run a compliance check",
-    "Review the generated NCC findings report",
-    "Check that citations reference specific NCC clauses",
-    "Try exporting the report as PDF",
+    "Run a compliance check on a building plan",
+    "Resolve or waive a finding in the report",
+    "Re-check compliance after resolving items",
   ],
   build: [
-    "Open an existing project and view design suggestions",
-    "Check the 3D viewer loads correctly",
-    "Review material and system selection options",
-    "Verify suggestions are relevant to your project type",
+    "Generate the 3D model of your design",
+    "Select the construction systems for your project",
+    "Open the System Explorer to compare the MMC build methods",
   ],
   quote: [
-    "Generate a cost estimate for a project",
-    "Compare traditional vs MMC cost breakdown",
-    "Check that rate benchmarks look reasonable",
-    "Try exporting the quote as PDF or Word",
+    "Run a cost estimate for your project",
+    "Open a cost line to check its supplier rate source",
+    "Export your cost report (PDF or Word)",
   ],
   direct: [
-    "Search for trades by state and category",
-    "Open a company profile and check all fields display",
-    "Try filtering by certification status",
-    "Test the enquiry form on a listing",
+    "Search the directory by trade and state",
+    "Open a business listing to view its details",
+    "Register your business in the directory",
   ],
   train: [
-    "Browse available training modules",
-    "Start a module and complete at least one lesson",
-    "Check that progress is tracked on the dashboard",
-    "Try a quiz and verify scoring works",
+    "Enrol in a course",
+    "Complete a lesson in that course",
+    "Tell us what course would help you most",
+  ],
+};
+
+/**
+ * How an individual task auto-ticks, parallel-indexed to TESTING_TASKS. `null`
+ * means the task is manual (a search / view / export we don't trace). The server
+ * (autoTickTasks) evaluates each signal best-effort — an unknown table/column
+ * just leaves the task manual, never throws.
+ */
+export type AutoSignal =
+  | { kind: "run"; table: "compliance_checks" | "design_checks" | "cost_estimates" }
+  | { kind: "recheck" }
+  | { kind: "finding_resolved" }
+  | { kind: "systems_selected" }
+  | { kind: "direct_registered" }
+  | { kind: "enrolled" }
+  | { kind: "lesson_completed" };
+
+export const TASK_AUTO_SIGNALS: Record<ModuleId, (AutoSignal | null)[]> = {
+  comply: [
+    { kind: "run", table: "compliance_checks" },
+    { kind: "finding_resolved" },
+    { kind: "recheck" },
+  ],
+  build: [
+    { kind: "run", table: "design_checks" },
+    { kind: "systems_selected" },
+    null,
+  ],
+  quote: [
+    { kind: "run", table: "cost_estimates" },
+    null,
+    null,
+  ],
+  direct: [
+    null,
+    null,
+    { kind: "direct_registered" },
+  ],
+  train: [
+    { kind: "enrolled" },
+    { kind: "lesson_completed" },
+    null,
   ],
 };
 

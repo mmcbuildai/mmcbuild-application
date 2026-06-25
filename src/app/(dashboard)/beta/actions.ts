@@ -4,7 +4,12 @@ import { db } from "@/lib/supabase/db";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ModuleId } from "@/lib/stripe/plans";
-import { allTasksDone, taskCount } from "@/lib/beta/testing-tasks";
+import {
+  allTasksDone,
+  taskCount,
+  TASK_AUTO_SIGNALS,
+  type AutoSignal,
+} from "@/lib/beta/testing-tasks";
 
 const VALID_MODULES: ModuleId[] = ["comply", "build", "quote", "direct", "train"];
 
@@ -31,39 +36,110 @@ async function requireUser() {
   };
 }
 
-// Modules whose "did you run it" task can be auto-ticked from a real run. The
-// run tables stamp created_by = the PROFILE id. taskIndex is the index of the
-// "run/generate" task in src/lib/beta/testing-tasks.ts (index 0 for each).
-// Direct/Train have no run table, so their tasks stay manual.
-const RUN_SIGNAL: Partial<Record<ModuleId, { table: string; taskIndex: number }>> =
-  {
-    comply: { table: "compliance_checks", taskIndex: 0 },
-    build: { table: "design_checks", taskIndex: 0 },
-    quote: { table: "cost_estimates", taskIndex: 0 },
-  };
+/**
+ * Has the tester actually performed the action behind an auto-tickable task?
+ * Best-effort + defensive: any query error (e.g. an unexpected schema) returns
+ * false, so the task simply stays manual — this must NEVER throw and break the
+ * dashboard load. Only a COMPLETED run counts (a row exists the moment a run is
+ * queued, but the task must reflect completion, not that they picked the module).
+ */
+async function signalSatisfied(
+  signal: AutoSignal,
+  ctx: { profileId: string; orgId: string },
+): Promise<boolean> {
+  const { profileId, orgId } = ctx;
+  try {
+    switch (signal.kind) {
+      case "run": {
+        const { count } = await db()
+          .from(signal.table)
+          .select("id", { count: "exact", head: true })
+          .eq("created_by", profileId)
+          .eq("status", "completed");
+        return (count ?? 0) > 0;
+      }
+      case "recheck": {
+        // A re-check is a completed compliance_check chained to a parent.
+        const { count } = await db()
+          .from("compliance_checks")
+          .select("id", { count: "exact", head: true })
+          .eq("created_by", profileId)
+          .eq("status", "completed")
+          .not("parent_check_id", "is", null);
+        return (count ?? 0) > 0;
+      }
+      case "finding_resolved": {
+        const { data: checks } = await db()
+          .from("compliance_checks")
+          .select("id")
+          .eq("created_by", profileId)
+          .limit(200);
+        const ids = ((checks ?? []) as { id: string }[]).map((c) => c.id);
+        if (ids.length === 0) return false;
+        const { count } = await db()
+          .from("compliance_findings")
+          .select("id", { count: "exact", head: true })
+          .in("check_id", ids)
+          .not("resolution_type", "is", null);
+        return (count ?? 0) > 0;
+      }
+      case "systems_selected": {
+        const { data } = await db()
+          .from("projects")
+          .select("selected_systems")
+          .eq("created_by", profileId);
+        return ((data ?? []) as { selected_systems: unknown }[]).some(
+          (p) => Array.isArray(p.selected_systems) && p.selected_systems.length > 0,
+        );
+      }
+      case "direct_registered": {
+        const { count } = await db()
+          .from("professionals")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", orgId);
+        return (count ?? 0) > 0;
+      }
+      case "enrolled": {
+        const { count } = await db()
+          .from("enrollments")
+          .select("id", { count: "exact", head: true })
+          .eq("profile_id", profileId);
+        return (count ?? 0) > 0;
+      }
+      case "lesson_completed": {
+        const { count } = await db()
+          .from("lesson_completions")
+          .select("id", { count: "exact", head: true })
+          .eq("profile_id", profileId);
+        return (count ?? 0) > 0;
+      }
+    }
+  } catch {
+    return false; // schema mismatch / transient error → leave the task manual
+  }
+  return false;
+}
 
 /**
- * Auto-tick the "ran the module" task when the tester has actually run it
- * (a row exists in the module's run table). Persisted so the completion gate
- * sees it. Judgment tasks (review/verify) are left for the tester to tick — that
- * manual confirmation + comment is the beta feedback we want.
+ * Auto-tick every task whose real-world action the tester has actually done —
+ * so the in-module checklist ticks itself as they go (run a check, resolve a
+ * finding, re-check, generate the 3D model, select systems, register a business,
+ * enrol, complete a lesson). Manual tasks (searches / views / exports we don't
+ * trace) the tester ticks by hand. Persisted to beta_feedback.completed_tasks.
  */
-async function autoTickRunTasks(
+async function autoTickTasks(
   userId: string,
   orgId: string,
   profileId: string,
 ) {
-  for (const [moduleId, sig] of Object.entries(RUN_SIGNAL)) {
-    // Only a COMPLETED run ticks the task. A row exists the moment a run is
-    // queued/processing, so counting any row marked the task done as soon as the
-    // user *started* a run (Karen, beta) — the task must reflect completion, not
-    // that they picked the module. All three run tables use status 'completed'.
-    const { count } = await db()
-      .from(sig.table)
-      .select("id", { count: "exact", head: true })
-      .eq("created_by", profileId)
-      .eq("status", "completed");
-    if (!count || count === 0) continue;
+  for (const moduleId of VALID_MODULES) {
+    const signals = TASK_AUTO_SIGNALS[moduleId];
+    const satisfied: number[] = [];
+    for (let i = 0; i < signals.length; i++) {
+      const s = signals[i];
+      if (s && (await signalSatisfied(s, { profileId, orgId }))) satisfied.push(i);
+    }
+    if (satisfied.length === 0) continue;
 
     const { data: row } = await db()
       .from("beta_feedback")
@@ -76,8 +152,10 @@ async function autoTickRunTasks(
       const done: number[] = Array.isArray(row.completed_tasks)
         ? (row.completed_tasks as number[])
         : [];
-      if (done.includes(sig.taskIndex)) continue;
-      const next = [...done, sig.taskIndex].sort((a, b) => a - b);
+      const next = Array.from(new Set([...done, ...satisfied])).sort(
+        (a, b) => a - b,
+      );
+      if (next.length === done.length) continue; // nothing new
       await db()
         .from("beta_feedback")
         .update({
@@ -92,7 +170,7 @@ async function autoTickRunTasks(
         module_id: moduleId,
         org_id: orgId,
         status: "in_progress",
-        completed_tasks: [sig.taskIndex],
+        completed_tasks: satisfied.sort((a, b) => a - b),
         started_at: new Date().toISOString(),
       });
     }
@@ -115,7 +193,7 @@ export async function getBetaProgress(): Promise<BetaFeedbackRow[]> {
   const { userId, orgId, profileId } = await requireUser();
 
   // Auto-tick "ran the module" tasks from the run tables before reading back.
-  await autoTickRunTasks(userId, orgId, profileId);
+  await autoTickTasks(userId, orgId, profileId);
 
   const { data } = await db()
     .from("beta_feedback")
