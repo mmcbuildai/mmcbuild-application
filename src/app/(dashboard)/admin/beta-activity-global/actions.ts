@@ -402,6 +402,20 @@ export async function startDummyBetaSession(): Promise<{
       }
       await admin.from("projects").delete().eq("id", p.id);
     }
+
+    // Wipe the demo's AI run rows BY CREATOR — not just via the project cascade
+    // above. A run row is stamped created_by = the demo profile even when it was
+    // run against a project owned by ANOTHER org (e.g. a shared sample project
+    // the demo once tested), so deleting only the demo's OWN projects leaves
+    // those runs behind. getBetaProgress() then re-derives module status
+    // ("in progress") from any surviving COMPLETED run on every /beta load, so a
+    // "clean" demo still showed Build/Quote in progress (Karen, 2026-06-25).
+    // Deleting by identity removes them at the source — these rows belong to the
+    // demo account, never to a real tester.
+    const RUN_TABLES = ["compliance_checks", "design_checks", "cost_estimates"] as const;
+    for (const table of RUN_TABLES) {
+      await admin.from(table).delete().eq("created_by", dummyProfileId);
+    }
   }
   await db().from("beta_feedback").delete().eq("user_id", dummyId);
 

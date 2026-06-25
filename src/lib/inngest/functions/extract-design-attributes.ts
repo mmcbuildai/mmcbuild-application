@@ -27,26 +27,71 @@ import type { DesignAttributes } from "@/lib/comply/questionnaire-prefill";
 import type { PlanFileKind } from "@/lib/plans/file-kind";
 import { contentTypeForKind, MIN_READABLE_PLAN_BYTES } from "@/lib/plans/file-kind";
 
-const ATTRIBUTE_EXTRACTION_PROMPT = `You are a building-plan reader. From the supplied architectural plan, extract ONLY the high-level attributes a building-compliance questionnaire needs. Do NOT attempt full geometry — return a single compact JSON object and nothing else.
+const ATTRIBUTE_EXTRACTION_PROMPT = `You are an expert building-compliance plan reader. Read the ENTIRE supplied plan set thoroughly and extract every attribute below that the plan supports. Look across ALL of it: the title block and drawing notes, the BASIX / NatHERS / energy report, the structural & footing notes, the bushfire (BAL) assessment, the site plan (setbacks, boundaries), elevations, sections, the finishes/window/door schedules, and any general specification notes. Do NOT attempt full geometry or per-room lists — return ONE compact JSON object of scalar values and flags, and nothing else.
 
-Return JSON in EXACTLY this shape (omit any field you cannot determine confidently — never guess):
+Take your time and be complete: if a value is printed or clearly shown ANYWHERE on the drawings (e.g. "Class 1a" in the title block, a soil classification on the footing plan, R-values in the BASIX commitments), extract it. But NEVER guess — if the plan does not clearly support a field, OMIT that field entirely.
+
+For the categorical fields, return EXACTLY one of the listed option values (verbatim). For numbers, return the number only (no units).
+
+Return JSON in EXACTLY this shape (every field optional — include only what the plan clearly supports):
 {
-  "storeys": <integer number of above-ground storeys>,
-  "floor_area_m2": <total internal floor area in square metres, number>,
-  "wet_area_count": <integer count of wet rooms across the whole plan: bathrooms, ensuites, laundries, WCs, powder rooms>,
-  "has_stairs": <true if the dwelling has internal stairs, else false>,
-  "has_balcony_deck": <true if there is a balcony or deck, else false>,
-  "has_swimming_pool": <true if there is a swimming pool, else false>,
-  "has_party_wall": <true if the dwelling shares a wall with an adjoining dwelling (attached/duplex/townhouse), else false>,
-  "roof_material": "<e.g. concrete tile, terracotta tile, Colorbond metal, Zincalume, slate, asphalt shingle>",
-  "wall_cladding": "<e.g. brick veneer, double brick, fibre cement, timber weatherboard, metal cladding, render, AAC/Hebel>",
-  "ceiling_height_habitable_m": <floor-to-ceiling height of habitable rooms in metres, number>
+  "storeys": <integer above-ground storeys>,
+  "floor_area_m2": <total internal floor area, m2>,
+  "wet_area_count": <integer count of bathrooms+ensuites+laundries+WCs+powder rooms across the whole plan>,
+  "has_stairs": <true/false: internal stairs present>,
+  "has_balcony_deck": <true/false: a balcony or deck present>,
+  "has_swimming_pool": <true/false: a swimming pool present>,
+  "has_party_wall": <true/false: shares a wall with an adjoining dwelling (attached/duplex/townhouse)>,
+  "roof_material": "<concrete tile | terracotta tile | Colorbond metal | Zincalume | slate | asphalt shingle>",
+  "wall_cladding": "<brick veneer | double brick | fibre cement | timber weatherboard | metal cladding | render | AAC/Hebel>",
+  "ceiling_height_habitable_m": <floor-to-ceiling height of habitable rooms, m>,
+
+  "building_typology": "<Single residential | Duplex | Townhouse | Apartment | Co-living / Boarding house | Hotel | Mixed use | Commercial>",
+  "building_class": "<Class 1a | Class 1b | Class 2 | Class 3 | Class 10a | Class 10b>  (the NCC class of building, usually in the title block)",
+  "construction_type": "<Type A | Type B | Type C>  (NCC construction type, if stated)",
+
+  "soil_classification": "<A | S | M | M-D | H1 | H2 | E | P>  (AS 2870 site class, from the geotech / footing notes)",
+  "footing_type": "<Strip footing | Pad footing | Raft slab | Waffle slab | Stiffened raft | Stumps/Piers | Screw piles>",
+  "wind_classification": "<N1 | N2 | N3 | N4 | N5 | N6 | C1 | C2 | C3 | C4>  (AS 4055 site wind class, from structural notes)",
+  "terrain_category": "<TC1 | TC2 | TC2.5 | TC3>",
+
+  "dpc_type": "<Polyethylene membrane | Bituminous membrane | Chemical DPC | Not specified>",
+  "has_sarking": <true/false: roof sarking specified>,
+  "has_subfloor_ventilation": <true/false: subfloor ventilation specified>,
+  "distance_to_boundary_m": <smallest setback of the building to a side/rear boundary, m, from the site plan>,
+
+  "party_wall_frl": "<the fire-resistance level of the party/separating wall, e.g. 60/60/60>",
+  "garage_location": "<Attached | Detached | Integrated/under main roof | Basement car park | N/A>",
+  "smoke_alarm_type": "<Photoelectric (hardwired interconnected) | Photoelectric (battery) | Ionisation | Combined photo/ion>",
+
+  "ceiling_height_non_habitable_m": <floor-to-ceiling height of non-habitable rooms (garage, store), m>,
+  "has_exhaust_fans": <true/false: mechanical exhaust to wet areas specified>,
+  "natural_ventilation_method": "<Openable windows | Openable windows + ceiling fans | Mechanical ventilation | Mixed mode>",
+
+  "energy_pathway": "<DTS (Deemed-to-Satisfy) | NatHERS | JV3 (Verification)>",
+  "insulation_ceiling_r": <ceiling/roof insulation R-value>,
+  "insulation_wall_r": <external wall insulation R-value>,
+  "insulation_floor_r": <floor insulation R-value>,
+  "glazing_type": "<Single clear | Single tinted | Double glazed (clear) | Double glazed (low-e) | Triple glazed>",
+  "hot_water_system": "<Electric storage | Electric heat pump | Gas storage | Gas instantaneous | Solar electric boost | Solar gas boost>",
+  "has_solar_pv": <true/false: rooftop solar PV shown/specified>,
+  "nathers_rating": <NatHERS star rating, 0-10>,
+
+  "has_heating_appliance": <true/false: a fixed heating appliance (fireplace/heater) present>,
+  "heating_type": "<Ducted gas | Ducted reverse cycle | Split system | Hydronic | Wood heater (open flue) | Wood heater (closed flue) | Electric panel>",
+
+  "max_fall_height_m": <greatest fall height from a balcony/deck/window/level change requiring a barrier, m>,
+  "has_step_free_entry": <true/false: a step-free (level) entry to the dwelling>,
+  "accessible_bathroom": <true/false: an accessible/adaptable bathroom provided>,
+  "min_door_width_mm": <narrowest internal door clear width, mm>,
+  "min_corridor_width_mm": <narrowest corridor/hallway width, mm>
 }
 
 Rules:
 - The final message must contain ONLY the JSON object — no preamble, no markdown fences. Start with { and end with }.
-- Return COUNTS and true/false flags only — do NOT list individual rooms (a long room list overflows the response).
-- Leave a field out entirely if the plan does not clearly support it.`;
+- Scalars and true/false flags ONLY — do NOT list individual rooms or repeat schedules (a long list overflows the response).
+- For categorical fields use ONLY the exact option strings listed above. If the plan's value doesn't match one, OMIT the field.
+- Leave a field out entirely if the plan does not clearly support it. Never guess.`;
 
 /** File kinds that have a direct vision path (PDF read natively, image rasterised). */
 function hasVisionPath(kind: PlanFileKind): boolean {

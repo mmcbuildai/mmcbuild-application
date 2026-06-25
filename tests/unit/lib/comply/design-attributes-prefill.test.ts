@@ -112,3 +112,145 @@ describe("buildDesignPrefillFromAttributes", () => {
     ).toEqual({});
   });
 });
+
+describe("buildDesignPrefillFromAttributes — expanded questionnaire fields", () => {
+  it("maps building class from the printed title-block value (short code + verbatim)", () => {
+    expect(buildDesignPrefillFromAttributes({ building_class: "1a" }).building_class).toBe(
+      "Class 1a",
+    );
+    expect(buildDesignPrefillFromAttributes({ building_class: "Class 1a" }).building_class).toBe(
+      "Class 1a",
+    );
+    expect(buildDesignPrefillFromAttributes({ building_class: "class 10b" }).building_class).toBe(
+      "Class 10b",
+    );
+  });
+
+  it("omits an unrecognised building class rather than guessing", () => {
+    expect(
+      buildDesignPrefillFromAttributes({ building_class: "Class 99" }).building_class,
+    ).toBeUndefined();
+  });
+
+  it("maps construction type by code and verbatim", () => {
+    expect(buildDesignPrefillFromAttributes({ construction_type: "A" }).construction_type).toBe(
+      "Type A",
+    );
+    expect(
+      buildDesignPrefillFromAttributes({ construction_type: "Type C" }).construction_type,
+    ).toBe("Type C");
+  });
+
+  it("maps structure & footing categoricals exactly (and the M-D soil edge case)", () => {
+    const out = buildDesignPrefillFromAttributes({
+      building_typology: "Townhouse",
+      soil_classification: "M-D",
+      footing_type: "Waffle slab",
+      wind_classification: "N2",
+      terrain_category: "TC2.5",
+    });
+    expect(out).toMatchObject({
+      building_typology: "Townhouse",
+      soil_classification: "M-D",
+      footing_type: "Waffle slab",
+      wind_classification: "N2",
+      terrain_category: "TC2.5",
+    });
+  });
+
+  it("omits a categorical that is not in the canonical list", () => {
+    expect(
+      buildDesignPrefillFromAttributes({ footing_type: "magic floating slab" }).footing_type,
+    ).toBeUndefined();
+    expect(
+      buildDesignPrefillFromAttributes({ glazing_type: "quadruple glazed" }).glazing_type,
+    ).toBeUndefined();
+  });
+
+  it("emits boolean spec flags only when true", () => {
+    const trueOut = buildDesignPrefillFromAttributes({
+      has_sarking: true,
+      has_subfloor_ventilation: true,
+      has_exhaust_fans: true,
+      has_solar_pv: true,
+      has_heating_appliance: true,
+      has_step_free_entry: true,
+      accessible_bathroom: true,
+    });
+    expect(trueOut).toMatchObject({
+      sarking: "true",
+      subfloor_ventilation: "true",
+      exhaust_fans: "true",
+      has_solar_pv: "true",
+      has_heating_appliance: "true",
+      has_step_free_entry: "true",
+      accessible_bathroom: "true",
+    });
+    expect(
+      buildDesignPrefillFromAttributes({ has_sarking: false, has_solar_pv: false }),
+    ).toEqual({});
+  });
+
+  it("passes a fire-resistance level through when it carries digits", () => {
+    expect(
+      buildDesignPrefillFromAttributes({ party_wall_frl: "60/60/60" }).party_wall_frl,
+    ).toBe("60/60/60");
+    expect(
+      buildDesignPrefillFromAttributes({ party_wall_frl: "not specified" }).party_wall_frl,
+    ).toBeUndefined();
+  });
+
+  it("bounds numbers and rounds door/corridor widths to mm integers", () => {
+    const out = buildDesignPrefillFromAttributes({
+      distance_to_boundary_m: 0.9,
+      insulation_ceiling_r: 4.1,
+      nathers_rating: 7,
+      min_door_width_mm: 820.4,
+      min_corridor_width_mm: 1000,
+      ceiling_height_non_habitable_m: 2.4,
+    });
+    expect(out).toMatchObject({
+      distance_to_boundary: "0.9",
+      insulation_ceiling_r: "4.1",
+      nathers_rating: "7",
+      min_door_width: "820",
+      min_corridor_width: "1000",
+      ceiling_height_non_habitable: "2.4",
+    });
+  });
+
+  it("rejects out-of-range numbers (impossible R-value, NatHERS > 10, sub-600mm door)", () => {
+    expect(
+      buildDesignPrefillFromAttributes({ insulation_wall_r: 99 }).insulation_wall_r,
+    ).toBeUndefined();
+    expect(
+      buildDesignPrefillFromAttributes({ nathers_rating: 12 }).nathers_rating,
+    ).toBeUndefined();
+    expect(
+      buildDesignPrefillFromAttributes({ min_door_width_mm: 100 }).min_door_width,
+    ).toBeUndefined();
+  });
+
+  it("maps the energy/services categoricals", () => {
+    const out = buildDesignPrefillFromAttributes({
+      energy_pathway: "NatHERS",
+      glazing_type: "Double glazed (low-e)",
+      hot_water_system: "Electric heat pump",
+      natural_ventilation_method: "Openable windows",
+      heating_type: "Split system",
+      garage_location: "Attached",
+      smoke_alarm_type: "Photoelectric (hardwired interconnected)",
+      dpc_type: "Chemical DPC",
+    });
+    expect(out).toMatchObject({
+      energy_pathway: "NatHERS",
+      glazing_type: "Double glazed (low-e)",
+      hot_water_system: "Electric heat pump",
+      natural_ventilation_method: "Openable windows",
+      heating_type: "Split system",
+      garage_location: "Attached",
+      smoke_alarm_type: "Photoelectric (hardwired interconnected)",
+      dpc_type: "Chemical DPC",
+    });
+  });
+});
