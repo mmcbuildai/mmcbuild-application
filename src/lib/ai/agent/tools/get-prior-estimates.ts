@@ -50,7 +50,7 @@ export function executeGetPriorEstimates(
 
     const lines = result.line_items.map(
       (li) =>
-        `  - ${li.element_description}: ${li.quantity} ${li.unit} × $${li.traditional_rate}/${li.unit} = $${li.traditional_total.toLocaleString()}` +
+        `  - ${li.element_description}: ${li.quantity} ${li.unit} × $${li.traditional_rate}/${li.unit} = $${(li.traditional_total ?? 0).toLocaleString()}` +
         (li.mmc_total ? ` (MMC: $${li.mmc_total.toLocaleString()})` : "")
     );
 

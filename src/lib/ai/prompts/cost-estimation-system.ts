@@ -93,8 +93,8 @@ export const COST_CONTINGENCY_PROMPT = (
 ) => `Calculate the contingency allowance for this project.
 
 Current totals (before contingency):
-- Traditional total: $${totalTraditional.toLocaleString()}
-- MMC total: $${totalMmc.toLocaleString()}
+- Traditional total: $${(totalTraditional ?? 0).toLocaleString()}
+- MMC total: $${(totalMmc ?? 0).toLocaleString()}
 - Average confidence across all line items: ${Math.round(avgConfidence * 100)}%
 
 Contingency guidelines:
