@@ -3,6 +3,7 @@ import { ExplainerVideo } from "@/components/shared/explainer-video";
 import { Button } from "@/components/ui/button";
 import { CourseSearch } from "@/components/train/course-search";
 import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
+import { CourseRequestCard } from "@/components/train/course-request-card";
 import { CourseCard } from "@/components/train/course-card";
 import { searchCourses } from "./actions";
 import { createClient } from "@/lib/supabase/server";
@@ -102,6 +103,8 @@ export default async function TrainPage({
             </p>
           </div>
         )}
+
+        <CourseRequestCard />
       </div>
     </div>
   );
