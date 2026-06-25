@@ -229,7 +229,11 @@ export const runDesignOptimisation = inngest.createFunction(
       const result = await callModel("design_primary", {
         system: OPTIMISATION_SYSTEM_PROMPT + systemsContext,
         messages: [{ role: "user", content: OPTIMISATION_USER_PROMPT(effectiveContent, spatialLayoutJson) }],
-        maxTokens: 4096,
+        // 4096 truncated a multi-suggestion response mid-array → the JSON came
+        // back unparseable ("```json { \"suggestions\": [ … " then cut off),
+        // failing the run at ~95% (Karen, 2026-06-25). 8192 matches the Comply
+        // truncation fix; the suggestions array is the large output here.
+        maxTokens: 8192,
         orgId: check.org_id,
         checkId: check.id,
       });
