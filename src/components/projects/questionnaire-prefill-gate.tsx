@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { QuestionnaireForm } from "@/components/projects/questionnaire-form";
-import { getProjectDesignPrefill } from "@/app/(dashboard)/projects/actions";
+import {
+  getDesignPrefillState,
+  type DesignPrefillStatus,
+} from "@/app/(dashboard)/projects/actions";
 
 interface SiteIntelPrefill {
   climate_zone?: number | null;
@@ -18,28 +20,49 @@ interface QuestionnairePrefillGateProps {
   existingResponses?: Record<string, unknown> | null;
   siteIntel?: SiteIntelPrefill | null;
   isDraft?: boolean;
-  /** Server-computed prefill at first render (may be empty when pending). */
+  /** Server-computed prefill at first render (empty while still extracting). */
   initialPrefill: Record<string, string>;
-  /**
-   * True when the on-upload design extraction is plausibly still in flight and
-   * the prefill is currently empty. When false the gate renders the form
-   * immediately with whatever prefill it has.
-   */
-  initiallyPending: boolean;
+  /** Server-computed extraction state at first render. */
+  initialStatus: DesignPrefillStatus;
 }
 
-// Poll cadence + hard cap so a slow/failed extraction can NEVER trap the user.
 const POLL_INTERVAL_MS = 5000;
-const MAX_POLLS = 18; // 18 × 5s = 90s hard cap.
+// Absolute backstop so a hung/failed extraction can never trap the user. A large
+// plan set's extraction runs ~2–3 min; the stuck-job reaper marks genuine hangs
+// errored within ~5 min, which flips the state to 'unavailable' before this. The
+// backstop is the last resort: render the form for manual fill, honestly framed.
+const MAX_WAIT_MS = 6 * 60 * 1000;
+// Don't trap the user: after this, offer a quiet "fill it in yourself" escape.
+const MANUAL_ESCAPE_AFTER_MS = 90 * 1000;
+// Honest expected duration the progress bar eases across (never fabricated to
+// 100% — it stops at ~92% until the extraction actually lands).
+const EXPECTED_MS = 3 * 60 * 1000;
+
+// Stage commentary — reflects what the extractor actually does, advanced by
+// elapsed time (the pipeline has no per-stage signal). Honest "working…" labels,
+// not a fake per-step completion.
+const STAGES = [
+  "Reading your uploaded plan…",
+  "Finding the floor plans, elevations and sections…",
+  "Tracing rooms, walls and areas…",
+  "Reading the schedule of finishes and notes…",
+  "Preparing your pre-filled answers…",
+];
+const STAGE_EVERY_MS = 30 * 1000;
 
 /**
- * Hold-back gate around the Comply questionnaire. The design-attribute
- * extraction is an async ~30–60s job that often hasn't finished by the time the
- * user reaches the questionnaire, so the prefill arrives empty. This gate waits
- * (briefly, while polling) for the extraction to land so the form renders
- * PRE-FILLED — with two escape hatches that guarantee the user is never stuck:
- * a 90s hard cap and an explicit "Skip" button. The waiting state only ever
- * shows for a FRESH questionnaire whose prefill is genuinely still pending.
+ * Hold-back gate around the Comply questionnaire.
+ *
+ * The design extraction that pre-fills the form is an async ~2–3 min job. Rather
+ * than RACE it (render an empty form, then ignore the data when it lands — the
+ * 90s-cap bug that left answers blank on a 32MB plan), this gate WAITS for the
+ * precursor to finish, showing an honest progress bar + stage commentary so the
+ * user understands the wait. It resolves only when the extraction is confirmed
+ * done: 'ready' → form pre-filled; 'unavailable' → form for manual fill. Two
+ * safety valves keep the user from ever being trapped: a quiet manual-escape
+ * after 90s and a 6-min absolute backstop. Belt-and-braces: even after the form
+ * renders, a background poll keeps running and feeds any late-arriving prefill
+ * into the form (which fills the fields the user hasn't touched).
  */
 export function QuestionnairePrefillGate({
   projectId,
@@ -47,48 +70,47 @@ export function QuestionnairePrefillGate({
   siteIntel,
   isDraft,
   initialPrefill,
-  initiallyPending,
+  initialStatus,
 }: QuestionnairePrefillGateProps) {
-  // Decide up-front whether we ever need to wait. Existing answers, a non-empty
-  // prefill, or "not pending" all mean: render the form now, no polling.
+  // Wait only for a fresh questionnaire whose extraction is genuinely in flight.
   const shouldWait =
     !existingResponses &&
-    initiallyPending &&
+    initialStatus === "extracting" &&
     Object.keys(initialPrefill).length === 0;
 
   const [waiting, setWaiting] = useState(shouldWait);
   const [prefill, setPrefill] = useState<Record<string, string>>(initialPrefill);
-  const pollCountRef = useRef(0);
-  // Time-based progress for the waiting bar. The extraction is a single async
-  // job with no incremental signal, so the bar reflects elapsed time against the
-  // 90s hard cap and eases toward (never reaching) 100% until the prefill lands —
-  // an honest "working…" indicator, not a fabricated percentage.
-  const startRef = useRef<number | null>(null);
+  const [stage, setStage] = useState(0);
   const [progress, setProgress] = useState(0);
+  const [showEscape, setShowEscape] = useState(false);
+  const startRef = useRef<number | null>(null);
 
+  // Foreground poll while waiting: resolve on 'ready' (prefill) or 'unavailable'.
   useEffect(() => {
     if (!waiting) return;
+    if (startRef.current === null) startRef.current = Date.now();
 
     let cancelled = false;
     const interval = setInterval(async () => {
-      pollCountRef.current += 1;
-
       try {
-        const next = await getProjectDesignPrefill(projectId);
+        const next = await getDesignPrefillState(projectId);
         if (cancelled) return;
-        if (Object.keys(next).length > 0) {
-          setPrefill(next);
+        if (next.status === "ready" && Object.keys(next.prefill).length > 0) {
+          setPrefill(next.prefill);
+          setWaiting(false);
+          return;
+        }
+        if (next.status === "unavailable") {
+          setPrefill(next.prefill);
           setWaiting(false);
           return;
         }
       } catch {
-        // Transient read failure — keep polling until the hard cap, then the
-        // form renders anyway. Never block the user on an error.
+        // Transient read failure — keep waiting until the backstop.
       }
-
-      // Hard cap: stop polling and render the form (manual fill).
-      if (!cancelled && pollCountRef.current >= MAX_POLLS) {
-        setWaiting(false);
+      // Absolute backstop.
+      if (!cancelled && startRef.current !== null) {
+        if (Date.now() - startRef.current >= MAX_WAIT_MS) setWaiting(false);
       }
     }, POLL_INTERVAL_MS);
 
@@ -98,19 +120,49 @@ export function QuestionnairePrefillGate({
     };
   }, [waiting, projectId]);
 
-  // Drive the progress bar off elapsed time (Date.now in an effect, not render,
-  // per the react-hooks purity rule).
+  // Drive the progress bar + stage commentary + escape off elapsed time.
   useEffect(() => {
     if (!waiting) return;
-    if (startRef.current === null) startRef.current = Date.now();
-    const totalMs = POLL_INTERVAL_MS * MAX_POLLS; // the 90s hard-cap window
     const tick = setInterval(() => {
       const start = startRef.current ?? Date.now();
-      const pct = Math.min(92, ((Date.now() - start) / totalMs) * 100);
-      setProgress(pct);
-    }, 200);
+      const elapsed = Date.now() - start;
+      setProgress(Math.min(92, (elapsed / EXPECTED_MS) * 100));
+      setStage(Math.min(STAGES.length - 1, Math.floor(elapsed / STAGE_EVERY_MS)));
+      if (elapsed >= MANUAL_ESCAPE_AFTER_MS) setShowEscape(true);
+    }, 250);
     return () => clearInterval(tick);
   }, [waiting]);
+
+  // Belt-and-braces: once the form is showing but the prefill is still empty (a
+  // backstop/unavailable resolution while extraction may yet finish), keep
+  // polling quietly. A late prefill flows into the form via its designPrefill
+  // prop, which fills the fields the user hasn't touched.
+  useEffect(() => {
+    if (waiting) return;
+    if (existingResponses) return;
+    if (Object.keys(prefill).length > 0) return;
+
+    let cancelled = false;
+    let polls = 0;
+    const interval = setInterval(async () => {
+      polls += 1;
+      try {
+        const next = await getDesignPrefillState(projectId);
+        if (!cancelled && Object.keys(next.prefill).length > 0) {
+          setPrefill(next.prefill);
+          clearInterval(interval);
+          return;
+        }
+      } catch {
+        /* keep trying */
+      }
+      if (polls >= 24) clearInterval(interval); // ~3 min of background retries
+    }, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [waiting, existingResponses, prefill, projectId]);
 
   if (waiting) {
     return (
@@ -118,12 +170,12 @@ export function QuestionnairePrefillGate({
         <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
           <div className="space-y-1">
-            <p className="text-base font-medium">
-              Reading your design to pre-fill your answers…
-            </p>
+            <p className="text-base font-medium">{STAGES[stage]}</p>
             <p className="mx-auto max-w-md text-base text-muted-foreground">
-              We&rsquo;re reading your uploaded plan to pre-fill what we can.
-              This takes up to a minute. You can skip and fill it in yourself.
+              We&rsquo;re reading your uploaded plan to pre-fill your answers, so
+              you don&rsquo;t re-type what&rsquo;s already on the drawings. Large
+              plan sets can take 2&ndash;3 minutes — we&rsquo;ll fill in
+              everything we can read.
             </p>
           </div>
           <div
@@ -141,14 +193,15 @@ export function QuestionnairePrefillGate({
               />
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11"
-            onClick={() => setWaiting(false)}
-          >
-            Skip — fill it in myself
-          </Button>
+          {showEscape && (
+            <button
+              type="button"
+              onClick={() => setWaiting(false)}
+              className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              Taking a while? Fill it in yourself instead
+            </button>
+          )}
         </CardContent>
       </Card>
     );

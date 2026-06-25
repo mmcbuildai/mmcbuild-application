@@ -288,7 +288,7 @@ export default async function ProjectOverviewPage({
                   : null
               }
               initialPrefill={prefillState?.prefill ?? {}}
-              initiallyPending={prefillState?.pending ?? false}
+              initialStatus={prefillState?.status ?? "unavailable"}
             />
           </div>
           {/* The questionnaire form owns the single "Save & Activate" action on

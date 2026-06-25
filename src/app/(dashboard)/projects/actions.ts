@@ -1148,9 +1148,23 @@ export async function getProjectDesignPrefill(
  * landed, or only non-vision plans like DWG) `pending` is false so the gate
  * renders the form immediately and never traps the user.
  */
+/**
+ * Tri-state for the questionnaire hold-back gate:
+ *   - 'ready'       — a prefill is available; render the form pre-filled.
+ *   - 'extracting'  — a vision plan's design extraction is still in flight; the
+ *                     gate waits (with commentary) rather than racing it.
+ *   - 'unavailable' — no auto-prefill is coming (no vision plan, or extraction
+ *                     finished and produced nothing usable); render for manual.
+ */
+export type DesignPrefillStatus = "ready" | "extracting" | "unavailable";
+
 export async function getDesignPrefillState(
   projectId: string,
-): Promise<{ prefill: Record<string, string>; pending: boolean }> {
+): Promise<{
+  prefill: Record<string, string>;
+  pending: boolean;
+  status: DesignPrefillStatus;
+}> {
   // Auth + org guard (matches getProjectDesignPrefill).
   const profile = await getProfile();
   const admin = createAdminClient();
@@ -1162,13 +1176,13 @@ export async function getDesignPrefillState(
     .single();
 
   if (!project || project.org_id !== profile.org_id) {
-    return { prefill: {}, pending: false };
+    return { prefill: {}, pending: false, status: "unavailable" };
   }
 
   // Reuse the existing prefill logic (also re-runs its own auth/org guard).
   const prefill = await getProjectDesignPrefill(projectId);
   if (Object.keys(prefill).length > 0) {
-    return { prefill, pending: false };
+    return { prefill, pending: false, status: "ready" };
   }
 
   // Empty prefill — is an extraction plausibly still coming? A vision-capable
@@ -1182,9 +1196,15 @@ export async function getDesignPrefillState(
     .is("design_attributes", null)
     .limit(1);
 
+  // A vision-capable plan whose design_attributes is still NULL = the on-upload
+  // extraction hasn't landed yet → keep waiting. If there's no such plan, either
+  // there's no vision plan at all, or every vision plan has already produced a
+  // (non-null) design_attributes that simply yielded no usable prefill — both
+  // mean no auto-prefill is coming, so the gate renders the form for manual fill
+  // instead of waiting forever.
   const hasPendingVisionPlan = !!pendingPlans && pendingPlans.length > 0;
   if (!hasPendingVisionPlan) {
-    return { prefill, pending: false };
+    return { prefill, pending: false, status: "unavailable" };
   }
 
   // The 3D spatial layout is the other prefill source; if it already existed the
@@ -1199,10 +1219,16 @@ export async function getDesignPrefillState(
     .maybeSingle();
 
   const hasSpatialLayout = !!layoutRow;
+  const pending = isPrefillPending({
+    prefill,
+    hasPendingVisionPlan,
+    hasSpatialLayout,
+  });
 
   return {
     prefill,
-    pending: isPrefillPending({ prefill, hasPendingVisionPlan, hasSpatialLayout }),
+    pending,
+    status: pending ? "extracting" : "unavailable",
   };
 }
 

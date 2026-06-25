@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,6 +109,11 @@ function applyDerivedResponses(
     out.attached_dwelling = "true";
   }
   out.has_heating_appliance = out.heating_type ? "true" : "false";
+  // Construction Type (A/B/C) is a Volume One (Class 2–9) concept — never carry
+  // a stale value on a Class 1/10 building where the field is hidden.
+  if (out.building_class && out.building_class.startsWith("Class 1")) {
+    out.construction_type = "";
+  }
   return out;
 }
 
@@ -463,8 +468,39 @@ export function QuestionnaireForm({
     min_corridor_width: defaults.min_corridor_width ?? prefill.min_corridor_width ?? "",
   });
 
-  const update = (key: string, value: string) =>
+  // Fields the user has actually edited — never overwritten by a late prefill.
+  const touchedRef = useRef<Set<string>>(new Set());
+  const update = (key: string, value: string) => {
+    touchedRef.current.add(key);
     setResponses((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // Apply a prefill that ARRIVES AFTER mount (the design extraction finished
+  // while the form was already showing — the gate keeps polling and updates
+  // designPrefill). Only fills fields the user hasn't touched and that are still
+  // empty/default, so it never clobbers an answer. Belt-and-braces against the
+  // race that left fields blank when extraction outran the hold-back gate.
+  useEffect(() => {
+    if (existingResponses) return; // saved questionnaires never auto-prefill
+    const keys = Object.keys(designPrefill ?? {});
+    if (keys.length === 0) return;
+    setResponses((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const k of keys) {
+        if (touchedRef.current.has(k)) continue;
+        const incoming = (designPrefill as Record<string, string>)[k];
+        const current = prev[k];
+        const isEmptyOrDefault =
+          current === undefined || current === "" || current === "false";
+        if (incoming && incoming !== current && isEmptyOrDefault) {
+          next[k] = incoming;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [designPrefill, existingResponses]);
 
   const typology = responses.building_typology;
   const showAccessibilityStep = !typology || RESIDENTIAL_TYPOLOGIES.has(typology);
@@ -475,6 +511,14 @@ export function QuestionnaireForm({
   const storeysNum = Number(responses.storeys);
   const stairsAutoDerived = Number.isFinite(storeysNum) && storeysNum > 1;
   const attachedAutoDerived = ATTACHED_TYPOLOGIES.has(typology);
+
+  // Construction Type (A/B/C) is an NCC Volume One concept — it applies to
+  // Class 2–9 only. For Class 1 (houses) / Class 10 (sheds/structures), which
+  // are assessed under Volume Two, it doesn't apply, so the field is hidden.
+  // Shown while the class is unknown so it's never silently dropped.
+  const buildingClass = responses.building_class;
+  const constructionTypeApplies =
+    !buildingClass || !buildingClass.startsWith("Class 1");
 
   // Step 8 (Access & Livable Housing) is hidden for hotel/commercial typologies.
   // We collapse the visible step list so navigation skips it cleanly.
@@ -649,13 +693,16 @@ export function QuestionnaireForm({
                 required
                 helper="Required — this decides which NCC volume your plan is assessed against: Class 1 or 10 (houses / structures) use Volume Two (Housing Provisions); Class 2–9 (apartments, boarding houses, commercial) use Volume One. A compliance check cannot run until this is set."
               />
-              <SelectField
-                label="Construction Type"
-                value={responses.construction_type}
-                onChange={(v) => update("construction_type", v)}
-                options={CONSTRUCTION_TYPES}
-                source={extractedKeys.has("construction_type") ? "extracted" : "manual"}
-              />
+              {constructionTypeApplies && (
+                <SelectField
+                  label="Construction Type"
+                  value={responses.construction_type}
+                  onChange={(v) => update("construction_type", v)}
+                  options={CONSTRUCTION_TYPES}
+                  source={extractedKeys.has("construction_type") ? "extracted" : "manual"}
+                  helper="The NCC fire-resistance tier — Type A (most fire-resistant) → Type C (least), set by building class + rise in storeys. Only applies to Class 2–9 (NCC Volume One) buildings; it isn't used for Class 1 houses or Class 10 structures."
+                />
+              )}
             </>
           )}
 
