@@ -48,7 +48,12 @@ export async function registerProfessional(input: RegistrationInput) {
     .eq("org_id", profile.org_id)
     .single();
 
-  if (existing) return { error: "Your organisation already has a listing" };
+  if (existing) {
+    return {
+      error:
+        "Your organisation already has a directory listing — edit it from the Directory instead of registering again.",
+    };
+  }
 
   const { data: professional, error } = await db()
     .from("professionals")
@@ -61,6 +66,17 @@ export async function registerProfessional(input: RegistrationInput) {
     .single();
 
   if (error || !professional) {
+    // The only UNIQUE on professionals is (org_id) — a 23505 here means the org
+    // already has a listing (e.g. the pre-check raced). Surface the SAME clear,
+    // actionable message rather than a raw "duplicate key…" string, which read to
+    // testers like a confusing "duplicate email" error (Karen, 2026-06-25).
+    const code = (error as { code?: string })?.code;
+    if (code === "23505") {
+      return {
+        error:
+          "Your organisation already has a directory listing — edit it from the Directory instead of registering again.",
+      };
+    }
     return { error: `Failed to register: ${(error as { message: string })?.message}` };
   }
 
