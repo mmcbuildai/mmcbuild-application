@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -21,23 +22,28 @@ import { Search } from "lucide-react";
 export function CourseSearch() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
 
-  const updateParams = useCallback(
-    (key: string, value: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (value && value !== "all") {
-        params.set(key, value);
-      } else {
-        params.delete(key);
-      }
-      params.delete("page");
-      startTransition(() => {
-        router.push(`/train?${params.toString()}`);
-      });
-    },
-    [router, searchParams]
+  // Hold the filters locally and apply them only on an explicit Search (or Enter)
+  // — the dropdowns no longer fire a navigation on every change.
+  const [query, setQuery] = useState(searchParams.get("query") ?? "");
+  const [category, setCategory] = useState(
+    searchParams.get("category") ?? "all",
   );
+  const [difficulty, setDifficulty] = useState(
+    searchParams.get("difficulty") ?? "all",
+  );
+
+  const applySearch = () => {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("query", query.trim());
+    if (category && category !== "all") params.set("category", category);
+    if (difficulty && difficulty !== "all") params.set("difficulty", difficulty);
+    // Always start from page 1 on a new search (omit the page param).
+    startTransition(() => {
+      router.push(`/train?${params.toString()}`);
+    });
+  };
 
   return (
     <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -46,19 +52,14 @@ export function CourseSearch() {
         <Input
           placeholder="Search courses..."
           className="pl-9"
-          defaultValue={searchParams.get("query") ?? ""}
-          onChange={(e) => {
-            const val = e.target.value;
-            // Debounce: update after user stops typing
-            const timeout = setTimeout(() => updateParams("query", val), 300);
-            return () => clearTimeout(timeout);
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") applySearch();
           }}
         />
       </div>
-      <Select
-        defaultValue={searchParams.get("category") ?? "all"}
-        onValueChange={(v) => updateParams("category", v)}
-      >
+      <Select value={category} onValueChange={setCategory}>
         <SelectTrigger className="w-full sm:w-[200px]">
           <SelectValue placeholder="Category" />
         </SelectTrigger>
@@ -71,10 +72,7 @@ export function CourseSearch() {
           ))}
         </SelectContent>
       </Select>
-      <Select
-        defaultValue={searchParams.get("difficulty") ?? "all"}
-        onValueChange={(v) => updateParams("difficulty", v)}
-      >
+      <Select value={difficulty} onValueChange={setDifficulty}>
         <SelectTrigger className="w-full sm:w-[160px]">
           <SelectValue placeholder="Difficulty" />
         </SelectTrigger>
@@ -87,6 +85,15 @@ export function CourseSearch() {
           ))}
         </SelectContent>
       </Select>
+      <Button
+        type="button"
+        onClick={applySearch}
+        disabled={isPending}
+        className="min-h-11 w-full sm:w-auto"
+      >
+        <Search className="mr-1.5 h-4 w-4" />
+        {isPending ? "Searching…" : "Search"}
+      </Button>
     </div>
   );
 }
