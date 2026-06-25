@@ -59,6 +59,12 @@ export function QuestionnairePrefillGate({
   const [waiting, setWaiting] = useState(shouldWait);
   const [prefill, setPrefill] = useState<Record<string, string>>(initialPrefill);
   const pollCountRef = useRef(0);
+  // Time-based progress for the waiting bar. The extraction is a single async
+  // job with no incremental signal, so the bar reflects elapsed time against the
+  // 90s hard cap and eases toward (never reaching) 100% until the prefill lands —
+  // an honest "working…" indicator, not a fabricated percentage.
+  const startRef = useRef<number | null>(null);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     if (!waiting) return;
@@ -92,6 +98,20 @@ export function QuestionnairePrefillGate({
     };
   }, [waiting, projectId]);
 
+  // Drive the progress bar off elapsed time (Date.now in an effect, not render,
+  // per the react-hooks purity rule).
+  useEffect(() => {
+    if (!waiting) return;
+    if (startRef.current === null) startRef.current = Date.now();
+    const totalMs = POLL_INTERVAL_MS * MAX_POLLS; // the 90s hard-cap window
+    const tick = setInterval(() => {
+      const start = startRef.current ?? Date.now();
+      const pct = Math.min(92, ((Date.now() - start) / totalMs) * 100);
+      setProgress(pct);
+    }, 200);
+    return () => clearInterval(tick);
+  }, [waiting]);
+
   if (waiting) {
     return (
       <Card>
@@ -105,6 +125,21 @@ export function QuestionnairePrefillGate({
               We&rsquo;re reading your uploaded plan to pre-fill what we can.
               This takes up to a minute. You can skip and fill it in yourself.
             </p>
+          </div>
+          <div
+            className="w-full max-w-md space-y-1.5"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress)}
+            aria-label="Reading your design to pre-fill your answers"
+          >
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+                style={{ width: `${Math.max(6, progress)}%` }}
+              />
+            </div>
           </div>
           <Button
             type="button"
