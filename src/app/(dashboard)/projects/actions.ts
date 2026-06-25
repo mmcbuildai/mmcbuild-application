@@ -1111,12 +1111,14 @@ export async function getProjectDesignPrefill(
   }
 
   const spatialPrefill = buildDesignPrefill(layout);
-  if (Object.keys(spatialPrefill).length > 0) {
-    return spatialPrefill;
-  }
 
-  // No 3D spatial layout yielded anything. Fall back to the lightweight
-  // attributes extracted from the plan on upload (the common Comply-first path).
+  // Always ALSO read the lightweight on-upload attributes. They carry the
+  // title-block / schedule / note fields (building class, soil class, footing,
+  // BAL/wind, R-values, glazing, …) that the geometry-only 3D spatial layout
+  // does not. Previously a present spatial layout short-circuited and discarded
+  // these — so a project that had run Build/3D lost its richer Comply prefill.
+  // Merge instead: attributes as the base, the more precise geometry-derived
+  // spatial values layered on top of the keys they share.
   const { data: planRow } = await admin
     .from("plans")
     .select("design_attributes")
@@ -1128,8 +1130,9 @@ export async function getProjectDesignPrefill(
 
   const attrs = (planRow as { design_attributes: DesignAttributes | null } | null)
     ?.design_attributes;
+  const attrsPrefill = buildDesignPrefillFromAttributes(attrs);
 
-  return buildDesignPrefillFromAttributes(attrs);
+  return { ...attrsPrefill, ...spatialPrefill };
 }
 
 /**
