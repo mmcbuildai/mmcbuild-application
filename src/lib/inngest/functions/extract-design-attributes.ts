@@ -23,6 +23,7 @@ import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { callVisionModel } from "@/lib/build/spatial/vision-call";
 import { extractJson } from "@/lib/ai/extract-json";
+import { preparePdfBufferForVision } from "@/lib/plans/pdf-vision-prep";
 import type { DesignAttributes } from "@/lib/comply/questionnaire-prefill";
 import type { PlanFileKind } from "@/lib/plans/file-kind";
 import { contentTypeForKind, MIN_READABLE_PLAN_BYTES } from "@/lib/plans/file-kind";
@@ -215,11 +216,31 @@ export const extractDesignAttributes = inngest.createFunction(
         );
         return null;
       }
-      const buffer = Buffer.from(await data.arrayBuffer());
+      let buffer = Buffer.from(await data.arrayBuffer());
 
       // Never send a blank/near-empty document to the model (CLAUDE.md rule).
       if (buffer.byteLength < MIN_READABLE_PLAN_BYTES) {
         throw new Error("No readable plan provided for attribute extraction");
+      }
+
+      // Big architect sets (30–37MB) exceed Anthropic's 32MB document ceiling
+      // and come back as a degraded read (only a few attributes). Run the shared
+      // optimise+ceiling prep — the SAME path the 3D extractor uses — in-memory
+      // inside this step (the buffer is never returned, so Inngest's step-output
+      // size limit isn't hit — the reason download+extract share one step). PDF
+      // only; images don't hit the document ceiling.
+      if (kind === "pdf") {
+        const prep = await preparePdfBufferForVision(buffer);
+        if (!prep.withinCeiling) {
+          // Still over the ceiling after optimise — skip cleanly rather than
+          // send an oversized doc. design_attributes stays null and the
+          // questionnaire falls back to manual entry (best-effort contract).
+          console.error(
+            `[extractDesignAttributes] PDF still over the document ceiling after optimise — skipping attribute extraction`,
+          );
+          return null;
+        }
+        buffer = prep.buffer;
       }
 
       const result =
