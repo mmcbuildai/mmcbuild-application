@@ -25,35 +25,22 @@ export interface SampleDesign {
   sizeBytes: number;
 }
 
-export const SAMPLE_DESIGNS: SampleDesign[] = [
-  // NOTE: the 5-storey Gladesville boarding-house sample was removed 2026-06-23.
-  // 3D "Show my design" is part of the guided beta test, and that plan is too
-  // large/complex for the residential-tuned extractor to render — offering a
-  // design we know fails the 3D step is a dead end for testers. Only keep
-  // samples that extract cleanly across 3D / Comply / Quote (see file header).
-  {
-    id: "terrace",
-    name: "2-storey terrace house (Class 1)",
-    description:
-      "A narrow two-storey attached terrace (Carter Williamson) — a Class 1 residential form, good for tighter attached layouts.",
-    samplePath:
-      "71d9fefc-97ec-442c-b22c-eb01be1c5583/929b572f-0bfd-469e-8068-683c1a7cbe7e/1781405698797_TH01_Terraces_01_by_Carter_Williamson-01.pdf",
-    fileName: "Sample — 2-storey terrace house.pdf",
-    fileKind: "pdf",
-    sizeBytes: 33_430_484,
-  },
-  {
-    id: "townhouses",
-    name: "Multi-dwelling townhouses (DA set)",
-    description:
-      "A multi-dwelling townhouse DA set (Mittagong) — a smaller, multi-page architectural set of attached dwellings.",
-    samplePath:
-      "71d9fefc-97ec-442c-b22c-eb01be1c5583/39ec1435-5b31-411a-b658-c0c9e858bf24/1780455022360_Mittagong_Townhouses_Architectural_DA_20241018.pdf",
-    fileName: "Sample — Multi-dwelling townhouses.pdf",
-    fileKind: "pdf",
-    sizeBytes: 14_828_942,
-  },
-];
+// PRUNED 2026-06-25: every available sample was MULTI-STOREY, and Build 3D only
+// renders a single storey today — so a tester picking a sample hit a 3D step
+// that rendered the design wrong (an incomplete ground-floor-only model). Rather
+// than offer designs we know mis-render, the picker is empty until we add
+// single-storey rich designs (sourcing single-storey patterns from the NSW
+// Housing Pattern Book — same free source as TH01). The create-project dialog
+// hides the sample section when this list is empty, leaving "upload your own".
+//
+// Removed entries (restore by re-pointing at single-storey plans once verified):
+//  - "terrace"     → TH01 Terraces (Carter Williamson), 2–3 storey. Keep TH01 for
+//                    EXTRACTION testing only (Class 1a / typology / BASIX pre-fill),
+//                    not as a beta-pickable design.
+//      path: 71d9fefc-…/929b572f-…/1781405698797_TH01_Terraces_01_by_Carter_Williamson-01.pdf
+//  - "townhouses"  → Mittagong multi-dwelling DA set, 2-storey.
+//      path: 71d9fefc-…/39ec1435-…/1780455022360_Mittagong_Townhouses_Architectural_DA_20241018.pdf
+export const SAMPLE_DESIGNS: SampleDesign[] = [];
 
 export function getSampleDesign(id: string): SampleDesign | undefined {
   return SAMPLE_DESIGNS.find((s) => s.id === id);
