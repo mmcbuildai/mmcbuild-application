@@ -36,7 +36,9 @@ For the categorical fields, return EXACTLY one of the listed option values (verb
 Return JSON in EXACTLY this shape (every field optional — include only what the plan clearly supports):
 {
   "storeys": <integer above-ground storeys>,
-  "floor_area_m2": <total internal floor area, m2>,
+  "floor_area_m2": <total internal floor area across ALL storeys, m2>,
+  "upper_floor_area_m2": <combined internal floor area of storeys ABOVE the ground floor, m2 (omit for single-storey)>,
+  "building_height_m": <overall building height from finished ground floor to roof ridge, m (from the elevation/section if shown)>,
   "wet_area_count": <integer count of bathrooms+ensuites+laundries+WCs+powder rooms across the whole plan>,
   "has_stairs": <true/false: internal stairs present>,
   "has_balcony_deck": <true/false: a balcony or deck present>,

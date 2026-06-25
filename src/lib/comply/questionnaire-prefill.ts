@@ -143,6 +143,51 @@ function boundedNumber(
   return String(round ? Math.round(raw) : raw);
 }
 
+/** Inter-floor slab gap (m) — kept consistent with the geometry builder. */
+const PREFILL_SLAB_THICKNESS = 0.2;
+
+/**
+ * Overall building height (m) from finished floor to roof ridge, derived from
+ * the storey heights + roof. Mirrors the geometry builder's stacking maths
+ * (sum of per-storey floor-to-ceiling heights + an inter-floor slab per level)
+ * and adds the roof ridge rise (explicit ridge_height_m, else estimated from
+ * pitch × half the shorter footprint span for pitched forms). Only meaningful
+ * once multi-storey extraction lands all storeys; returns null when it can't be
+ * derived to a sane value. Exported for unit testing.
+ */
+export function deriveBuildingHeightM(
+  layout: SpatialLayout,
+): number | null {
+  const n = Math.max(1, typeof layout.storeys === "number" ? layout.storeys : 1);
+  const heightOf = (level: number): number => {
+    const sd = layout.storey_details?.find((s) => s.level === level);
+    if (sd?.floor_to_ceiling_m && sd.floor_to_ceiling_m > 0) return sd.floor_to_ceiling_m;
+    return layout.wall_height || 2.4;
+  };
+  let wallTop = 0;
+  for (let level = 0; level < n; level++) {
+    wallTop += heightOf(level) + (level < n - 1 ? PREFILL_SLAB_THICKNESS : 0);
+  }
+
+  let ridge = layout.roof?.ridge_height_m;
+  if (
+    (ridge == null || ridge <= 0) &&
+    layout.roof &&
+    layout.roof.form !== "flat" &&
+    layout.roof.form !== "skillion"
+  ) {
+    const pitch = layout.roof.pitch_deg ?? 22.5;
+    const span = Math.min(layout.bounds?.width ?? 0, layout.bounds?.depth ?? 0);
+    if (span > 0 && pitch > 0) {
+      ridge = (span / 2) * Math.tan((pitch * Math.PI) / 180);
+    }
+  }
+
+  const total = wallTop + (typeof ridge === "number" && ridge > 0 ? ridge : 0);
+  if (!(total > 0) || total > 50) return null;
+  return Math.round(total * 10) / 10;
+}
+
 export function buildDesignPrefill(
   layout: SpatialLayout | null | undefined,
 ): Record<string, string> {
@@ -157,13 +202,31 @@ export function buildDesignPrefill(
     out.storeys = String(layout.storeys);
   }
 
-  // Total floor area (sum of room areas, rounded)
+  // Total floor area (sum of room areas across ALL storeys, rounded). Now that
+  // upper floors are extracted (multi-storey), this is true total GFA — it was
+  // ground-floor-only before.
   const floorArea = rooms.reduce(
     (sum, r) => sum + (typeof r.area_m2 === "number" ? r.area_m2 : 0),
     0,
   );
   if (floorArea > 0) {
     out.floor_area = String(Math.round(floorArea));
+  }
+
+  // Upper-storey floor area (sum of rooms on floor_level >= 1). Only present
+  // once multi-storey extraction has landed upper floors; lets the ground vs
+  // upper split feed compliance (e.g. rise-in-storeys / fire separation).
+  const upperArea = rooms
+    .filter((r) => (typeof r.floor_level === "number" ? r.floor_level : 0) >= 1)
+    .reduce((sum, r) => sum + (typeof r.area_m2 === "number" ? r.area_m2 : 0), 0);
+  if (upperArea > 0) {
+    out.upper_floor_area = String(Math.round(upperArea));
+  }
+
+  // Overall building height to ridge (m)
+  const height = deriveBuildingHeightM(layout);
+  if (height !== null) {
+    out.building_height = String(height);
   }
 
   // Wet area count
@@ -238,6 +301,10 @@ export interface DesignAttributes {
   // is also all scalars.
   storeys?: number;
   floor_area_m2?: number;
+  /** Combined floor area (m²) of storeys above the ground floor. */
+  upper_floor_area_m2?: number;
+  /** Overall building height (m) from finished floor to roof ridge. */
+  building_height_m?: number;
   wet_area_count?: number;
   has_stairs?: boolean;
   has_balcony_deck?: boolean;
@@ -322,6 +389,17 @@ export function buildDesignPrefillFromAttributes(
   // Total floor area (rounded; positive only)
   if (typeof attrs.floor_area_m2 === "number" && attrs.floor_area_m2 > 0) {
     out.floor_area = String(Math.round(attrs.floor_area_m2));
+  }
+
+  // Upper-storey floor area (rounded; positive only)
+  if (typeof attrs.upper_floor_area_m2 === "number" && attrs.upper_floor_area_m2 > 0) {
+    out.upper_floor_area = String(Math.round(attrs.upper_floor_area_m2));
+  }
+
+  // Overall building height to ridge (sanity-bounded)
+  const heightAttr = boundedNumber(attrs.building_height_m, 1, 50);
+  if (heightAttr !== null) {
+    out.building_height = heightAttr;
   }
 
   // Wet area count (aggregate from the extraction; positive only)

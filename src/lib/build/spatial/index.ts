@@ -10,6 +10,12 @@ export type {
   Storey,
   Materials,
 } from "./types";
-export { buildFloorPlan3D, buildSuggestionHighlight } from "./geometry";
+export {
+  buildFloorPlan3D,
+  buildSuggestionHighlight,
+  getStoreyBaseElevation,
+  getTopStoreyIndex,
+  type BuildFloorPlanOptions,
+} from "./geometry";
 // Note: extractSpatialLayout and renderPdfPage are server-only —
 // import them directly from their files in server contexts.

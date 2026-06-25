@@ -94,6 +94,7 @@ function buildWall(
   wall: Wall,
   defaultHeight: number,
   layoutMaterials?: SpatialLayout["materials"],
+  baseElevation = 0,
 ): THREE.Mesh {
   const length = wallLength(wall);
   const thickness = wall.thickness || 0.09;
@@ -124,21 +125,26 @@ function buildWall(
   const mid = wallMidpoint(wall);
   const angle = wallAngle(wall);
 
-  mesh.position.set(mid.x, height / 2, mid.y);
+  mesh.position.set(mid.x, baseElevation + height / 2, mid.y);
   mesh.rotation.y = -angle;
 
-  mesh.userData = { type: "wall", wallId: wall.id, material: wall.material };
+  mesh.userData = { type: "wall", wallId: wall.id, material: wall.material, storey: wall.storey ?? 0 };
   return mesh;
 }
 
 /**
  * Build a floor polygon for a room.
  */
-function buildFloor(room: Room): THREE.Mesh {
+function buildFloor(room: Room, baseElevation = 0): THREE.Mesh {
   if (room.polygon.length < 3) {
     // Fallback: create a small placeholder
     const geo = new THREE.PlaneGeometry(1, 1);
-    return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xf5f0e8 }));
+    const placeholder = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({ color: 0xf5f0e8 }),
+    );
+    placeholder.position.y = baseElevation + 0.01;
+    return placeholder;
   }
 
   const shape = new THREE.Shape();
@@ -160,16 +166,21 @@ function buildFloor(room: Room): THREE.Mesh {
   const mesh = new THREE.Mesh(geometry, material);
   // Rotate to lay flat (shape is in XY, we need XZ)
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = 0.01; // slightly above ground to prevent z-fighting
+  mesh.position.y = baseElevation + 0.01; // sit on this storey's slab, just above to avoid z-fighting
 
-  mesh.userData = { type: "floor", roomId: room.id, roomName: room.name };
+  mesh.userData = { type: "floor", roomId: room.id, roomName: room.name, storey: room.floor_level ?? 0 };
   return mesh;
 }
 
 /**
  * Build an opening (door or window) as a coloured box cut into the wall.
  */
-function buildOpening(opening: Opening, wallHeight: number, walls: Wall[]): THREE.Mesh | null {
+function buildOpening(
+  opening: Opening,
+  wallHeight: number,
+  walls: Wall[],
+  baseElevation = 0,
+): THREE.Mesh | null {
   // Find the parent wall to determine position and rotation
   const wall = walls.find((w) => w.id === opening.wall_id);
   if (!wall) {
@@ -185,7 +196,7 @@ function buildOpening(opening: Opening, wallHeight: number, walls: Wall[]): THRE
       opacity: opening.type === "window" ? 0.4 : 0.8,
     });
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(opening.position.x, sillHeight + height / 2, opening.position.y);
+    mesh.position.set(opening.position.x, baseElevation + sillHeight + height / 2, opening.position.y);
     mesh.userData = { type: "opening", openingType: opening.type, openingId: opening.id };
     return mesh;
   }
@@ -205,7 +216,7 @@ function buildOpening(opening: Opening, wallHeight: number, walls: Wall[]): THRE
   });
 
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(opening.position.x, sillHeight + height / 2, opening.position.y);
+  mesh.position.set(opening.position.x, baseElevation + sillHeight + height / 2, opening.position.y);
   mesh.rotation.y = -angle;
 
   mesh.userData = { type: "opening", openingType: opening.type, openingId: opening.id };
@@ -303,8 +314,17 @@ function buildRoof(
 
   const form = roof.form ?? "gable";
 
-  // Primary path: polygon-based roof following the wall outline.
-  const polygon = computePerimeterPolygon(layout.walls);
+  // Primary path: polygon-based roof following the wall outline. On a
+  // multi-storey building only the TOP storey's external walls define the
+  // roof footprint — feeding every storey's walls in would chain two
+  // overlapping loops and corrupt the perimeter trace.
+  const top = topStoreyIndex(layout);
+  const topStoreyWalls = layout.walls.filter((w) => (w.storey ?? 0) === top);
+  const roofWalls =
+    topStoreyWalls.filter((w) => w.type === "external").length >= 3
+      ? topStoreyWalls
+      : layout.walls;
+  const polygon = computePerimeterPolygon(roofWalls);
   if (polygon) {
     return buildRoofFromPolygon(polygon, form, pitchRad, eave, baseHeight, material);
   }
@@ -869,8 +889,7 @@ function buildGround(bounds: SpatialLayout["bounds"]): THREE.Mesh {
  */
 export function buildSuggestionHighlight(
   wallIds: string[],
-  walls: Wall[],
-  wallHeight: number,
+  layout: SpatialLayout,
   colour: number = COLOURS.suggestion_highlight
 ): THREE.Group {
   const group = new THREE.Group();
@@ -883,16 +902,22 @@ export function buildSuggestionHighlight(
   });
 
   for (const wallId of wallIds) {
-    const wall = walls.find((w) => w.id === wallId);
+    const wall = layout.walls.find((w) => w.id === wallId);
     if (!wall) continue;
 
+    const storey = wall.storey ?? 0;
+    const base = storeyBaseElevation(layout, storey);
+    const height =
+      wall.height_m && wall.height_m > 0
+        ? wall.height_m
+        : storeyHeight(layout, storey);
     const length = wallLength(wall);
     const thickness = (wall.thickness || 0.09) + 0.05;
-    const geometry = new THREE.BoxGeometry(length, wallHeight + 0.1, thickness);
+    const geometry = new THREE.BoxGeometry(length, height + 0.1, thickness);
     const mesh = new THREE.Mesh(geometry, material);
     const mid = wallMidpoint(wall);
     const angle = wallAngle(wall);
-    mesh.position.set(mid.x, wallHeight / 2, mid.y);
+    mesh.position.set(mid.x, base + height / 2, mid.y);
     mesh.rotation.y = -angle;
     group.add(mesh);
   }
@@ -901,55 +926,140 @@ export function buildSuggestionHighlight(
 }
 
 /**
- * Compute total exterior wall height from optional storey_details.
- * Falls back to layout.wall_height (or 2.4) when storey_details is absent.
- * Used so a 2-storey building extrudes walls to the correct full height.
+ * Public storey helpers for renderers (floor-selector UI, room-label
+ * elevation). Re-exported through ./index alongside buildFloorPlan3D.
  */
-function totalWallHeight(layout: SpatialLayout): number {
-  if (layout.storey_details && layout.storey_details.length > 0) {
-    const slabThickness = 0.2; // m between floors
-    const total = layout.storey_details.reduce(
-      (sum, s) => sum + (s.floor_to_ceiling_m || 2.4),
-      0,
-    );
-    return total + slabThickness * (layout.storey_details.length - 1);
+export function getStoreyBaseElevation(layout: SpatialLayout, storey: number): number {
+  return storeyBaseElevation(layout, storey);
+}
+
+export function getTopStoreyIndex(layout: SpatialLayout): number {
+  return topStoreyIndex(layout);
+}
+
+/** Inter-floor slab/structure gap between one storey's ceiling and the next
+ *  storey's floor (metres). Kept consistent with the elevation maths below. */
+const SLAB_THICKNESS = 0.2;
+
+/**
+ * Floor-to-ceiling height (m) for a given storey. Prefers the matching
+ * `storey_details[]` entry, then falls back to `layout.wall_height`, then 2.4.
+ */
+function storeyHeight(layout: SpatialLayout, storey: number): number {
+  const sd = layout.storey_details?.find((s) => s.level === storey);
+  if (sd?.floor_to_ceiling_m && sd.floor_to_ceiling_m > 0) {
+    return sd.floor_to_ceiling_m;
   }
   return layout.wall_height || 2.4;
 }
 
 /**
+ * Y elevation (m) at which `storey`'s floor sits — the cumulative height of
+ * every storey below it plus an inter-floor slab gap per level. Ground
+ * (storey 0) sits at 0. This is what stacks upper floors above lower ones
+ * instead of extruding everything from the ground as a single tall box.
+ */
+function storeyBaseElevation(layout: SpatialLayout, storey: number): number {
+  let base = 0;
+  for (let s = 0; s < storey; s++) {
+    base += storeyHeight(layout, s) + SLAB_THICKNESS;
+  }
+  return base;
+}
+
+/**
+ * Highest storey index actually present — derived from the walls/rooms (which
+ * carry the real storey tags) as well as the declared `storeys` count, so the
+ * roof lands on the top storey even if `storeys`/`storey_details` are stale.
+ */
+function topStoreyIndex(layout: SpatialLayout): number {
+  let top = (layout.storeys ?? 1) - 1;
+  for (const w of layout.walls) top = Math.max(top, w.storey ?? 0);
+  for (const r of layout.rooms) top = Math.max(top, r.floor_level ?? 0);
+  return Math.max(0, top);
+}
+
+/**
+ * Y elevation (m) of the top of the building — where the roof starts. Equals
+ * the top storey's base elevation plus its own floor-to-ceiling height. For a
+ * single-storey layout this is just the wall height.
+ */
+function roofBaseHeight(layout: SpatialLayout): number {
+  const top = topStoreyIndex(layout);
+  return storeyBaseElevation(layout, top) + storeyHeight(layout, top);
+}
+
+export interface BuildFloorPlanOptions {
+  /**
+   * When set, render only the walls/rooms/openings on this storey index
+   * (0 = ground). The roof is included only when this equals the top storey.
+   * `null`/undefined renders every storey stacked (the default).
+   */
+  storeyFilter?: number | null;
+}
+
+/**
  * Main entry point: build complete 3D scene from spatial layout.
  *
- * Order: ground → floors → walls → openings → roof. Roof sits on top of
- * the tallest wall (totalWallHeight); each wall can override height via
- * wall.height_m.
+ * Order: ground → floors → walls → openings → roof. Each wall/floor/opening
+ * is placed at its storey's base elevation (storeyBaseElevation) and extruded
+ * to that storey's own floor-to-ceiling height, so multi-storey plans render
+ * as stacked floors rather than one tall box. The roof sits on top of the
+ * topmost storey (roofBaseHeight). Per-wall `wall.height_m` still overrides.
  */
-export function buildFloorPlan3D(layout: SpatialLayout): THREE.Group {
+export function buildFloorPlan3D(
+  layout: SpatialLayout,
+  options: BuildFloorPlanOptions = {},
+): THREE.Group {
   const group = new THREE.Group();
-  const wallHeight = totalWallHeight(layout);
+  const filter = options.storeyFilter ?? null;
+  const top = topStoreyIndex(layout);
 
   // Ground plane
   group.add(buildGround(layout.bounds));
 
-  // Room floors
+  // Room floors — each on its storey's slab
   for (const room of layout.rooms) {
-    group.add(buildFloor(room));
+    const storey = room.floor_level ?? 0;
+    if (filter !== null && storey !== filter) continue;
+    group.add(buildFloor(room, storeyBaseElevation(layout, storey)));
   }
 
-  // Walls — pass materials so external walls can pick up cladding colour
+  // Walls — extrude to the storey height, lifted to the storey's base.
+  // Pass materials so external walls can pick up cladding colour.
   for (const wall of layout.walls) {
-    group.add(buildWall(wall, wallHeight, layout.materials));
+    const storey = wall.storey ?? 0;
+    if (filter !== null && storey !== filter) continue;
+    group.add(
+      buildWall(
+        wall,
+        storeyHeight(layout, storey),
+        layout.materials,
+        storeyBaseElevation(layout, storey),
+      ),
+    );
   }
 
-  // Openings (doors and windows)
+  // Openings (doors and windows) — follow their parent wall's storey
   for (const opening of layout.openings) {
-    const mesh = buildOpening(opening, wallHeight, layout.walls);
+    const parentWall = layout.walls.find((w) => w.id === opening.wall_id);
+    const storey = parentWall?.storey ?? 0;
+    if (filter !== null && storey !== filter) continue;
+    const mesh = buildOpening(
+      opening,
+      storeyHeight(layout, storey),
+      layout.walls,
+      storeyBaseElevation(layout, storey),
+    );
     if (mesh) group.add(mesh);
   }
 
-  // Roof (if present) — sits on top of the wall height
-  const roof = buildRoof(layout, wallHeight);
-  if (roof) group.add(roof);
+  // Roof (if present) — sits on top of the top storey. Skipped when a lower
+  // storey is isolated so the cutaway view isn't capped by the roof.
+  if (filter === null || filter === top) {
+    const roof = buildRoof(layout, roofBaseHeight(layout));
+    if (roof) group.add(roof);
+  }
 
   // Centre the model on origin for easier camera positioning
   const centreX = layout.bounds.width / 2;

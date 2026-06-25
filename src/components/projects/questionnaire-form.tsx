@@ -84,6 +84,33 @@ const PARTY_WALL_TYPOLOGIES = new Set([
   "Apartment",
   "Mixed use",
 ]);
+// Typologies where attachment to another dwelling is DEFINITIONAL (a duplex /
+// townhouse is, by definition, attached) — so the "attached dwelling" answer is
+// derivable rather than asked. Apartment / Mixed use can be a standalone block,
+// so they stay a manual question.
+const ATTACHED_TYPOLOGIES = new Set(["Duplex", "Townhouse"]);
+
+/**
+ * Apply the fields the questionnaire can derive rather than ask, so the saved
+ * responses (which compliance reads) always carry the implied value. Each rule
+ * is a one-way implication that is never wrong, so it only ever SETS a value —
+ * it never clears a user's answer:
+ *   - storeys > 1            ⇒ has_stairs (a multi-storey dwelling has stairs)
+ *   - attached typology      ⇒ attached_dwelling (duplex/townhouse are attached)
+ *   - a chosen heating_type  ⇒ has_heating_appliance (and none ⇒ false, since
+ *                              the standalone "has appliance" checkbox is gone)
+ */
+function applyDerivedResponses(
+  r: Record<string, string>,
+): Record<string, string> {
+  const out = { ...r };
+  if (Number(out.storeys) > 1) out.has_stairs = "true";
+  if (ATTACHED_TYPOLOGIES.has(out.building_typology)) {
+    out.attached_dwelling = "true";
+  }
+  out.has_heating_appliance = out.heating_type ? "true" : "false";
+  return out;
+}
 
 const DESIGN_STAGES = [
   "Concept / brief",
@@ -306,25 +333,39 @@ function CheckboxField({
   onChange,
   helper,
   source,
+  autoTag,
+  disabled,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   helper?: string;
   source?: FieldSource;
+  autoTag?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div>
-      <div className="flex items-center gap-2">
-        <label className="inline-flex w-fit cursor-pointer select-none items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          className={`inline-flex w-fit select-none items-center gap-2 ${
+            disabled ? "cursor-default" : "cursor-pointer"
+          }`}
+        >
           <input
             type="checkbox"
             className="h-4 w-4 rounded border-gray-300"
             checked={checked}
+            disabled={disabled}
             onChange={(e) => onChange(e.target.checked)}
           />
           <span className="text-sm">{label}</span>
         </label>
+        {autoTag && (
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+            Auto-derived
+          </span>
+        )}
         <SourceBadge source={source} empty={!checked} />
       </div>
       {helper && (
@@ -374,6 +415,8 @@ export function QuestionnaireForm({
     construction_type: defaults.construction_type ?? prefill.construction_type ?? "",
     storeys: defaults.storeys ?? prefill.storeys ?? "",
     floor_area: defaults.floor_area ?? prefill.floor_area ?? "",
+    upper_floor_area: defaults.upper_floor_area ?? prefill.upper_floor_area ?? "",
+    building_height: defaults.building_height ?? prefill.building_height ?? "",
     soil_classification: defaults.soil_classification ?? prefill.soil_classification ?? "",
     footing_type: defaults.footing_type ?? prefill.footing_type ?? "",
     wind_classification: defaults.wind_classification ?? prefill.wind_classification ?? "",
@@ -427,6 +470,12 @@ export function QuestionnaireForm({
   const showAccessibilityStep = !typology || RESIDENTIAL_TYPOLOGIES.has(typology);
   const canHavePartyWall = !typology || PARTY_WALL_TYPOLOGIES.has(typology);
 
+  // Fields the form derives rather than asks (mirrors applyDerivedResponses,
+  // which writes the same values into the saved responses on submit).
+  const storeysNum = Number(responses.storeys);
+  const stairsAutoDerived = Number.isFinite(storeysNum) && storeysNum > 1;
+  const attachedAutoDerived = ATTACHED_TYPOLOGIES.has(typology);
+
   // Step 8 (Access & Livable Housing) is hidden for hotel/commercial typologies.
   // We collapse the visible step list so navigation skips it cleanly.
   const visibleSteps = STEPS.map((label, i) => ({ label, originalIndex: i })).filter(
@@ -439,7 +488,7 @@ export function QuestionnaireForm({
   const handleSave = async () => {
     setSaving(true);
     setError(null);
-    const result = await saveQuestionnaire(projectId, responses);
+    const result = await saveQuestionnaire(projectId, applyDerivedResponses(responses));
     setSaving(false);
 
     if (result.error) {
@@ -453,7 +502,7 @@ export function QuestionnaireForm({
   const handleSaveAndActivate = async () => {
     setSaving(true);
     setError(null);
-    const saveResult = await saveQuestionnaire(projectId, responses);
+    const saveResult = await saveQuestionnaire(projectId, applyDerivedResponses(responses));
     if (saveResult.error) {
       setError(saveResult.error);
       setSaving(false);
@@ -628,6 +677,29 @@ export function QuestionnaireForm({
                 value={responses.floor_area}
                 onChange={(v) => update("floor_area", v)}
                 source={extractedKeys.has("floor_area") ? "extracted" : "manual"}
+                helper="Combined internal floor area across all storeys."
+              />
+              {(Number(responses.storeys) > 1 ||
+                extractedKeys.has("upper_floor_area")) && (
+                <TextField
+                  label="Upper-storey Floor Area (m²)"
+                  type="number"
+                  min={0}
+                  placeholder="Combined area of floors above the ground floor"
+                  value={responses.upper_floor_area}
+                  onChange={(v) => update("upper_floor_area", v)}
+                  source={extractedKeys.has("upper_floor_area") ? "extracted" : "manual"}
+                />
+              )}
+              <TextField
+                label="Overall Building Height — to ridge (m)"
+                type="number"
+                min={0}
+                placeholder="e.g., 7.2"
+                value={responses.building_height}
+                onChange={(v) => update("building_height", v)}
+                source={extractedKeys.has("building_height") ? "extracted" : "manual"}
+                helper="Finished ground floor to roof ridge — drives rise-in-storeys and height-limit checks."
               />
               <SelectField
                 label="Soil Classification (AS 2870)"
@@ -723,8 +795,15 @@ export function QuestionnaireForm({
               {canHavePartyWall && (
                 <CheckboxField
                   label="Attached dwelling (party wall)"
-                  checked={responses.attached_dwelling === "true"}
+                  checked={attachedAutoDerived || responses.attached_dwelling === "true"}
                   onChange={(v) => update("attached_dwelling", String(v))}
+                  autoTag={attachedAutoDerived}
+                  disabled={attachedAutoDerived}
+                  helper={
+                    attachedAutoDerived
+                      ? `A ${typology.toLowerCase()} is attached to another dwelling by definition.`
+                      : undefined
+                  }
                   source={extractedKeys.has("attached_dwelling") ? "extracted" : "manual"}
                 />
               )}
@@ -742,7 +821,8 @@ export function QuestionnaireForm({
                 options={SMOKE_ALARM_TYPES}
                 source={extractedKeys.has("smoke_alarm_type") ? "extracted" : "manual"}
               />
-              {canHavePartyWall && responses.attached_dwelling === "true" && (
+              {canHavePartyWall &&
+                (attachedAutoDerived || responses.attached_dwelling === "true") && (
                 <TextField
                   label="Party Wall FRL (e.g., 60/60/60)"
                   placeholder="e.g., 60/60/60"
@@ -901,21 +981,15 @@ export function QuestionnaireForm({
                 onChange={(v) => update("has_swimming_pool", String(v))}
                 source={extractedKeys.has("has_swimming_pool") ? "extracted" : "manual"}
               />
-              <CheckboxField
-                label="Heating appliance (wood heater, gas fire, etc.)"
-                checked={responses.has_heating_appliance === "true"}
-                onChange={(v) => update("has_heating_appliance", String(v))}
-                source={extractedKeys.has("has_heating_appliance") ? "extracted" : "manual"}
+              <SelectField
+                label="Fixed Heating Appliance"
+                value={responses.heating_type}
+                onChange={(v) => update("heating_type", v)}
+                options={HEATING_TYPES}
+                placeholder="None / not specified"
+                source={extractedKeys.has("heating_type") ? "extracted" : "manual"}
+                helper="Pick the fixed heating appliance, if any. Leaving it as “None” records that the dwelling has no fixed heater — drives the H3 ancillary (flue/hearth) checks."
               />
-              {responses.has_heating_appliance === "true" && (
-                <SelectField
-                  label="Heating Type"
-                  value={responses.heating_type}
-                  onChange={(v) => update("heating_type", v)}
-                  options={HEATING_TYPES}
-                  source={extractedKeys.has("heating_type") ? "extracted" : "manual"}
-                />
-              )}
             </>
           )}
 
@@ -923,8 +997,15 @@ export function QuestionnaireForm({
             <>
               <CheckboxField
                 label="Has stairs"
-                checked={responses.has_stairs === "true"}
+                checked={stairsAutoDerived || responses.has_stairs === "true"}
                 onChange={(v) => update("has_stairs", String(v))}
+                autoTag={stairsAutoDerived}
+                disabled={stairsAutoDerived}
+                helper={
+                  stairsAutoDerived
+                    ? "A building with more than one storey has internal stairs."
+                    : undefined
+                }
                 source={extractedKeys.has("has_stairs") ? "extracted" : "manual"}
               />
               <CheckboxField

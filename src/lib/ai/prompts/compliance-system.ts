@@ -68,6 +68,8 @@ CLASSIFICATION & GENERAL:
 H1 — STRUCTURE & FOOTINGS:
 - Number of Storeys: ${v("storeys", "1")}
 - Total Floor Area: ${v("floor_area")} m²
+- Upper-storey Floor Area: ${v("upper_floor_area")} m²
+- Overall Building Height (to ridge): ${v("building_height")} m
 - Soil Classification (AS 2870): ${v("soil_classification")}
 - Footing Type: ${v("footing_type")}
 - Wind Classification (AS 4055): ${v("wind_classification")}
