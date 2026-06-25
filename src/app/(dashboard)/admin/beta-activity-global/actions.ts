@@ -428,6 +428,21 @@ export async function startDummyBetaSession(): Promise<{
     await admin.from("enrollments").delete().eq("profile_id", dummyProfileId);
   }
 
+  // Reset the demo org's trial usage so every walk starts with a FULL fresh
+  // allowance. trial_usage_count is NOT cleared by deleting projects/runs, so it
+  // accumulated across walks; at the 3-run trial cap (TRIAL_RUN_LIMIT) the very
+  // next demo opened already "usage limit reached" even though it looked clean
+  // (Karen, 2026-06-25). Zero the count + reopen a fresh trial window so the demo
+  // behaves as a genuine first run every time.
+  await admin
+    .from("organisations")
+    .update({
+      trial_usage_count: 0,
+      trial_started_at: new Date().toISOString(),
+      trial_ends_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    } as never)
+    .eq("id", orgId);
+
   // 4. One-time sign-in. Build a token_hash link to OUR /auth/callback (NOT the
   //    default action_link, which returns the session in the URL fragment via
   //    the implicit flow and lands on the Site URL / dashboard). The callback
