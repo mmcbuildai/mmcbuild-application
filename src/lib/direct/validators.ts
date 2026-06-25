@@ -6,8 +6,10 @@ export const registrationSchema = z.object({
   trade_type: z.string().min(1, "Trade type is required"),
   headline: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
-  phone: z.string().optional(),
-  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  // Phone + email are MANDATORY on a directory listing — buyers must be able to
+  // reach the business (Dennis, 2026-06-25).
+  phone: z.string().trim().min(5, "Phone number is required"),
+  email: z.string().trim().min(1, "Email is required").email("Invalid email"),
   website: z.string().url("Invalid URL").optional().or(z.literal("")),
   logo_url: z.string().optional(),
   regions: z.array(z.string()).min(1, "Select at least one region"),
@@ -23,8 +25,10 @@ export const profileUpdateSchema = z.object({
   trade_type: z.string().optional(),
   headline: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
-  phone: z.string().optional(),
-  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  // Mandatory contact details — kept required on edit so a listing can never be
+  // saved without a reachable phone + email (matches registrationSchema).
+  phone: z.string().trim().min(5, "Phone number is required"),
+  email: z.string().trim().min(1, "Email is required").email("Invalid email"),
   website: z.string().url("Invalid URL").optional().or(z.literal("")),
   logo_url: z.string().optional(),
   cover_image_url: z.string().optional(),

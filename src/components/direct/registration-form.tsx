@@ -58,8 +58,8 @@ export function RegistrationForm({ orgId }: RegistrationFormProps) {
       trade_type: tradeType,
       headline: headline || undefined,
       description: description || undefined,
-      phone: phone || undefined,
-      email: email || undefined,
+      phone,
+      email,
       website: website || undefined,
       logo_url: logoUrl || undefined,
       regions,
@@ -158,21 +158,23 @@ export function RegistrationForm({ orgId }: RegistrationFormProps) {
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
+              <Label htmlFor="phone">Phone *</Label>
               <Input
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 type="tel"
+                required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Contact Email</Label>
+              <Label htmlFor="email">Contact Email *</Label>
               <Input
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 type="email"
+                required
               />
             </div>
           </div>

@@ -78,8 +78,8 @@ export function ProfileEditForm({ professional: pro, orgId }: ProfileEditFormPro
         trade_type: tradeType,
         headline: headline || undefined,
         description: description || undefined,
-        phone: phone || undefined,
-        email: email || undefined,
+        phone,
+        email,
         website: website || undefined,
         logo_url: logoUrl || undefined,
         cover_image_url: coverUrl || undefined,
@@ -153,12 +153,12 @@ export function ProfileEditForm({ professional: pro, orgId }: ProfileEditFormPro
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>Phone</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" />
+            <Label>Phone *</Label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" required />
           </div>
           <div className="space-y-2">
-            <Label>Email</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
+            <Label>Email *</Label>
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
           </div>
         </div>
 
