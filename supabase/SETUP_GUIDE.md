@@ -1,12 +1,16 @@
 # Supabase Setup Guide — MMC Build
 
+> **Canonical production project: `lztzyfeivpsbqbsfzctw`** (MMC's own Supabase
+> account, Sydney / ap-southeast-2). The old CAS-owned Mumbai project
+> `skyeqimwnyuuozvhubdc` is **RETIRED** — never link, point, or push to it.
+
 ## Your Supabase Project
-- **URL**: https://skyeqimwnyuuozvhubdc.supabase.co
-- **Region**: Must be Sydney (ap-southeast-2) for AU data residency
+- **URL**: https://lztzyfeivpsbqbsfzctw.supabase.co
+- **Region**: Sydney (ap-southeast-2) for AU data residency
 
 ## Step 1: Run the SQL Setup
 
-1. Go to https://skyeqimwnyuuozvhubdc.supabase.co → **SQL Editor**
+1. Go to https://lztzyfeivpsbqbsfzctw.supabase.co → **SQL Editor**
 2. Click **New Query**
 3. Copy and paste the entire contents of `supabase/setup_complete.sql`
 4. Click **Run** (or Ctrl+Enter)
@@ -50,7 +54,7 @@ Go to **Settings** → **API**:
 ### Local Development (.env.local)
 Create `C:\Users\denni\PycharmProjects\MMCBuild\.env.local`:
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://skyeqimwnyuuozvhubdc.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://lztzyfeivpsbqbsfzctw.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 NEXT_PUBLIC_APP_URL=http://localhost:3000
@@ -60,7 +64,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 Go to https://vercel.com/corporate-ai-solutions/mmcbuild/settings/environment-variables
 
 Add these for **Production**, **Preview**, and **Development**:
-- `NEXT_PUBLIC_SUPABASE_URL` = `https://skyeqimwnyuuozvhubdc.supabase.co`
+- `NEXT_PUBLIC_SUPABASE_URL` = `https://lztzyfeivpsbqbsfzctw.supabase.co`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = `<your-anon-key>`
 - `SUPABASE_SERVICE_ROLE_KEY` = `<your-service-role-key>`
 - `NEXT_PUBLIC_APP_URL` = `https://mmcbuild-one.vercel.app`
