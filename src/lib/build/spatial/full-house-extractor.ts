@@ -15,7 +15,7 @@
 import "server-only";
 import { PDFDocument } from "pdf-lib";
 import {
-  classifyAllPagesNative,
+  classifySinglePageNative,
   type PageTypeClassification,
 } from "./page-classifier";
 import {
@@ -207,14 +207,55 @@ export function prepareStorey(
 }
 
 /**
- * Cap the classifier at the first N pages of the source PDF. Floor plans,
- * elevations, sections, and schedules live near the front of any
- * architectural set; pages beyond ~15 are typically construction details
- * which the per-type extractors don't use. Without this cap the classifier
- * spends ~30-40s on a 35-page set, blowing the Vercel edge connection
- * close window.
+ * Per-page classification scans the first N pages (one cheap call per page, run
+ * in parallel). The old 15-page cap existed because the SINGLE whole-set call
+ * grew slow/large past ~15 pages and blew the Vercel edge window — but this
+ * extraction runs in Inngest (300s budget) and per-page calls are cheap +
+ * parallel, so we can afford to look deeper. 30 covers the floor plans /
+ * elevations / sections / schedules in any normal set's front matter.
  */
-const CLASSIFIER_PAGE_CAP = 15;
+const CLASSIFIER_PAGE_CAP = 30;
+
+/**
+ * Deep cap for the SECOND pass: only used when the first pass found no floor
+ * plan at all (e.g. a 70-page DA set whose plans sit past page 30). Bounds how
+ * far we'll keep scanning so a pathological set can't run away.
+ */
+const CLASSIFIER_DEEP_CAP = 60;
+
+/** Max concurrent per-page classify calls (rate-limit friendly). */
+const CLASSIFY_CONCURRENCY = 8;
+
+/**
+ * Classify a contiguous range of pages [from, to], one focused call per page,
+ * in concurrency-bounded batches. Re-throws a provider outage (so the caller
+ * surfaces the real cause); a single page's non-outage failure degrades to
+ * `other` without sinking the batch.
+ */
+async function classifyPagesRange(
+  sourceDoc: PDFDocument,
+  from: number,
+  to: number,
+): Promise<PageTypeClassification[]> {
+  const pages: number[] = [];
+  for (let p = from; p <= to; p++) pages.push(p);
+
+  const out: PageTypeClassification[] = [];
+  for (let i = 0; i < pages.length; i += CLASSIFY_CONCURRENCY) {
+    const batch = pages.slice(i, i + CLASSIFY_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (pageNumber) => {
+        const b64 = await singlePagePdfBase64(sourceDoc, pageNumber);
+        if (!b64) {
+          return { pageNumber, type: "other", confidence: 0 } as PageTypeClassification;
+        }
+        return classifySinglePageNative(b64, pageNumber);
+      }),
+    );
+    out.push(...results);
+  }
+  return out;
+}
 
 /**
  * Extract a single page from a multi-page PDF and return it as its own
@@ -247,39 +288,6 @@ async function singlePagePdfBase64(
       err,
     );
     return null;
-  }
-}
-
-/**
- * Build a base64-encoded PDF containing only the first `count` pages of
- * the source. Returns the original base64 if the source already has
- * <= count pages.
- */
-async function firstNPagesPdfBase64(
-  sourceDoc: PDFDocument,
-  originalBase64: string,
-  count: number,
-): Promise<string> {
-  const totalPages = sourceDoc.getPageCount();
-  if (totalPages <= count) return originalBase64;
-
-  // Same defensive shape as singlePagePdfBase64: if pdf-lib throws on a
-  // malformed page object during copyPages, fall back to the full PDF so the
-  // classifier still gets something to look at rather than bubbling the
-  // minified type-check error up to the UI.
-  try {
-    const out = await PDFDocument.create();
-    const indices = Array.from({ length: count }, (_, i) => i);
-    const copiedPages = await out.copyPages(sourceDoc, indices);
-    for (const p of copiedPages) out.addPage(p);
-    const bytes = await out.save();
-    return Buffer.from(bytes).toString("base64");
-  } catch (err) {
-    console.error(
-      `[firstNPagesPdfBase64] failed to split first ${count} pages, falling back to full PDF:`,
-      err,
-    );
-    return originalBase64;
   }
 }
 
@@ -398,19 +406,30 @@ export async function extractFullHouse(
   const sourcePageCount = sourceDoc.getPageCount();
   console.log(`[extractFullHouse] source has ${sourcePageCount} pages`);
 
-  // 2. Classify pages — capped at the first CLASSIFIER_PAGE_CAP.
-  const classifierPdfBase64 = await firstNPagesPdfBase64(
-    sourceDoc,
-    pdfBase64,
-    CLASSIFIER_PAGE_CAP,
-  );
+  // 2. Classify pages — ONE focused call per page (parallel, title-block first),
+  // which reliably distinguishes ground vs upper floor plans (the whole-set call
+  // mislabelled upper floors as "other", halving the GFA). First pass over the
+  // front matter; if it finds NO floor plan and the set is larger, a second
+  // deeper pass — big DA sets put their plans past the front cap.
   let classifications: PageTypeClassification[];
   try {
-    classifications = await classifyAllPagesNative(classifierPdfBase64);
+    const firstTo = Math.min(sourcePageCount, CLASSIFIER_PAGE_CAP);
+    classifications = await classifyPagesRange(sourceDoc, 1, firstTo);
+    const hasFloorPlan = classifications.some(
+      (c) => c.type === "floor_plan_ground" || c.type === "floor_plan_upper",
+    );
+    if (!hasFloorPlan && sourcePageCount > firstTo) {
+      const deepTo = Math.min(sourcePageCount, CLASSIFIER_DEEP_CAP);
+      console.log(
+        `[extractFullHouse] no floor plan in first ${firstTo} pages — scanning ${firstTo + 1}-${deepTo}`,
+      );
+      const more = await classifyPagesRange(sourceDoc, firstTo + 1, deepTo);
+      classifications = [...classifications, ...more];
+    }
   } catch (err) {
-    // The classifier is the first AI call in the chain, so a provider outage
-    // (billing exhausted / revoked key / rate limit) surfaces here. Report it
-    // honestly rather than letting it masquerade as "no readable floor plan".
+    // A provider outage (billing exhausted / revoked key / rate limit) surfaces
+    // here (the first AI calls in the chain). Report it honestly rather than
+    // letting it masquerade as "no readable floor plan".
     const outage = detectAiProviderUnavailable(err);
     if (!outage) throw err;
     console.error(
@@ -428,7 +447,7 @@ export async function extractFullHouse(
     };
   }
   console.log(
-    `[extractFullHouse] classifier returned ${classifications.length} pages at +${Date.now() - t0}ms`,
+    `[extractFullHouse] classified ${classifications.length} pages at +${Date.now() - t0}ms`,
   );
   if (classifications.length === 0) {
     return {
@@ -477,7 +496,8 @@ export async function extractFullHouse(
         c.type === "section" ||
         c.type === "roof_plan" ||
         ELEVATION_TYPES.has(c.type) ||
-        c.type === "cover", // include cover as last resort — covers can be misread floor plans
+        c.type === "cover" || // covers can be misread floor plans
+        c.type === "other", // last resort — a floor plan the classifier dropped here
     )
     .sort((a, b) => b.confidence - a.confidence);
 
