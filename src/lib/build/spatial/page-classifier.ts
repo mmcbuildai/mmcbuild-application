@@ -226,3 +226,84 @@ export async function classifyAllPagesNative(
     return [];
   }
 }
+
+// ============================================================================
+// Per-PAGE native classifier — one focused call per page.
+//
+// The whole-set classifier above asks one model call to label up to ~15 pages
+// at once; in practice it mislabels floor plans (a 2-storey set's UPPER floor
+// plan came back "other", so only the ground floor was extracted and the GFA
+// halved) because its attention is split across many pages and it doesn't read
+// each sheet's title block. Classifying ONE page at a time — title block first —
+// is far more reliable at identifying ground vs upper floor plans, which is what
+// makes the multi-storey extraction actually fire on real plans. Cheap (Haiku)
+// and run in parallel by the orchestrator.
+// ============================================================================
+
+const SINGLE_PAGE_PROMPT = `You are looking at ONE page from an architectural plan set. Classify it as EXACTLY one of these types:
+
+- floor_plan_ground : top-down view of the GROUND/lower floor — rooms with internal walls + room labels
+- floor_plan_upper : top-down view of a FIRST/SECOND/UPPER floor — rooms with internal walls + room labels
+- elevation_n / elevation_s / elevation_e / elevation_w / elevation_other : a side view of the building
+- section : a vertical slice through the building (floor/ceiling heights, roof structure internally)
+- roof_plan : top-down view of the ROOF (pitch arrows, ridges, hips — NOT rooms)
+- schedule : finishes / window / door / fixtures schedule, or a table
+- site_plan : the building footprint on the lot with boundaries / setbacks
+- cover : cover sheet, title sheet, sheet index, revision table
+- details : construction details, joinery details, small assembly sections
+- other : anything else (legends, notes-only, structural, services)
+
+DECISION ORDER:
+1. READ THE SHEET TITLE BLOCK FIRST — it is authoritative. "GROUND FLOOR PLAN" → floor_plan_ground; "FIRST FLOOR PLAN" / "PROPOSED FIRST FLOOR" / "LEVEL 1 PLAN" / "UPPER FLOOR" → floor_plan_upper; "ROOF PLAN" → roof_plan; "SECTION" → section; "NORTH ELEVATION" → elevation_n.
+2. If the title is unclear, infer from content: a top-down drawing showing multiple rooms enclosed by internal walls, with room labels (Bedroom, Living, Kitchen…), IS a floor plan. Default to floor_plan_ground unless the title or shown levels indicate an upper floor.
+3. A floor plan is NOT "other" or "details" — do not bury a real room-and-wall plan in those buckets.
+
+Return ONLY this JSON object (no preamble, no fences):
+{ "type": "floor_plan_upper", "confidence": 0.92, "notes": "Title: PROPOSED FIRST FLOOR PLAN" }`;
+
+/**
+ * Classify a SINGLE page (supplied as its own single-page PDF). Returns the
+ * page's type; degrades to `other` (confidence 0) on a no-content / parse
+ * failure, but RE-THROWS a provider outage so the orchestrator can surface it.
+ */
+export async function classifySinglePageNative(
+  singlePagePdfBase64: string,
+  pageNumber: number,
+): Promise<PageTypeClassification> {
+  let result;
+  try {
+    result = await callVisionModel("plan_page_classify", {
+      system: SINGLE_PAGE_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content:
+            `This PDF contains ONE page (originally page ${pageNumber} of the set). Classify it. Return ONLY the JSON object.`,
+        },
+      ],
+      pdf: { data: Buffer.from(singlePagePdfBase64, "base64") },
+      pdfPageHint: 1,
+      maxTokens: 300,
+    });
+  } catch (err) {
+    const outage = detectAiProviderUnavailable(err);
+    if (outage) throw outage; // let the orchestrator report the real cause
+    console.error(`[classifySinglePageNative] page ${pageNumber} failed:`, err);
+    return { pageNumber, type: "other", confidence: 0 };
+  }
+
+  if (!result.text) return { pageNumber, type: "other", confidence: 0 };
+  try {
+    const parsed = extractJson<{ type?: PageType; confidence?: number; notes?: string }>(
+      result.text,
+    );
+    return {
+      pageNumber,
+      type: parsed.type ?? "other",
+      confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
+      notes: parsed.notes,
+    };
+  } catch {
+    return { pageNumber, type: "other", confidence: 0 };
+  }
+}

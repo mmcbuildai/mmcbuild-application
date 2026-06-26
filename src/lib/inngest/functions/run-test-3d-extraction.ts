@@ -7,10 +7,8 @@ import {
   requiresPdfConversion,
   type PlanFileKind,
 } from "@/lib/plans/file-kind";
-import {
-  convertViaCloudConvert,
-  optimizePdfViaCloudConvert,
-} from "@/lib/plans/dwg-converter";
+import { convertViaCloudConvert } from "@/lib/plans/dwg-converter";
+import { preparePdfBufferForVision } from "@/lib/plans/pdf-vision-prep";
 import { extractSpatialLayoutFromDxf } from "@/lib/plans/dxf-extractor";
 import { extractFullHouse } from "@/lib/build/spatial/full-house-extractor";
 import { extractSpatialLayout } from "@/lib/build/spatial/extractor";
@@ -327,17 +325,12 @@ async function convertToPdfStep(
   return { pdfPath: intermediatePath, convertedFrom: kind };
 }
 
-// PDFs larger than this get a CloudConvert optimise pass before extraction.
-// Below it, the optimise cost/latency isn't worth it; above it we're heading
-// toward Anthropic's 32MB document ceiling and the worker-memory danger zone.
-const OPTIMISE_PDF_THRESHOLD_BYTES = 20 * 1024 * 1024;
-
 /**
- * Downscale-large-PDF step. If the PDF exceeds the threshold, run a
- * CloudConvert optimise pass and swap in the smaller file; otherwise (or on
- * any failure / no size win) return the original path unchanged. Best-effort:
- * the size guard in extractFullHouse is the backstop if optimise can't get it
- * under the limit.
+ * Downscale-large-PDF step. Runs the shared PDF→vision prep (the SAME optimise
+ * pass the on-upload attribute extractor uses); when it shrinks the file, writes
+ * the smaller copy to a temp path and returns it, otherwise returns the original
+ * path unchanged. Best-effort: the size guard in extractFullHouse is the backstop
+ * if optimise can't get it under the ceiling.
  */
 async function optimiseLargePdfStep(
   pdfPath: string,
@@ -345,27 +338,16 @@ async function optimiseLargePdfStep(
 ): Promise<string> {
   const buf = await downloadFromBucket(pdfPath);
   if (!buf) return pdfPath; // download failure surfaces in the extract step
-  if (buf.length <= OPTIMISE_PDF_THRESHOLD_BYTES) return pdfPath;
 
-  console.log(
-    `[run-test-3d-extraction] PDF is ${Math.round(buf.length / 1024 / 1024)}MB — running CloudConvert optimise`,
-  );
-  const optimised = await optimizePdfViaCloudConvert(buf, "plan.pdf");
-  if ("error" in optimised) {
-    console.error(
-      "[run-test-3d-extraction] optimise failed, using original:",
-      optimised.error,
-    );
-    return pdfPath;
-  }
-  if (optimised.buffer.length >= buf.length) return pdfPath; // no win
+  const prep = await preparePdfBufferForVision(buf);
+  if (!prep.optimised) return pdfPath; // below threshold, no win, or optimise failed
 
   const orgPrefix = pdfPath.split("/")[0] || "shared";
   const optimisedPath = `${orgPrefix}/test-3d/optimised/${jobId}.pdf`;
   const admin = createAdminClient();
   const { error } = await admin.storage
     .from("plan-uploads")
-    .upload(optimisedPath, optimised.buffer, {
+    .upload(optimisedPath, prep.buffer, {
       contentType: "application/pdf",
       upsert: true,
     });
@@ -376,9 +358,6 @@ async function optimiseLargePdfStep(
     );
     return pdfPath;
   }
-  console.log(
-    `[run-test-3d-extraction] optimised ${Math.round(buf.length / 1024 / 1024)}MB → ${Math.round(optimised.buffer.length / 1024 / 1024)}MB`,
-  );
   return optimisedPath;
 }
 

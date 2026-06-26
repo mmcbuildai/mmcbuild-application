@@ -6,9 +6,17 @@ import { OrbitControls, PerspectiveCamera, Html, Grid } from "@react-three/drei"
 import {
   buildFloorPlan3D,
   buildSuggestionHighlight,
+  getStoreyBaseElevation,
+  getTopStoreyIndex,
   type SpatialLayout,
   type SuggestionOverlay,
 } from "@/lib/build/spatial";
+
+// Storey index → human label. 0 = Ground, 1 = First, etc.
+function storeyLabel(index: number): string {
+  const ordinals = ["Ground", "First", "Second", "Third", "Fourth", "Fifth"];
+  return ordinals[index] ?? `Level ${index}`;
+}
 
 // ============================================
 // Mobile detection
@@ -30,8 +38,17 @@ function useIsMobile(): boolean {
 // Sub-components rendered inside Canvas
 // ============================================
 
-function BuildingModel({ layout }: { layout: SpatialLayout }) {
-  const group = useMemo(() => buildFloorPlan3D(layout), [layout]);
+function BuildingModel({
+  layout,
+  storeyFilter,
+}: {
+  layout: SpatialLayout;
+  storeyFilter: number | null;
+}) {
+  const group = useMemo(
+    () => buildFloorPlan3D(layout, { storeyFilter }),
+    [layout, storeyFilter],
+  );
   return <primitive object={group} />;
 }
 
@@ -48,8 +65,7 @@ function SuggestionHighlights({
         const colour = parseInt(overlay.colour.replace("#", ""), 16);
         const group = buildSuggestionHighlight(
           overlay.affected_wall_ids,
-          layout.walls,
-          layout.wall_height || 2.4,
+          layout,
           colour
         );
         return <primitive key={overlay.id} object={group} />;
@@ -58,23 +74,33 @@ function SuggestionHighlights({
   );
 }
 
-function RoomLabels({ layout }: { layout: SpatialLayout }) {
+function RoomLabels({
+  layout,
+  storeyFilter,
+}: {
+  layout: SpatialLayout;
+  storeyFilter: number | null;
+}) {
   const centreX = layout.bounds.width / 2;
   const centreZ = layout.bounds.depth / 2;
 
   return (
     <>
       {layout.rooms.map((room) => {
+        const storey = room.floor_level ?? 0;
+        if (storeyFilter !== null && storey !== storeyFilter) return null;
         // Calculate room centre from polygon
         const cx =
           room.polygon.reduce((s, p) => s + p.x, 0) / room.polygon.length - centreX;
         const cz =
           room.polygon.reduce((s, p) => s + p.y, 0) / room.polygon.length - centreZ;
+        // Float the label just above this storey's floor slab.
+        const cy = getStoreyBaseElevation(layout, storey) + 0.1;
 
         return (
           <Html
             key={room.id}
-            position={[cx, 0.1, cz]}
+            position={[cx, cy, cz]}
             center
             distanceFactor={15}
             style={{ pointerEvents: "none" }}
@@ -157,7 +183,11 @@ export function PlanViewer3D({
 }: PlanViewer3DProps) {
   const [showLabels, setShowLabels] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [storeyFilter, setStoreyFilter] = useState<number | null>(null);
   const isMobile = useIsMobile();
+
+  const topStorey = getTopStoreyIndex(layout);
+  const isMultiStorey = topStorey >= 1;
 
   return (
     <div className={`relative rounded-lg border bg-zinc-50 ${className}`}>
@@ -165,6 +195,33 @@ export function PlanViewer3D({
       <div className="flex items-center justify-between border-b bg-white px-3 py-2 rounded-t-lg">
         <span className="text-sm font-medium text-zinc-700">{label || "3D Plan View"}</span>
         <div className="flex items-center gap-2">
+          {isMultiStorey && (
+            <div
+              role="group"
+              aria-label="Storey"
+              className="flex items-center rounded border border-zinc-200 bg-zinc-100 p-0.5"
+            >
+              {[null, ...Array.from({ length: topStorey + 1 }, (_, i) => i)].map(
+                (level) => {
+                  const selected = storeyFilter === level;
+                  return (
+                    <button
+                      key={level === null ? "all" : level}
+                      onClick={() => setStoreyFilter(level)}
+                      aria-pressed={selected}
+                      className={`rounded px-2 py-1.5 text-xs min-h-[44px] md:min-h-0 md:py-0.5 ${
+                        selected
+                          ? "bg-white text-zinc-800 shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-700"
+                      }`}
+                    >
+                      {level === null ? "All" : storeyLabel(level)}
+                    </button>
+                  );
+                },
+              )}
+            </div>
+          )}
           <button
             onClick={() => setShowLabels(!showLabels)}
             className={`rounded px-3 py-1.5 text-xs min-h-[44px] md:min-h-0 md:px-2 md:py-0.5 ${
@@ -195,8 +252,10 @@ export function PlanViewer3D({
         <Canvas shadows={!isMobile}>
           <Suspense fallback={null}>
             <SceneSetup layout={layout} isMobile={isMobile} />
-            <BuildingModel layout={layout} />
-            {showLabels && <RoomLabels layout={layout} />}
+            <BuildingModel layout={layout} storeyFilter={storeyFilter} />
+            {showLabels && (
+              <RoomLabels layout={layout} storeyFilter={storeyFilter} />
+            )}
             {showSuggestions && suggestions.length > 0 && (
               <SuggestionHighlights overlays={suggestions} layout={layout} />
             )}

@@ -15,7 +15,7 @@
 import "server-only";
 import { PDFDocument } from "pdf-lib";
 import {
-  classifyAllPagesNative,
+  classifySinglePageNative,
   type PageTypeClassification,
 } from "./page-classifier";
 import {
@@ -26,6 +26,7 @@ import {
   type ElevationExtraction,
   type SectionExtraction,
   type ScheduleExtraction,
+  type PdfFloorPlanExtraction,
 } from "./extractor";
 import {
   ANTHROPIC_PDF_MAX_BYTES,
@@ -112,15 +113,149 @@ export function backfillWallsFromRooms(existing: Wall[], rooms: Room[]): Wall[] 
   return [...existing, ...derived];
 }
 
+export function boundsCentre(b: SpatialLayout["bounds"]): Point2D {
+  return { x: (b.min.x + b.max.x) / 2, y: (b.min.y + b.max.y) / 2 };
+}
+
 /**
- * Cap the classifier at the first N pages of the source PDF. Floor plans,
- * elevations, sections, and schedules live near the front of any
- * architectural set; pages beyond ~15 are typically construction details
- * which the per-type extractors don't use. Without this cap the classifier
- * spends ~30-40s on a 35-page set, blowing the Vercel edge connection
- * close window.
+ * Recompute the overall footprint bounds from every wall endpoint and room
+ * vertex. Used after merging multiple storeys, whose individual bounds no
+ * longer describe the union once upper floors have been translated.
  */
-const CLASSIFIER_PAGE_CAP = 15;
+export function recomputeBounds(
+  walls: Wall[],
+  rooms: Room[],
+): SpatialLayout["bounds"] {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  const acc = (p: Point2D) => {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  };
+  for (const w of walls) {
+    acc(w.start);
+    acc(w.end);
+  }
+  for (const r of rooms) for (const p of r.polygon ?? []) acc(p);
+  if (!Number.isFinite(minX)) {
+    return { min: { x: 0, y: 0 }, max: { x: 0, y: 0 }, width: 0, depth: 0 };
+  }
+  return {
+    min: { x: minX, y: minY },
+    max: { x: maxX, y: maxY },
+    width: maxX - minX,
+    depth: maxY - minY,
+  };
+}
+
+/**
+ * Stamp an independently-extracted floor onto a storey index and align it to
+ * the ground floor.
+ *
+ * Each floor-plan PAGE is extracted in isolation (extractFloorPlanFromPdf),
+ * so it comes back with its own (0,0) bottom-left origin AND `floor_level: 0`
+ * regardless of which storey it really is. Merging those as-is would render
+ * every floor at storey 0, stacked on the same spot. This:
+ *   - re-tags every `wall.storey` + `room.floor_level` to `storey`
+ *   - namespaces ids (`s{storey}_`) so upper-floor walls/rooms/openings never
+ *     collide with the ground floor's ids (the backfill + wall_id links rely
+ *     on unique ids)
+ *   - translates the floor so its footprint centre matches the ground floor's
+ *     centre. Absolute coordinates aren't preserved across pages, so exact
+ *     registration is impossible; centre-alignment is the most forgiving
+ *     default for the common set-back upper storey.
+ */
+export function prepareStorey(
+  floor: SpatialLayout,
+  storey: number,
+  groundCentre: Point2D | null,
+): SpatialLayout {
+  let shift = (p: Point2D): Point2D => p;
+  if (groundCentre) {
+    const c = boundsCentre(floor.bounds);
+    const dx = groundCentre.x - c.x;
+    const dy = groundCentre.y - c.y;
+    if (dx !== 0 || dy !== 0) shift = (p) => ({ x: p.x + dx, y: p.y + dy });
+  }
+  const tag = `s${storey}_`;
+  return {
+    ...floor,
+    walls: (floor.walls ?? []).map((w) => ({
+      ...w,
+      id: tag + w.id,
+      start: shift(w.start),
+      end: shift(w.end),
+      storey,
+    })),
+    rooms: (floor.rooms ?? []).map((r) => ({
+      ...r,
+      id: tag + r.id,
+      polygon: (r.polygon ?? []).map(shift),
+      floor_level: storey,
+    })),
+    openings: (floor.openings ?? []).map((o) => ({
+      ...o,
+      id: tag + o.id,
+      position: shift(o.position),
+      wall_id: o.wall_id ? tag + o.wall_id : o.wall_id,
+    })),
+  };
+}
+
+/**
+ * Per-page classification scans the first N pages (one cheap call per page, run
+ * in parallel). The old 15-page cap existed because the SINGLE whole-set call
+ * grew slow/large past ~15 pages and blew the Vercel edge window — but this
+ * extraction runs in Inngest (300s budget) and per-page calls are cheap +
+ * parallel, so we can afford to look deeper. 30 covers the floor plans /
+ * elevations / sections / schedules in any normal set's front matter.
+ */
+const CLASSIFIER_PAGE_CAP = 30;
+
+/**
+ * Deep cap for the SECOND pass: only used when the first pass found no floor
+ * plan at all (e.g. a 70-page DA set whose plans sit past page 30). Bounds how
+ * far we'll keep scanning so a pathological set can't run away.
+ */
+const CLASSIFIER_DEEP_CAP = 60;
+
+/** Max concurrent per-page classify calls (rate-limit friendly). */
+const CLASSIFY_CONCURRENCY = 8;
+
+/**
+ * Classify a contiguous range of pages [from, to], one focused call per page,
+ * in concurrency-bounded batches. Re-throws a provider outage (so the caller
+ * surfaces the real cause); a single page's non-outage failure degrades to
+ * `other` without sinking the batch.
+ */
+async function classifyPagesRange(
+  sourceDoc: PDFDocument,
+  from: number,
+  to: number,
+): Promise<PageTypeClassification[]> {
+  const pages: number[] = [];
+  for (let p = from; p <= to; p++) pages.push(p);
+
+  const out: PageTypeClassification[] = [];
+  for (let i = 0; i < pages.length; i += CLASSIFY_CONCURRENCY) {
+    const batch = pages.slice(i, i + CLASSIFY_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (pageNumber) => {
+        const b64 = await singlePagePdfBase64(sourceDoc, pageNumber);
+        if (!b64) {
+          return { pageNumber, type: "other", confidence: 0 } as PageTypeClassification;
+        }
+        return classifySinglePageNative(b64, pageNumber);
+      }),
+    );
+    out.push(...results);
+  }
+  return out;
+}
 
 /**
  * Extract a single page from a multi-page PDF and return it as its own
@@ -153,39 +288,6 @@ async function singlePagePdfBase64(
       err,
     );
     return null;
-  }
-}
-
-/**
- * Build a base64-encoded PDF containing only the first `count` pages of
- * the source. Returns the original base64 if the source already has
- * <= count pages.
- */
-async function firstNPagesPdfBase64(
-  sourceDoc: PDFDocument,
-  originalBase64: string,
-  count: number,
-): Promise<string> {
-  const totalPages = sourceDoc.getPageCount();
-  if (totalPages <= count) return originalBase64;
-
-  // Same defensive shape as singlePagePdfBase64: if pdf-lib throws on a
-  // malformed page object during copyPages, fall back to the full PDF so the
-  // classifier still gets something to look at rather than bubbling the
-  // minified type-check error up to the UI.
-  try {
-    const out = await PDFDocument.create();
-    const indices = Array.from({ length: count }, (_, i) => i);
-    const copiedPages = await out.copyPages(sourceDoc, indices);
-    for (const p of copiedPages) out.addPage(p);
-    const bytes = await out.save();
-    return Buffer.from(bytes).toString("base64");
-  } catch (err) {
-    console.error(
-      `[firstNPagesPdfBase64] failed to split first ${count} pages, falling back to full PDF:`,
-      err,
-    );
-    return originalBase64;
   }
 }
 
@@ -304,19 +406,30 @@ export async function extractFullHouse(
   const sourcePageCount = sourceDoc.getPageCount();
   console.log(`[extractFullHouse] source has ${sourcePageCount} pages`);
 
-  // 2. Classify pages — capped at the first CLASSIFIER_PAGE_CAP.
-  const classifierPdfBase64 = await firstNPagesPdfBase64(
-    sourceDoc,
-    pdfBase64,
-    CLASSIFIER_PAGE_CAP,
-  );
+  // 2. Classify pages — ONE focused call per page (parallel, title-block first),
+  // which reliably distinguishes ground vs upper floor plans (the whole-set call
+  // mislabelled upper floors as "other", halving the GFA). First pass over the
+  // front matter; if it finds NO floor plan and the set is larger, a second
+  // deeper pass — big DA sets put their plans past the front cap.
   let classifications: PageTypeClassification[];
   try {
-    classifications = await classifyAllPagesNative(classifierPdfBase64);
+    const firstTo = Math.min(sourcePageCount, CLASSIFIER_PAGE_CAP);
+    classifications = await classifyPagesRange(sourceDoc, 1, firstTo);
+    const hasFloorPlan = classifications.some(
+      (c) => c.type === "floor_plan_ground" || c.type === "floor_plan_upper",
+    );
+    if (!hasFloorPlan && sourcePageCount > firstTo) {
+      const deepTo = Math.min(sourcePageCount, CLASSIFIER_DEEP_CAP);
+      console.log(
+        `[extractFullHouse] no floor plan in first ${firstTo} pages — scanning ${firstTo + 1}-${deepTo}`,
+      );
+      const more = await classifyPagesRange(sourceDoc, firstTo + 1, deepTo);
+      classifications = [...classifications, ...more];
+    }
   } catch (err) {
-    // The classifier is the first AI call in the chain, so a provider outage
-    // (billing exhausted / revoked key / rate limit) surfaces here. Report it
-    // honestly rather than letting it masquerade as "no readable floor plan".
+    // A provider outage (billing exhausted / revoked key / rate limit) surfaces
+    // here (the first AI calls in the chain). Report it honestly rather than
+    // letting it masquerade as "no readable floor plan".
     const outage = detectAiProviderUnavailable(err);
     if (!outage) throw err;
     console.error(
@@ -334,7 +447,7 @@ export async function extractFullHouse(
     };
   }
   console.log(
-    `[extractFullHouse] classifier returned ${classifications.length} pages at +${Date.now() - t0}ms`,
+    `[extractFullHouse] classified ${classifications.length} pages at +${Date.now() - t0}ms`,
   );
   if (classifications.length === 0) {
     return {
@@ -359,10 +472,17 @@ export async function extractFullHouse(
   // candidate and let the higher-stakes Sonnet floor plan extractor have
   // a go. If that ALSO fails to extract anything useful, the orchestrator
   // returns the same error but at least we tried.
-  const classifiedFloorPlanPage =
+  const groundFloorPage =
     classifications.find((c) => c.type === "floor_plan_ground")?.pageNumber ??
-    classifications.find((c) => c.type === "floor_plan_upper")?.pageNumber ??
     null;
+  // Every upper-storey floor plan, in page order (the classifier can't tell
+  // first from second — both are "floor_plan_upper" — but architectural sets
+  // run ground → first → second, so page order is the storey order).
+  const upperFloorPages = classifications
+    .filter((c) => c.type === "floor_plan_upper")
+    .map((c) => c.pageNumber)
+    .sort((a, b) => a - b);
+  const classifiedFloorPlanPage = groundFloorPage ?? upperFloorPages[0] ?? null;
 
   // Pages that COULD plausibly contain extractable floor-plan geometry,
   // even if the classifier labelled them as something else. Excludes
@@ -376,7 +496,8 @@ export async function extractFullHouse(
         c.type === "section" ||
         c.type === "roof_plan" ||
         ELEVATION_TYPES.has(c.type) ||
-        c.type === "cover", // include cover as last resort — covers can be misread floor plans
+        c.type === "cover" || // covers can be misread floor plans
+        c.type === "other", // last resort — a floor plan the classifier dropped here
     )
     .sort((a, b) => b.confidence - a.confidence);
 
@@ -398,6 +519,27 @@ export async function extractFullHouse(
     );
   }
 
+  // Build the ordered list of floor-plan pages to extract, each tagged with
+  // its storey index. A manual override forces a single ground-floor extraction
+  // (the test-3d page picker). Otherwise storey 0 = ground (or the best single
+  // fallback when the classifier found none) and each upper floor stacks above.
+  type FloorPage = { pageNumber: number; storey: number };
+  let floorPages: FloorPage[];
+  if (options?.floorPlanPageOverride) {
+    floorPages = [{ pageNumber: options.floorPlanPageOverride, storey: 0 }];
+  } else {
+    const ordered: number[] = [];
+    if (groundFloorPage) ordered.push(groundFloorPage);
+    for (const up of upperFloorPages) if (!ordered.includes(up)) ordered.push(up);
+    if (ordered.length === 0 && floorPlanPage) ordered.push(floorPlanPage);
+    floorPages = ordered.map((pageNumber, i) => ({ pageNumber, storey: i }));
+  }
+  console.log(
+    `[extractFullHouse] floor pages: ${floorPages
+      .map((f) => `p${f.pageNumber}→storey${f.storey}`)
+      .join(", ") || "none"}`,
+  );
+
   const elevationPages = classifications.filter((c) =>
     ELEVATION_TYPES.has(c.type),
   );
@@ -409,32 +551,36 @@ export async function extractFullHouse(
   // 4. Split out per-page PDFs for each extraction using the already
   // parsed sourceDoc.
   const splitT = Date.now();
-  const [floorPlanPageBase64, sectionPageBase64, schedulePageBase64, ...elevationPageBase64s] =
+  const floorPageBase64s = await Promise.all(
+    floorPages.map((f) => singlePagePdfBase64(sourceDoc, f.pageNumber)),
+  );
+  const [sectionPageBase64, schedulePageBase64, ...elevationPageBase64s] =
     await Promise.all([
-      floorPlanPage ? singlePagePdfBase64(sourceDoc, floorPlanPage) : Promise.resolve(null),
       sectionPage ? singlePagePdfBase64(sourceDoc, sectionPage) : Promise.resolve(null),
       schedulePage ? singlePagePdfBase64(sourceDoc, schedulePage) : Promise.resolve(null),
       ...elevationPages.map((p) => singlePagePdfBase64(sourceDoc, p.pageNumber)),
     ]);
   console.log(
-    `[extractFullHouse] split ${1 + elevationPages.length + (sectionPage ? 1 : 0) + (schedulePage ? 1 : 0)} pages in ${Date.now() - splitT}ms`,
+    `[extractFullHouse] split ${floorPages.length + elevationPages.length + (sectionPage ? 1 : 0) + (schedulePage ? 1 : 0)} pages in ${Date.now() - splitT}ms`,
   );
 
   // 4. Fan out extractions in parallel — allSettled so a single failure
   // (Anthropic rate limit, transient network) doesn't kill the whole run.
   // Each extractor now receives a single-page PDF; we pass pageHint: 1
   // and post-mutate the response to record the original page number.
-  const floorPlanPromise = floorPlanPage && floorPlanPageBase64
-    ? extractFloorPlanFromPdf(floorPlanPageBase64, { pageHint: 1 }).then(
-        (res) => ({
-          ...res,
-          // Restore the original page number (the extractor saw a single-page
-          // PDF so it returned 1; we want the page from the source doc).
-          detectedPage: floorPlanPage,
-          totalPages: sourcePageCount,
-        }),
-      )
-    : Promise.resolve(null);
+  // One extraction per floor page, in parallel. Each sees a single-page PDF
+  // (so returns detectedPage 1); we restore the true source page + tag the
+  // storey for the merge step.
+  const floorPlanPromises = floorPages.map((fp, i) => {
+    const slice = floorPageBase64s[i];
+    if (!slice) return Promise.resolve(null);
+    return extractFloorPlanFromPdf(slice, { pageHint: 1 }).then((res) => ({
+      ...res,
+      storey: fp.storey,
+      detectedPage: fp.pageNumber,
+      totalPages: sourcePageCount,
+    }));
+  });
   const elevationPromises = elevationPages.map((p, i) => {
     const slice = elevationPageBase64s[i];
     if (!slice) return Promise.resolve(null);
@@ -454,19 +600,45 @@ export async function extractFullHouse(
     : Promise.resolve(null);
 
   const settled = await Promise.allSettled([
-    floorPlanPromise,
+    Promise.allSettled(floorPlanPromises),
     Promise.allSettled(elevationPromises),
     sectionPromise,
     schedulePromise,
   ]);
 
-  const floorPlanResult =
-    settled[0].status === "fulfilled" ? settled[0].value : null;
-  if (settled[0].status === "rejected") {
-    // If the primary extractor failed because the provider is down (billing /
-    // key / rate limit), report that — don't fall through to the decomposer
-    // and ultimately "no readable floor plan", which hides the real cause.
-    const outage = detectAiProviderUnavailable(settled[0].reason);
+  // Floor results, in storey order. Each settled entry is itself a settled
+  // result (allSettled-in-allSettled) so one floor failing never kills the run.
+  type FloorResult = PdfFloorPlanExtraction & {
+    storey: number;
+    detectedPage: number;
+    totalPages: number | null;
+  };
+  const floorResults: (FloorResult | null)[] =
+    settled[0].status === "fulfilled"
+      ? settled[0].value.map((r, i) => {
+          if (r.status === "fulfilled") return r.value;
+          console.error(
+            `[extractFullHouse] floor page ${floorPages[i]?.pageNumber} (storey ${floorPages[i]?.storey}) rejected:`,
+            r.reason,
+          );
+          return null;
+        })
+      : [];
+
+  // The ground floor (storey 0) is the primary result — all downstream logic
+  // (decomposer trigger, confidence, totalPages, error) keys off it, exactly
+  // as the single-floor pipeline did. Upper floors are additive.
+  const floorPlanResult = floorResults.find((r) => r?.storey === 0) ?? floorResults[0] ?? null;
+  const upperFloorResults = floorResults.filter(
+    (r): r is FloorResult => !!r && r.storey > 0 && !!r.layout,
+  );
+
+  // Provider-outage honesty: extractFloorPlanFromPdf catches its own errors and
+  // returns them as `error` strings rather than throwing, so check the primary
+  // floor's error for an outage signature before falling through to the
+  // decomposer (which would mask "AI service down" as "no readable floor plan").
+  if (floorPlanResult?.error) {
+    const outage = detectAiProviderUnavailable(new Error(floorPlanResult.error));
     if (outage) {
       console.error(
         `[extractFullHouse] AI provider unavailable during floor-plan extraction: ${outage.message}`,
@@ -482,7 +654,6 @@ export async function extractFullHouse(
         error: outage.userMessage,
       };
     }
-    console.error("[extractFullHouse] floor plan rejected:", settled[0].reason);
   }
 
   const elevationResults: (ElevationExtraction | null)[] =
@@ -587,11 +758,42 @@ export async function extractFullHouse(
 
   // 4. Merge into one SpatialLayout — uses floorPlanLayout which may have come
   // from either the standard extractor or the sheet decomposer fallback.
+  // This is storey 0 (ground); its walls/rooms keep their implicit storey 0.
   const layout: SpatialLayout = { ...floorPlanLayout };
   if (sheetDecompositionUsed && !layout.notes) {
     layout.notes = "Extracted via sheet decomposer (multi-drawing CAD sheet fallback).";
   } else if (sheetDecompositionUsed && layout.notes) {
     layout.notes = `[sheet-decomposer] ${layout.notes}`;
+  }
+
+  // Merge upper storeys onto the ground floor. Each upper floor was extracted in
+  // isolation (its own (0,0) origin + floor_level 0), so prepareStorey re-tags
+  // each to its real storey and centre-aligns it over the ground footprint.
+  // Skipped when the sheet decomposer recovered the ground floor — that path
+  // reads a single CAD model-space tile, so there are no separate upper pages.
+  const mergedUpperStoreys: number[] = [];
+  if (upperFloorResults.length > 0 && !sheetDecompositionUsed) {
+    const groundCentre = boundsCentre(layout.bounds);
+    for (const up of upperFloorResults) {
+      if (!up.layout) continue;
+      const prepared = prepareStorey(up.layout, up.storey, groundCentre);
+      layout.walls = [...(layout.walls ?? []), ...prepared.walls];
+      layout.rooms = [...(layout.rooms ?? []), ...prepared.rooms];
+      layout.openings = [...(layout.openings ?? []), ...prepared.openings];
+      mergedUpperStoreys.push(up.storey);
+    }
+    if (mergedUpperStoreys.length > 0) {
+      layout.bounds = recomputeBounds(layout.walls ?? [], layout.rooms ?? []);
+    }
+  }
+  // Storey count = floors we actually have geometry for. Overriding the model's
+  // per-page `storeys` guess is deliberate: it keeps the roof on the top
+  // EXTRACTED floor instead of floating above a storey we never read.
+  layout.storeys = 1 + mergedUpperStoreys.length;
+  if (mergedUpperStoreys.length > 0) {
+    console.log(
+      `[extractFullHouse] merged upper storey(s) ${mergedUpperStoreys.join(", ")} → ${layout.storeys} storeys total`,
+    );
   }
 
   // Backfill internal partitions from room boundaries so the 3D/.dae model

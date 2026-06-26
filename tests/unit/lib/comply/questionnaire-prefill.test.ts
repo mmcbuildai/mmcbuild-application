@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildDesignPrefill } from "@/lib/comply/questionnaire-prefill";
+import {
+  buildDesignPrefill,
+  deriveBuildingHeightM,
+} from "@/lib/comply/questionnaire-prefill";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 
 /** Minimal SpatialLayout factory — only the fields the prefill reads matter. */
@@ -92,5 +95,118 @@ describe("buildDesignPrefill", () => {
 
     const result = buildDesignPrefill(layout);
     expect(result.attached_dwelling).toBe("true");
+  });
+
+  it("derives upper_floor_area from rooms on floor_level >= 1", () => {
+    const layout = makeLayout({
+      storeys: 2,
+      rooms: [
+        { id: "r1", name: "Living", polygon: [], area_m2: 50, floor_level: 0, type: "living" },
+        { id: "r2", name: "Bed 1", polygon: [], area_m2: 18, floor_level: 1, type: "bedroom" },
+        { id: "r3", name: "Bed 2", polygon: [], area_m2: 14, floor_level: 1, type: "bedroom" },
+      ],
+    });
+    const result = buildDesignPrefill(layout);
+    expect(result.upper_floor_area).toBe("32"); // 18 + 14
+    expect(result.floor_area).toBe("82"); // total across all storeys
+  });
+
+  it("omits upper_floor_area for a single-storey layout", () => {
+    const layout = makeLayout({
+      storeys: 1,
+      rooms: [{ id: "r1", name: "Living", polygon: [], area_m2: 50, floor_level: 0 }],
+    });
+    expect(buildDesignPrefill(layout).upper_floor_area).toBeUndefined();
+  });
+
+  it("derives the narrowest door width (mm) from door openings, excluding garage/windows", () => {
+    const layout = makeLayout({
+      openings: [
+        { id: "o1", type: "garage_door", position: { x: 0, y: 0 }, width: 5.2, height: 2.1 },
+        { id: "o2", type: "door", position: { x: 1, y: 0 }, width: 0.92, height: 2.04 },
+        { id: "o3", type: "door", position: { x: 2, y: 0 }, width: 0.82, height: 2.04 },
+        { id: "o4", type: "window", position: { x: 3, y: 0 }, width: 0.6, height: 1.2 },
+      ],
+    });
+    expect(buildDesignPrefill(layout).min_door_width).toBe("820"); // 0.82m, not the window/garage
+  });
+
+  it("derives the narrowest corridor width (mm) from a hallway room's short side", () => {
+    const layout = makeLayout({
+      rooms: [
+        {
+          id: "h1",
+          name: "Hallway",
+          // 4m long × 1.0m wide
+          polygon: [
+            { x: 0, y: 0 },
+            { x: 4, y: 0 },
+            { x: 4, y: 1 },
+            { x: 0, y: 1 },
+          ],
+          area_m2: 4,
+          floor_level: 0,
+        },
+      ],
+    });
+    expect(buildDesignPrefill(layout).min_corridor_width).toBe("1000"); // 1.0m short side
+  });
+
+  it("falls back to wall_height for habitable ceiling when no storey_details", () => {
+    const layout = makeLayout({ wall_height: 2.55, storey_details: undefined });
+    expect(buildDesignPrefill(layout).ceiling_height_habitable).toBe("2.55");
+  });
+});
+
+describe("deriveBuildingHeightM", () => {
+  function makeLayout(overrides: Partial<SpatialLayout> = {}): SpatialLayout {
+    return {
+      rooms: [],
+      walls: [],
+      openings: [],
+      bounds: { min: { x: 0, y: 0 }, max: { x: 8, y: 10 }, width: 8, depth: 10 },
+      storeys: 1,
+      wall_height: 2.4,
+      confidence: 0.9,
+      ...overrides,
+    };
+  }
+
+  it("stacks storey heights + slabs + estimated ridge for a 2-storey gable", () => {
+    const layout = makeLayout({
+      storeys: 2,
+      storey_details: [
+        { id: "s0", level: 0, floor_to_ceiling_m: 2.7 },
+        { id: "s1", level: 1, floor_to_ceiling_m: 2.55 },
+      ],
+      // gable, pitch 22.5°, shorter span = width 8 → half-span 4 → ridge ≈ 1.657
+      roof: { form: "gable", pitch_deg: 22.5, eave_overhang_m: 0.5 },
+    });
+    // wallTop = 2.7 + 0.2 + 2.55 = 5.45; ridge ≈ 4 * tan(22.5°) ≈ 1.657
+    // total ≈ 7.107 → rounded 7.1
+    expect(deriveBuildingHeightM(layout)).toBeCloseTo(7.1, 1);
+  });
+
+  it("uses an explicit ridge_height_m when provided", () => {
+    const layout = makeLayout({
+      storeys: 1,
+      roof: { form: "gable", pitch_deg: 22.5, eave_overhang_m: 0.5, ridge_height_m: 2 },
+    });
+    // wallTop = 2.4 (single storey), ridge = 2 → 4.4
+    expect(deriveBuildingHeightM(layout)).toBeCloseTo(4.4, 6);
+  });
+
+  it("adds no ridge for a flat roof", () => {
+    const layout = makeLayout({
+      storeys: 1,
+      roof: { form: "flat", pitch_deg: 0, eave_overhang_m: 0.3 },
+    });
+    expect(deriveBuildingHeightM(layout)).toBeCloseTo(2.4, 6);
+  });
+
+  it("returns null for an implausible (>50m) height", () => {
+    // 20 storeys × 2.4m + slabs ≈ 51.8m → over the 50m sanity ceiling.
+    const layout = makeLayout({ storeys: 20, wall_height: 2.4 });
+    expect(deriveBuildingHeightM(layout)).toBeNull();
   });
 });

@@ -481,6 +481,21 @@ export function BetaDashboard({
         </p>
       </div>
 
+      {/* Entry-path clarifier (#15) — testers were unsure whether to start from a
+          project or from here, and whether work done elsewhere "counted". Make it
+          explicit: start anywhere, progress auto-tracks regardless of entry path. */}
+      <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-4 text-sm">
+        <p className="font-medium">How beta testing works</p>
+        <p className="mt-1 text-muted-foreground">
+          Work through the modules below, or open any module straight from the
+          sidebar — it&rsquo;s the same product either way. Each task here ticks
+          off <strong>automatically</strong> as you actually do it (run a check,
+          generate a 3D model, register a business…), no matter where you started.
+          When you&rsquo;ve finished a module, add a rating and comment to mark it
+          complete.
+        </p>
+      </div>
+
       {/* Progress overview */}
       <div className="rounded-xl border bg-card p-5">
         <div className="flex items-center justify-between mb-3">

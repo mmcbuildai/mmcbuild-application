@@ -1110,6 +1110,41 @@ export async function getProjectDesignPrefill(
       ?.spatial_layout;
   }
 
+  // Third source: the strong EAGER extraction. On a normal upload the full
+  // spatial layout is cached in test_3d_jobs (keyed org_id + storage_path), NOT
+  // in design_checks (which only design-optimisation / build populate). So most
+  // projects have a rich layout sitting here — floor area, ceiling height, wet
+  // rooms, door widths — that the questionnaire prefill never read, which is why
+  // those H1/H4 fields showed "Fill in yourself" despite being on the drawings.
+  // Mirror run-design-optimisation's reuse step and read it as a fallback.
+  if (!layout) {
+    const { data: plansForProject } = await admin
+      .from("plans")
+      .select("file_path")
+      .eq("project_id", projectId)
+      .not("file_path", "is", null)
+      .order("created_at", { ascending: false });
+    const paths = ((plansForProject as { file_path: string | null }[] | null) ?? [])
+      .map((p) => p.file_path)
+      .filter((p): p is string => !!p);
+    if (paths.length > 0) {
+      // test_3d_jobs isn't in the generated types — use the untyped db() helper
+      // (same as registerPlan's eager-extraction insert and run-design-optimisation).
+      const { data: jobRow } = await db()
+        .from("test_3d_jobs")
+        .select("result")
+        .eq("org_id", project.org_id)
+        .in("storage_path", paths)
+        .eq("status", "done")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      layout =
+        (jobRow as { result?: { layout?: SpatialLayout | null } | null } | null)
+          ?.result?.layout ?? layout;
+    }
+  }
+
   const spatialPrefill = buildDesignPrefill(layout);
 
   // Always ALSO read the lightweight on-upload attributes. They carry the
@@ -1148,9 +1183,23 @@ export async function getProjectDesignPrefill(
  * landed, or only non-vision plans like DWG) `pending` is false so the gate
  * renders the form immediately and never traps the user.
  */
+/**
+ * Tri-state for the questionnaire hold-back gate:
+ *   - 'ready'       — a prefill is available; render the form pre-filled.
+ *   - 'extracting'  — a vision plan's design extraction is still in flight; the
+ *                     gate waits (with commentary) rather than racing it.
+ *   - 'unavailable' — no auto-prefill is coming (no vision plan, or extraction
+ *                     finished and produced nothing usable); render for manual.
+ */
+export type DesignPrefillStatus = "ready" | "extracting" | "unavailable";
+
 export async function getDesignPrefillState(
   projectId: string,
-): Promise<{ prefill: Record<string, string>; pending: boolean }> {
+): Promise<{
+  prefill: Record<string, string>;
+  pending: boolean;
+  status: DesignPrefillStatus;
+}> {
   // Auth + org guard (matches getProjectDesignPrefill).
   const profile = await getProfile();
   const admin = createAdminClient();
@@ -1162,13 +1211,13 @@ export async function getDesignPrefillState(
     .single();
 
   if (!project || project.org_id !== profile.org_id) {
-    return { prefill: {}, pending: false };
+    return { prefill: {}, pending: false, status: "unavailable" };
   }
 
   // Reuse the existing prefill logic (also re-runs its own auth/org guard).
   const prefill = await getProjectDesignPrefill(projectId);
   if (Object.keys(prefill).length > 0) {
-    return { prefill, pending: false };
+    return { prefill, pending: false, status: "ready" };
   }
 
   // Empty prefill — is an extraction plausibly still coming? A vision-capable
@@ -1182,9 +1231,15 @@ export async function getDesignPrefillState(
     .is("design_attributes", null)
     .limit(1);
 
+  // A vision-capable plan whose design_attributes is still NULL = the on-upload
+  // extraction hasn't landed yet → keep waiting. If there's no such plan, either
+  // there's no vision plan at all, or every vision plan has already produced a
+  // (non-null) design_attributes that simply yielded no usable prefill — both
+  // mean no auto-prefill is coming, so the gate renders the form for manual fill
+  // instead of waiting forever.
   const hasPendingVisionPlan = !!pendingPlans && pendingPlans.length > 0;
   if (!hasPendingVisionPlan) {
-    return { prefill, pending: false };
+    return { prefill, pending: false, status: "unavailable" };
   }
 
   // The 3D spatial layout is the other prefill source; if it already existed the
@@ -1199,10 +1254,16 @@ export async function getDesignPrefillState(
     .maybeSingle();
 
   const hasSpatialLayout = !!layoutRow;
+  const pending = isPrefillPending({
+    prefill,
+    hasPendingVisionPlan,
+    hasSpatialLayout,
+  });
 
   return {
     prefill,
-    pending: isPrefillPending({ prefill, hasPendingVisionPlan, hasSpatialLayout }),
+    pending,
+    status: pending ? "extracting" : "unavailable",
   };
 }
 
