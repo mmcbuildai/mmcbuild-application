@@ -280,13 +280,30 @@ function LockedAutoField({
     );
   }
 
+  // Override path: the user has changed (or is changing) the address-derived
+  // value. The stated value WINS for compliance — but if it differs from the
+  // address lookup, red-flag it: a mismatch usually means an uploaded report
+  // (e.g. a bushfire/BAL assessment) deliberately overrides the address overlay,
+  // OR the address is wrong and should be re-checked. (BAL override + conflict.)
+  const conflicts = autoValue !== null && value !== "" && value !== autoValue;
   return (
-    <SelectField
-      label={label}
-      value={value}
-      onChange={onChange}
-      options={options}
-    />
+    <div className="space-y-1.5">
+      <SelectField
+        label={label}
+        value={value}
+        onChange={onChange}
+        options={options}
+      />
+      {conflicts && (
+        <p className="rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+          <span className="font-semibold">Heads up:</span> this differs from the
+          value derived from the site address ({autoValue}). Your value takes
+          precedence for the compliance check — keep it if you have a report
+          (e.g. a bushfire/BAL assessment) that overrides the address overlay;
+          otherwise double-check the address.
+        </p>
+      )}
+    </div>
   );
 }
 
