@@ -1110,6 +1110,41 @@ export async function getProjectDesignPrefill(
       ?.spatial_layout;
   }
 
+  // Third source: the strong EAGER extraction. On a normal upload the full
+  // spatial layout is cached in test_3d_jobs (keyed org_id + storage_path), NOT
+  // in design_checks (which only design-optimisation / build populate). So most
+  // projects have a rich layout sitting here — floor area, ceiling height, wet
+  // rooms, door widths — that the questionnaire prefill never read, which is why
+  // those H1/H4 fields showed "Fill in yourself" despite being on the drawings.
+  // Mirror run-design-optimisation's reuse step and read it as a fallback.
+  if (!layout) {
+    const { data: plansForProject } = await admin
+      .from("plans")
+      .select("file_path")
+      .eq("project_id", projectId)
+      .not("file_path", "is", null)
+      .order("created_at", { ascending: false });
+    const paths = ((plansForProject as { file_path: string | null }[] | null) ?? [])
+      .map((p) => p.file_path)
+      .filter((p): p is string => !!p);
+    if (paths.length > 0) {
+      // test_3d_jobs isn't in the generated types — use the untyped db() helper
+      // (same as registerPlan's eager-extraction insert and run-design-optimisation).
+      const { data: jobRow } = await db()
+        .from("test_3d_jobs")
+        .select("result")
+        .eq("org_id", project.org_id)
+        .in("storage_path", paths)
+        .eq("status", "done")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      layout =
+        (jobRow as { result?: { layout?: SpatialLayout | null } | null } | null)
+          ?.result?.layout ?? layout;
+    }
+  }
+
   const spatialPrefill = buildDesignPrefill(layout);
 
   // Always ALSO read the lightweight on-upload attributes. They carry the

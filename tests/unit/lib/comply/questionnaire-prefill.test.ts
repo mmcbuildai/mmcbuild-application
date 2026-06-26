@@ -118,6 +118,44 @@ describe("buildDesignPrefill", () => {
     });
     expect(buildDesignPrefill(layout).upper_floor_area).toBeUndefined();
   });
+
+  it("derives the narrowest door width (mm) from door openings, excluding garage/windows", () => {
+    const layout = makeLayout({
+      openings: [
+        { id: "o1", type: "garage_door", position: { x: 0, y: 0 }, width: 5.2, height: 2.1 },
+        { id: "o2", type: "door", position: { x: 1, y: 0 }, width: 0.92, height: 2.04 },
+        { id: "o3", type: "door", position: { x: 2, y: 0 }, width: 0.82, height: 2.04 },
+        { id: "o4", type: "window", position: { x: 3, y: 0 }, width: 0.6, height: 1.2 },
+      ],
+    });
+    expect(buildDesignPrefill(layout).min_door_width).toBe("820"); // 0.82m, not the window/garage
+  });
+
+  it("derives the narrowest corridor width (mm) from a hallway room's short side", () => {
+    const layout = makeLayout({
+      rooms: [
+        {
+          id: "h1",
+          name: "Hallway",
+          // 4m long × 1.0m wide
+          polygon: [
+            { x: 0, y: 0 },
+            { x: 4, y: 0 },
+            { x: 4, y: 1 },
+            { x: 0, y: 1 },
+          ],
+          area_m2: 4,
+          floor_level: 0,
+        },
+      ],
+    });
+    expect(buildDesignPrefill(layout).min_corridor_width).toBe("1000"); // 1.0m short side
+  });
+
+  it("falls back to wall_height for habitable ceiling when no storey_details", () => {
+    const layout = makeLayout({ wall_height: 2.55, storey_details: undefined });
+    expect(buildDesignPrefill(layout).ceiling_height_habitable).toBe("2.55");
+  });
 });
 
 describe("deriveBuildingHeightM", () => {

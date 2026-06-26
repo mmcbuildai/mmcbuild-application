@@ -275,10 +275,42 @@ export function buildDesignPrefill(
     out.has_swimming_pool = "true";
   }
 
-  // Habitable ceiling height (first storey's floor-to-ceiling, sanity-bounded)
-  const fc = layout.storey_details?.[0]?.floor_to_ceiling_m;
+  // Habitable ceiling height (first storey's floor-to-ceiling, sanity-bounded).
+  // Falls back to the overall wall_height when no per-storey detail was captured.
+  const fc =
+    layout.storey_details?.[0]?.floor_to_ceiling_m ?? layout.wall_height;
   if (typeof fc === "number" && fc >= 2.1 && fc <= 4) {
     out.ceiling_height_habitable = String(fc);
+  }
+
+  // Narrowest internal door clear width (mm) from the extracted door openings —
+  // accessibility (H8 / Livable Housing). Garage doors and windows excluded.
+  const openings = Array.isArray(layout.openings) ? layout.openings : [];
+  const doorWidths = openings
+    .filter((o) => o.type === "door" || o.type === "sliding_door" || o.type === "bifold")
+    .map((o) => o.width)
+    .filter((w): w is number => typeof w === "number" && w > 0);
+  if (doorWidths.length > 0) {
+    const mm = Math.round(Math.min(...doorWidths) * 1000);
+    if (mm >= 600 && mm <= 2000) out.min_door_width = String(mm);
+  }
+
+  // Narrowest corridor/hallway width (mm) — the short dimension of any
+  // hallway/corridor room's bounding box.
+  const HALL_RE = /hall|corridor|passage/i;
+  const hallWidths: number[] = [];
+  for (const r of rooms) {
+    if (!HALL_RE.test(roomLabel(r))) continue;
+    const poly = r.polygon ?? [];
+    if (poly.length < 3) continue;
+    const xs = poly.map((p) => p.x);
+    const ys = poly.map((p) => p.y);
+    const narrow = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    if (narrow > 0) hallWidths.push(narrow);
+  }
+  if (hallWidths.length > 0) {
+    const mm = Math.round(Math.min(...hallWidths) * 1000);
+    if (mm >= 600 && mm <= 3000) out.min_corridor_width = String(mm);
   }
 
   return out;
