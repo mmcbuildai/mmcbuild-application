@@ -10,6 +10,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Keep the module import cheap: stub the Inngest client (createFunction runs at
 // module load) and the heavy/env-touching deps the function file imports.
+// `server-only` throws outside an RSC context — the function file transitively
+// imports it (via the spatial extractor), so stub it or the whole suite fails
+// to import (the long-standing red CI check on this file).
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/inngest/client", () => ({
   inngest: { createFunction: () => ({ id: "run-design-optimisation" }) },
 }));

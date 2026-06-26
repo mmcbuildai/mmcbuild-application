@@ -520,6 +520,15 @@ export function QuestionnaireForm({
   const constructionTypeApplies =
     !buildingClass || !buildingClass.startsWith("Class 1");
 
+  // Honesty guard on the extracted floor area: when the building is multi-storey
+  // but the extraction captured no upper-floor area, the classifier likely read
+  // only the ground-floor plan — so the "floor area" is the ground floor alone,
+  // NOT the total. Flag it rather than silently present a half-GFA as the total.
+  const floorAreaGroundOnly =
+    extractedKeys.has("floor_area") &&
+    Number(responses.storeys) > 1 &&
+    !responses.upper_floor_area;
+
   // Step 8 (Access & Livable Housing) is hidden for hotel/commercial typologies.
   // We collapse the visible step list so navigation skips it cleanly.
   const visibleSteps = STEPS.map((label, i) => ({ label, originalIndex: i })).filter(
@@ -724,7 +733,11 @@ export function QuestionnaireForm({
                 value={responses.floor_area}
                 onChange={(v) => update("floor_area", v)}
                 source={extractedKeys.has("floor_area") ? "extracted" : "manual"}
-                helper="Combined internal floor area across all storeys."
+                helper={
+                  floorAreaGroundOnly
+                    ? "⚠ This looks like the GROUND FLOOR only — the upper floor wasn't read from your plans. Update it to the total across all storeys."
+                    : "Combined internal floor area across all storeys."
+                }
               />
               {(Number(responses.storeys) > 1 ||
                 extractedKeys.has("upper_floor_area")) && (
