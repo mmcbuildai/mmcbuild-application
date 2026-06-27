@@ -41,6 +41,31 @@ export async function requestComplianceCheck(
     return { error: "Profile not found" };
   }
 
+  // Duplicate-run guard — BEFORE the paywall, so a second click never consumes
+  // a paid run. If a check is already queued/processing for this project, return
+  // the existing one so the UI can point the user at the run in progress instead
+  // of spawning a wasted duplicate (Karen/Dennis, 2026-06-28: progress shows on a
+  // separate page, so re-clicking Run started a second check + burned a run).
+  {
+    const admin = createAdminClient();
+    const { data: inFlight } = await admin
+      .from("compliance_checks")
+      .select("id")
+      .eq("project_id", projectId)
+      .in("status", ["queued", "processing"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (inFlight) {
+      return {
+        error: "already_running",
+        checkId: (inFlight as { id: string }).id,
+        message:
+          "A compliance check is already running for this project. Open it to see progress.",
+      };
+    }
+  }
+
   // Load questionnaire data for context (before the paywall, so the hard gate
   // below never consumes a paid run).
   let questionnaireData: Record<string, unknown> = {};

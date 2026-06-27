@@ -31,6 +31,17 @@ export function RunCheckButton({
       );
 
       if ("error" in result) {
+        // A check is already running for this project — don't show an error or
+        // start a duplicate; take the user straight to the run in progress.
+        if (
+          result.error === "already_running" &&
+          (result as { checkId?: string }).checkId
+        ) {
+          router.push(
+            `/comply/${projectId}/check/${(result as { checkId: string }).checkId}`,
+          );
+          return;
+        }
         // Prefer a human-readable `message` when the action provides one (e.g.
         // the building-classification hard gate) over the bare error code.
         setError(
