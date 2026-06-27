@@ -12,7 +12,6 @@ import {
   GraduationCap,
   CreditCard,
   Settings,
-  LogOut,
   Tag,
   LayoutDashboard,
   FolderOpen,
@@ -23,7 +22,7 @@ import {
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { OrgSwitcher } from "./org-switcher";
-import { Button } from "@/components/ui/button";
+import { SignOutButton } from "./sign-out-button";
 import { isRunLimited, TRIAL_RUN_LIMIT } from "@/lib/persona-access";
 import {
   isModuleLaunched,
@@ -217,14 +216,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
             );
           })}
           <form action={signOut}>
-            <Button
-              variant="ghost"
-              className="min-h-11 w-full justify-start gap-3 px-3 text-slate-400 hover:text-red-400 hover:bg-white/5 md:min-h-0"
-              type="submit"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign Out
-            </Button>
+            <SignOutButton />
           </form>
         </div>
 
