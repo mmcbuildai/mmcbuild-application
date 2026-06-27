@@ -3,6 +3,7 @@ import { CostComparisonChart } from "./cost-comparison-chart";
 import { HoldingCostCalculator } from "./holding-cost-calculator";
 import { getCostCategoryLabel } from "@/lib/ai/types";
 import { ReportExportButton } from "@/components/shared/report-export-button";
+import { computeCostTotals } from "@/lib/quote/totals";
 
 interface LineItem {
   id: string;
@@ -51,13 +52,16 @@ interface CostReportProps {
 export function CostReport({ estimate, lineItems, holdingCostVariables }: CostReportProps) {
   const categories = [...new Set(lineItems.map((li) => li.cost_category))];
 
-  const totalTraditional = estimate.total_traditional ?? 0;
-  const totalMmc = estimate.total_mmc ?? 0;
-  const savingsPct = estimate.total_savings_pct ?? 0;
-  const totalSavings = totalTraditional - totalMmc;
-  // Line items the engine couldn't price (provisional / TBC) — surfaced honestly
-  // rather than counted as $0, which would understate the real cost.
-  const tbcCount = lineItems.filter((li) => li.traditional_total == null).length;
+  // Compute the headline from the line items (the source of truth = what's shown
+  // below + in the PDF), not the stored rollup which was sometimes null → "$0 at
+  // the top" while the detail showed real numbers (Karen, 2026-06-27).
+  const {
+    traditional: totalTraditional,
+    mmc: totalMmc,
+    savings: totalSavings,
+    savingsPct,
+    tbcCount,
+  } = computeCostTotals(lineItems, estimate);
 
   // Aggregate data sources
   const sourceCountMap = new Map<string, number>();
@@ -97,12 +101,16 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
         />
       </div>
       {tbcCount > 0 && (
-        <p className="-mt-3 text-xs text-amber-600">
-          {tbcCount} item{tbcCount === 1 ? "" : "s"} marked{" "}
-          <span className="font-medium">TBC</span> — provisional elements the
-          estimate couldn&rsquo;t price yet, so they are not included in the
-          totals above.
-        </p>
+        <div className="-mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span className="font-medium">
+            Headline total is not the full price.
+          </span>{" "}
+          {tbcCount} item{tbcCount === 1 ? "" : "s"} could not be priced yet
+          (shown as <span className="font-medium">TBC</span> in the line items
+          below) and {tbcCount === 1 ? "is" : "are"} <span className="font-medium">excluded</span>{" "}
+          from the totals above — so the real cost will be higher once{" "}
+          {tbcCount === 1 ? "it is" : "they are"} priced.
+        </div>
       )}
 
       {/* Comparison chart */}

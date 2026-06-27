@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { generateCostPdf } from "@/lib/quote/report-pdf";
 import { generateCostDocx } from "@/lib/quote/report-docx";
+import { computeCostTotals } from "@/lib/quote/totals";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -55,13 +56,20 @@ export async function GET(
     .eq("estimate_id", estimateId)
     .order("sort_order", { ascending: true });
 
+  // Headline totals from the line items (source of truth), so the PDF matches
+  // the on-screen report exactly and is never "$0" when line items are priced.
+  const totals = computeCostTotals(
+    (lineItems ?? []) as { traditional_total: number | null; mmc_total: number | null }[],
+    rec,
+  );
+
   const reportInput = {
     projectName: project?.name ?? "Untitled Project",
     projectAddress: project?.address ?? null,
     summary: rec.summary ?? "",
-    totalTraditional: rec.total_traditional ?? 0,
-    totalMmc: rec.total_mmc ?? 0,
-    totalSavingsPct: rec.total_savings_pct,
+    totalTraditional: totals.traditional,
+    totalMmc: totals.mmc,
+    totalSavingsPct: rec.total_savings_pct ?? totals.savingsPct,
     region: rec.region,
     completedAt: rec.completed_at ?? new Date().toISOString(),
     traditionalDurationWeeks: rec.traditional_duration_weeks ?? null,
