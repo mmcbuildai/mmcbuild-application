@@ -90,8 +90,8 @@ export async function enqueueTest3D(
 }
 
 export type Test3DStatus =
-  | { status: "queued" }
-  | { status: "processing" }
+  | { status: "queued"; stage?: string | null }
+  | { status: "processing"; stage?: string | null }
   | { status: "done"; result: Test3DResult }
   | { status: "error"; error: string }
   | { status: "not_found" }
@@ -106,7 +106,7 @@ export async function getTest3DStatus(jobId: string): Promise<Test3DStatus> {
 
   const { data, error } = await db()
     .from("test_3d_jobs")
-    .select("status, result, error, user_id")
+    .select("status, result, error, stage, user_id")
     .eq("id", jobId)
     .maybeSingle();
 
@@ -115,6 +115,7 @@ export async function getTest3DStatus(jobId: string): Promise<Test3DStatus> {
     status: string;
     result: Test3DResult | null;
     error: string | null;
+    stage: string | null;
     user_id: string;
   };
   if (row.user_id !== user.id) return { status: "unauthorised" };
@@ -125,6 +126,6 @@ export async function getTest3DStatus(jobId: string): Promise<Test3DStatus> {
   if (row.status === "error") {
     return { status: "error", error: row.error ?? "Unknown error" };
   }
-  if (row.status === "processing") return { status: "processing" };
-  return { status: "queued" };
+  if (row.status === "processing") return { status: "processing", stage: row.stage };
+  return { status: "queued", stage: row.stage };
 }

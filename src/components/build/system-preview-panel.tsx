@@ -18,6 +18,13 @@ import type { SpatialLayout } from "@/lib/build/spatial";
 
 // Rotating reassurance while the 3D build runs — same shape as the other
 // long-job runs so the experience is consistent across modules.
+// Real extraction-stage → human label (test_3d_jobs.stage, written by the
+// run-test-3d-extraction job). Falls back to a generic line for any other value.
+const STAGE_LABELS: Record<string, string> = {
+  reading: "Reading your plan…",
+  extracting: "Extracting walls, rooms & openings…",
+};
+
 const PREVIEW_TIPS = [
   "Reconstructing your floor plan in 3D from every page of the plan.",
   "Multi-storey designs take longer — each floor is read, then stacked in turn.",
@@ -81,6 +88,9 @@ export function SystemPreviewPanel({
   const [elapsed, setElapsed] = useState(0);
   const [tipIndex, setTipIndex] = useState(0);
   const [notifyArmed, setNotifyArmed] = useState(false);
+  // Real extraction stage from the job (test_3d_jobs.stage), shown so a long
+  // multi-storey build reads as progress, not a hang.
+  const [stage, setStage] = useState<string | null>(null);
   const notifyRef = useRef(false);
 
   // Stop the poll loop on unmount so it doesn't keep calling the server action
@@ -192,7 +202,8 @@ export function SystemPreviewPanel({
         setPhase("error");
         return;
       }
-      // queued | processing → keep polling
+      // queued | processing → surface the real stage, keep polling
+      setStage(status.stage ?? null);
       pollRef.current = setTimeout(tick, 2500);
     };
     pollRef.current = setTimeout(tick, 2000);
@@ -279,7 +290,7 @@ export function SystemPreviewPanel({
         <div className="space-y-3 border-t px-4 py-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-zinc-700">
-              Building your design in 3D…
+              {STAGE_LABELS[stage ?? ""] ?? "Building your design in 3D…"}
             </p>
             <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
               <Clock className="h-3.5 w-3.5" />
