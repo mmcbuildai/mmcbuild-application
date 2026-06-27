@@ -50,6 +50,7 @@ export function EstimationProgress({
       // for both traditional and MMC methods, in sequential phases.
       description="The cost engine works through every building category in phases — extracting quantities from your plan, looking up current supplier rates, and comparing traditional construction against the MMC alternatives. This typically takes 5–8 minutes, and longer for large or complex plans."
       tips={TIPS}
+      estimatedSecs={360}
       completionTitle="Your cost estimation report is ready"
       completionBody="Your cost estimation report is ready."
       onComplete={() => router.refresh()}
