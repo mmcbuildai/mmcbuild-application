@@ -6,6 +6,16 @@ node_modules/
 dist/
 .next/
 .turbo/
+
+# ─── Meeting recordings / large media (large + may contain PII — never commit) ───
+# Zoom/meeting captures and design source PDFs dropped into docs/ for reference.
+*.mp4
+*.m4a
+*.mov
+*.wav
+docs/MMCBUILD ZOOM/
+docs/*MMC BUILD*/
+design/
 out/
 *.tsbuildinfo
 

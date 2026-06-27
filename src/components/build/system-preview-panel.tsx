@@ -8,9 +8,28 @@ import { BuildSequence } from "./build-sequence";
 import { SystemExplorerView } from "./system-explorer-view";
 import { PlanComparison3D } from "./plan-comparison-3d";
 import { SystemSelectChips } from "./system-select-chips";
-import { startProjectSystemPreview } from "@/app/(dashboard)/build/actions";
+import {
+  startProjectSystemPreview,
+  getProjectSystemPreviewCached,
+} from "@/app/(dashboard)/build/actions";
 import { getTest3DStatus } from "@/app/(dashboard)/build/test-3d/actions";
+import { Bell, CheckCircle, Clock } from "lucide-react";
 import type { SpatialLayout } from "@/lib/build/spatial";
+
+// Rotating reassurance while the 3D build runs — same shape as the other
+// long-job runs so the experience is consistent across modules.
+const PREVIEW_TIPS = [
+  "Reconstructing your floor plan in 3D from every page of the plan.",
+  "Multi-storey designs take longer — each floor is read, then stacked in turn.",
+  "Detecting walls, rooms and openings so the model matches your design.",
+  "You can leave this page or work elsewhere — we'll keep building and have it ready when you return.",
+];
+
+function fmtElapsed(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
 
 type Phase = "idle" | "working" | "ready" | "error";
 type ViewMode = "build-sequence" | "system-explorer" | "plan-comparison";
@@ -56,6 +75,14 @@ export function SystemPreviewPanel({
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
+  // Reassurance state while building: elapsed timer, rotating tip, and a
+  // "notify me when ready" browser notification (mirrors the other runs).
+  const startRef = useRef<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [tipIndex, setTipIndex] = useState(0);
+  const [notifyArmed, setNotifyArmed] = useState(false);
+  const notifyRef = useRef(false);
+
   // Stop the poll loop on unmount so it doesn't keep calling the server action
   // (and setState) after the user navigates away.
   useEffect(() => {
@@ -64,6 +91,28 @@ export function SystemPreviewPanel({
     };
   }, []);
 
+  // Elapsed timer + rotating tip while the build runs.
+  useEffect(() => {
+    if (phase !== "working") {
+      startRef.current = null;
+      return;
+    }
+    if (startRef.current === null) {
+      startRef.current = Date.now();
+    }
+    const t = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - (startRef.current ?? Date.now())) / 1000));
+    }, 1000);
+    const r = setInterval(
+      () => setTipIndex((i) => (i + 1) % PREVIEW_TIPS.length),
+      7000,
+    );
+    return () => {
+      clearInterval(t);
+      clearInterval(r);
+    };
+  }, [phase]);
+
   // On a successful extraction, refresh server components so the Design
   // Optimisation gate unlocks (the build page re-checks hasPlanLayout). This
   // is a soft refresh — the panel keeps its rendered 3D.
@@ -71,10 +120,38 @@ export function SystemPreviewPanel({
     (l: SpatialLayout) => {
       setLayout(l);
       setPhase("ready");
+      // If the user armed "notify me" and wandered off, ping them now.
+      if (
+        notifyRef.current &&
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted"
+      ) {
+        try {
+          new Notification("MMC Build", {
+            body: "Your 3D design preview is ready.",
+          });
+        } catch {
+          // best-effort
+        }
+      }
       router.refresh();
     },
     [router],
   );
+
+  const armNotify = useCallback(async () => {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission === "granted") {
+      notifyRef.current = true;
+      setNotifyArmed(true);
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") {
+      notifyRef.current = true;
+      setNotifyArmed(true);
+    }
+  }, []);
 
   const poll = useCallback((jobId: string) => {
     const deadline = Date.now() + MAX_POLL_MS;
@@ -124,6 +201,8 @@ export function SystemPreviewPanel({
   const start = useCallback(async () => {
     // Clear any in-flight poll chain so a retry can't run two loops at once.
     if (pollRef.current) clearTimeout(pollRef.current);
+    startRef.current = null;
+    setElapsed(0);
     setPhase("working");
     setError(null);
     const res = await startProjectSystemPreview(planId);
@@ -138,6 +217,26 @@ export function SystemPreviewPanel({
     }
     poll(res.jobId);
   }, [planId, poll, markReady]);
+
+  // On mount, restore a finished 3D (so returning from another screen doesn't
+  // force a re-click) or re-attach to an extraction already running for this
+  // plan (so it isn't orphaned + duplicated). Read-only; no job is started.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cached = await getProjectSystemPreviewCached(planId);
+      if (cancelled) return;
+      if (cached.state === "done") {
+        markReady(cached.layout);
+      } else if (cached.state === "running") {
+        setPhase("working");
+        poll(cached.jobId);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [planId, markReady, poll]);
 
   return (
     <div className="rounded-lg border bg-white">
@@ -177,11 +276,53 @@ export function SystemPreviewPanel({
       </div>
 
       {phase === "working" && (
-        <p className="border-t px-4 py-3 text-xs text-zinc-500">
-          Reconstructing your floor plan in 3D. This takes around 30 seconds to
-          a couple of minutes the first time, depending on the plan — it&apos;s
-          cached after that.
-        </p>
+        <div className="space-y-3 border-t px-4 py-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-zinc-700">
+              Building your design in 3D…
+            </p>
+            <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+              <Clock className="h-3.5 w-3.5" />
+              {fmtElapsed(elapsed)}
+            </span>
+          </div>
+          {/* Indeterminate progress bar — eased over the first couple of
+              minutes, then a steady pulse so a long multi-storey build never
+              looks frozen. */}
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+            <div
+              className={`h-full rounded-full bg-teal-500 transition-all duration-1000 ${
+                elapsed > 150 ? "animate-pulse" : ""
+              }`}
+              style={{ width: `${Math.min(92, Math.max(6, elapsed * 0.7))}%` }}
+            />
+          </div>
+          <p className="text-xs text-zinc-500">{PREVIEW_TIPS[tipIndex]}</p>
+          {elapsed > 90 && (
+            <p className="text-xs text-zinc-500">
+              Large or multi-storey plans take a few minutes the first time —
+              it hasn&apos;t stalled, and the result is cached afterwards. You
+              can leave this page; we&apos;ll keep building.
+            </p>
+          )}
+          <div>
+            {notifyArmed ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700">
+                <CheckCircle className="h-3.5 w-3.5" />
+                We&rsquo;ll notify you when it&rsquo;s ready
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={armNotify}
+                className="inline-flex min-h-[36px] items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                Notify me when it&rsquo;s ready
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {phase === "error" && error && (
