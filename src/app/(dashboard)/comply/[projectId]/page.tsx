@@ -107,6 +107,12 @@ export default async function ProjectComplyPage({
   );
   const hasQuestionnaire = questionnaire?.completed;
   const canRunCheck = !!readyPlan && !!hasQuestionnaire;
+  // A check already running for this project — show its progress here instead of
+  // a Run button, so re-clicking can't spawn a duplicate (the live commentary
+  // lives on the check page; this links straight to it).
+  const inFlightCheck = (checks as { id: string; status: string }[]).find(
+    (c) => c.status === "queued" || c.status === "processing",
+  );
 
   return (
     <div className="space-y-6">
@@ -156,7 +162,24 @@ export default async function ProjectComplyPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {canRunCheck ? (
+            {inFlightCheck ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+                  A compliance check is already running
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Watch its live progress and commentary on the check page —
+                  no need to start another.
+                </p>
+                <Button asChild>
+                  <Link href={`/comply/${projectId}/check/${inFlightCheck.id}`}>
+                    View check in progress
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            ) : canRunCheck ? (
               <RunCheckButton
                 projectId={projectId}
                 planId={readyPlan.id}
