@@ -6,6 +6,36 @@ import { inngest } from "@/lib/inngest/client";
 import { db } from "@/lib/supabase/db";
 import { revalidatePath } from "next/cache";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
+import { SAMPLE_DESIGNS } from "@/lib/beta/sample-designs";
+
+/**
+ * Sample designs are COPIED into each tester's project under a fresh storage
+ * path, so the per-plan extraction cache (org + storage_path) always misses and
+ * re-runs the full multi-storey 3D build — and the demo wipe clears the tester's
+ * copy every cycle. But the SAMPLE SOURCE file (under the protected demo org)
+ * keeps its finished extraction across wipes. So when a plan is a copy of a known
+ * sample (matched by file name), fall back to the source's cached layout — no
+ * re-run. Read-only; db() bypasses RLS to read the cross-org source row.
+ */
+async function findCachedSampleLayout(
+  fileName: string | null,
+): Promise<SpatialLayout | null> {
+  if (!fileName) return null;
+  const sample = SAMPLE_DESIGNS.find((s) => s.fileName === fileName);
+  if (!sample) return null;
+  const { data } = await db()
+    .from("test_3d_jobs")
+    .select("result")
+    .eq("storage_path", sample.samplePath)
+    .eq("status", "done")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const row =
+    (data as unknown as { result: { layout: SpatialLayout | null } | null } | null) ??
+    null;
+  return row?.result?.layout ?? null;
+}
 
 export async function requestDesignOptimisation(
   projectId: string,
@@ -388,6 +418,12 @@ export async function startProjectSystemPreview(
     return { layout: cached.result.layout };
   }
 
+  // Sample fallback: a copied sample reuses the source's persistent extraction.
+  const sampleLayout = await findCachedSampleLayout(plan.file_name);
+  if (sampleLayout) {
+    return { layout: sampleLayout };
+  }
+
   // No cached layout — enqueue the extraction job (same shape as the harness).
   const { data: job, error: insertError } = await db()
     .from("test_3d_jobs")
@@ -450,12 +486,15 @@ export async function getProjectSystemPreviewCached(
 
   const { data: planRow } = await db()
     .from("plans")
-    .select("org_id, file_path")
+    .select("org_id, file_path, file_name")
     .eq("id", planId)
     .single();
   const plan =
-    (planRow as unknown as { org_id: string; file_path: string | null } | null) ??
-    null;
+    (planRow as unknown as {
+      org_id: string;
+      file_path: string | null;
+      file_name: string | null;
+    } | null) ?? null;
   if (!plan || plan.org_id !== profile.org_id || !plan.file_path) {
     return { state: "none" };
   }
@@ -475,6 +514,13 @@ export async function getProjectSystemPreviewCached(
     null;
   if (cached?.result?.layout) {
     return { state: "done", layout: cached.result.layout };
+  }
+
+  // Sample fallback: a copied sample reuses the source's persistent extraction
+  // (survives the demo wipe), so the demo/beta 3D restores instantly.
+  const sampleLayout = await findCachedSampleLayout(plan.file_name);
+  if (sampleLayout) {
+    return { state: "done", layout: sampleLayout };
   }
 
   // Otherwise re-attach to an extraction that's still running for this plan —
