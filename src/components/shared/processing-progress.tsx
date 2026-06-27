@@ -74,6 +74,13 @@ export interface ProcessingProgressProps {
   leaveAfterSecs?: number;
   /** Accent colour for the spinner/bar. */
   accentClass?: string;
+  /**
+   * Rough expected duration (seconds). The bar eases toward ~90% across this
+   * window instead of slamming to its cap in ~77s — and once elapsed exceeds it
+   * the bar switches to an honest "still working" pulse so a long job never sits
+   * frozen at 95% (the Quote "stuck at the end" report, 2026-06-27).
+   */
+  estimatedSecs?: number;
 }
 
 const DEFAULT_TIPS = [
@@ -100,6 +107,7 @@ export function ProcessingProgress({
   onComplete,
   leaveAfterSecs = 180,
   accentClass = "text-primary",
+  estimatedSecs = 240,
 }: ProcessingProgressProps) {
   const router = useRouter();
   const [status, setStatus] = useState<ProcessingStatus>(initialStatus);
@@ -289,6 +297,15 @@ export function ProcessingProgress({
       ? slowStageNote(currentStage, stageElapsed)
       : null;
 
+  // Ease the bar toward ~90% across the EXPECTED duration (not a fixed 77s), so
+  // it reflects real elapsed-vs-estimate instead of slamming to the cap and
+  // sitting there. Past the estimate the bar goes indeterminate (pulsing) with
+  // an honest note — never a frozen near-100% that reads as "stuck".
+  const pastEstimate = estimatedSecs > 0 && elapsed > estimatedSecs;
+  const barPct = pastEstimate
+    ? 92
+    : Math.min(90, Math.max(4, (elapsed / Math.max(estimatedSecs, 1)) * 90));
+
   return (
     <Card>
       <CardHeader>
@@ -312,13 +329,23 @@ export function ProcessingProgress({
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
 
-        {/* Indeterminate, time-eased progress bar (no per-step signal). */}
+        {/* Time-eased bar across the expected duration; pulses (not frozen)
+            once a run goes past its estimate. */}
         <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
-            className="h-full rounded-full bg-primary transition-all duration-1000"
-            style={{ width: `${Math.min(92, Math.max(5, elapsed * 1.2))}%` }}
+            className={`h-full rounded-full bg-primary transition-all duration-1000 ${
+              pastEstimate ? "animate-pulse" : ""
+            }`}
+            style={{ width: `${barPct}%` }}
           />
         </div>
+        {pastEstimate && (
+          <p className="text-xs text-muted-foreground">
+            Still working — this run is taking longer than usual, which is normal
+            for large or complex plans. It hasn&rsquo;t stalled; we&rsquo;ll show
+            the result the moment it&rsquo;s ready. ({fmt(elapsed)} elapsed)
+          </p>
+        )}
 
         {/* Per-stage checklist when the host reports stages. */}
         {(completedStages.length > 0 || currentStage) && stages && (
