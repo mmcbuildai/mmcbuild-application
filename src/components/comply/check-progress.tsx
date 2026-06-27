@@ -238,14 +238,25 @@ export function CheckProgress({
           <CardTitle className="text-lg">Compliance Check Progress</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
-            <CheckCircle className="h-5 w-5 text-green-600" />
-            <div>
-              <p className="text-sm font-medium">Complete</p>
-              <p className="text-xs text-muted-foreground">
-                Your compliance report is ready.
-              </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 shrink-0 text-green-600" />
+              <div>
+                <p className="text-sm font-medium">Complete</p>
+                <p className="text-xs text-muted-foreground">
+                  Your compliance report is ready — open the{" "}
+                  <span className="font-medium">Action Items</span> tab below to
+                  see the findings.
+                </p>
+              </div>
             </div>
+            <Button
+              size="sm"
+              className="min-h-11 shrink-0"
+              onClick={() => router.refresh()}
+            >
+              View report
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -167,7 +167,10 @@ type FieldSource = "extracted" | "manual";
 function SourceBadge({ source, empty }: { source?: FieldSource; empty: boolean }) {
   if (source === "extracted") {
     return (
-      <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+      <span
+        className="cursor-help rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700"
+        title="Pre-filled from your uploaded plan. It's still fully editable — change it if it's not right."
+      >
         Extracted from your design
       </span>
     );
@@ -216,7 +219,10 @@ function SelectField({
           </span>
         )}
         {autoTag && (
-          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+          <span
+            className="cursor-help rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+            title="We worked this out from your other answers and the plan (e.g. a multi-storey home implies internal stairs). It's an assumption — change it if it's not right."
+          >
             Auto-derived
           </span>
         )}
@@ -384,7 +390,10 @@ function CheckboxField({
           <span className="text-sm">{label}</span>
         </label>
         {autoTag && (
-          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+          <span
+            className="cursor-help rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+            title="We worked this out from your other answers and the plan (e.g. a multi-storey home implies internal stairs). It's an assumption — change it if it's not right."
+          >
             Auto-derived
           </span>
         )}
