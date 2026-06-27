@@ -19,3 +19,17 @@ export const waiveFindingSchema = z.object({
 });
 
 export type WaiveFindingInput = z.infer<typeof waiveFindingSchema>;
+
+// Builder asks the external contributor for more before resolving/waiving — the
+// "keep the conversation going" path. Re-opens the share for another round and
+// emails the contributor the follow-up message.
+export const requestMoreInfoSchema = z.object({
+  findingId: z.string().trim().uuid("Invalid finding id"),
+  message: z
+    .string()
+    .trim()
+    .min(1, "Enter a message for the contributor")
+    .max(2000),
+});
+
+export type RequestMoreInfoInput = z.infer<typeof requestMoreInfoSchema>;

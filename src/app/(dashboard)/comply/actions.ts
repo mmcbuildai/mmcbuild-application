@@ -13,7 +13,9 @@ import {
 import {
   resolveFindingSchema,
   waiveFindingSchema,
+  requestMoreInfoSchema,
 } from "@/lib/validators/finding-resolution";
+import { sendEmail } from "@/lib/email/resend";
 
 export async function requestComplianceCheck(
   projectId: string,
@@ -726,6 +728,106 @@ export async function waiveFinding(findingId: string, reason: string) {
     action: "finding_waived",
     actor_id: profile.id,
     details: { reason: parsed.data.reason },
+  } as never);
+
+  return { success: true };
+}
+
+/**
+ * "Request more info" — the third option Karen needed beyond Resolve/Waive
+ * (2026-06-27): keep the conversation going with the external contributor
+ * instead of being forced to a terminal verdict. Re-opens the most recent share
+ * for another round (back to `awaiting`, clears the prior response, extends the
+ * link) and emails the contributor the builder's follow-up message. No schema
+ * change — reuses the existing finding_share_tokens round.
+ */
+export async function requestMoreInfo(findingId: string, message: string) {
+  const parsed = requestMoreInfoSchema.safeParse({ findingId, message });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const auth = await authorizeFindingResolution(parsed.data.findingId);
+  if ("error" in auth) return { error: auth.error };
+  const { profile, admin } = auth;
+
+  // The most recent contributor we shared this finding with — the one to re-engage.
+  const { data: tokenRow } = await admin
+    .from("finding_share_tokens" as never)
+    .select("id, token, email_to")
+    .eq("finding_id", parsed.data.findingId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const share =
+    (tokenRow as unknown as {
+      id: string;
+      token: string;
+      email_to: string;
+    } | null) ?? null;
+  if (!share) {
+    return {
+      error:
+        "No one has been sent this finding yet — share it for remediation first, then you can request more info.",
+    };
+  }
+
+  // Re-open the same share for another round.
+  const nowIso = new Date().toISOString();
+  const expiresIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { error: tokErr } = await admin
+    .from("finding_share_tokens" as never)
+    .update({
+      remediation_status: "awaiting",
+      responded_at: null,
+      expires_at: expiresIso,
+      updated_at: nowIso,
+    } as never)
+    .eq("id", share.id);
+  if (tokErr) {
+    return { error: `Couldn't re-open the request: ${tokErr.message}` };
+  }
+
+  // Finding back to awaiting (not "responded"/resolved) so the board shows the
+  // open conversation again rather than a terminal state.
+  await admin
+    .from("compliance_findings")
+    .update({
+      remediation_status: "awaiting",
+      remediation_responded_at: null,
+    } as never)
+    .eq("id", parsed.data.findingId);
+
+  // Email the contributor the builder's follow-up + the same respond link.
+  try {
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL || "https://app.mmcbuild.com.au";
+    const respondUrl = `${appUrl}/respond/${share.token}`;
+    const safeMessage = parsed.data.message
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    await sendEmail({
+      to: share.email_to,
+      subject: "A follow-up on the compliance finding you responded to",
+      html: `<p>Hi,</p>
+<p>Thanks for your response. The reviewer has a follow-up before this finding can be closed:</p>
+<blockquote style="border-left:3px solid #cbd5e1;margin:0;padding:8px 12px;color:#374151;">${safeMessage}</blockquote>
+<p><a href="${respondUrl}">Reply to this finding</a> — no login required.</p>
+<p>— MMC Build</p>`,
+    });
+  } catch (e) {
+    console.error(
+      "[requestMoreInfo] follow-up email failed (non-fatal):",
+      (e as Error).message,
+    );
+  }
+
+  await admin.from("finding_activity_log").insert({
+    finding_id: parsed.data.findingId,
+    action: "more_info_requested",
+    actor_id: profile.id,
+    details: { message: parsed.data.message, email_to: share.email_to },
   } as never);
 
   return { success: true };
