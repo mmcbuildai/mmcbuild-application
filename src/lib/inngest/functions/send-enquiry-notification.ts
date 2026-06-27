@@ -1,6 +1,6 @@
 import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/resend";
 import { buildEnquiryNotificationEmail } from "@/lib/email/templates/enquiry-notification";
 
 export const sendEnquiryNotification = inngest.createFunction(
@@ -55,9 +55,7 @@ export const sendEnquiryNotification = inngest.createFunction(
         dashboardUrl,
       });
 
-      const resend = getResend();
-      await resend.emails.send({
-        from: FROM_EMAIL,
+      await sendEmail({
         to: details.recipientEmail,
         subject: `New Enquiry: ${details.subject} — MMC Direct`,
         html,

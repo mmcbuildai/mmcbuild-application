@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/supabase/db";
 import { createClient } from "@/lib/supabase/server";
-import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/resend";
 import { revalidatePath } from "next/cache";
 import type { ModuleId } from "@/lib/stripe/plans";
 import {
@@ -462,8 +462,7 @@ export async function submitPageFeedback(input: {
         process.env.KARTHIK_EMAIL || "karthik.rao@mmcbuild.com.au",
       ];
       const isCourse = message.startsWith("[Course request]");
-      await getResend().emails.send({
-        from: FROM_EMAIL,
+      await sendEmail({
         to,
         subject: isCourse
           ? "MMC Build — new course request"
