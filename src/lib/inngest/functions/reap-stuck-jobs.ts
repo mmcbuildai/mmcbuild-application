@@ -1,5 +1,6 @@
 import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { db } from "@/lib/supabase/db";
 
 /**
  * Reaper — the backstop for AI jobs that never finish.
@@ -54,6 +55,35 @@ export const reapStuckJobs = inngest.createFunction(
         return (data ?? []).length;
       });
     }
+
+    // test_3d_jobs (the Build 3D preview) uses different columns than the three
+    // RUN_TABLES — `finished_at` not `completed_at`, an `error` text column not
+    // `summary`, and status enum done/error/queued/processing — so it gets its
+    // own sweep. Build previews were leaving ghosts stuck at "processing" for
+    // weeks (4 found 2026-06-27) because the client poll only times out the UI,
+    // never the DB row.
+    reaped["test_3d_jobs"] = await step.run("reap-test_3d_jobs", async () => {
+      // test_3d_jobs isn't in the generated Supabase types — address it via the
+      // loose db() helper (cast to any), the same way build/actions.ts does.
+      const { data, error } = await db()
+        .from("test_3d_jobs")
+        .update({
+          status: "error",
+          error:
+            "Timed out — the job did not complete (no worker result). Please re-run.",
+          finished_at: new Date().toISOString(),
+        } as never)
+        .is("finished_at", null)
+        .in("status", ["queued", "processing"])
+        .lt("created_at", cutoff)
+        .select("id");
+
+      if (error) {
+        console.error(`[reapStuckJobs] test_3d_jobs sweep failed: ${error.message}`);
+        return 0;
+      }
+      return (data ?? []).length;
+    });
 
     const total = Object.values(reaped).reduce((a, b) => a + b, 0);
     if (total > 0) {
