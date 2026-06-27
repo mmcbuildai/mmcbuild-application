@@ -33,10 +33,9 @@ const META: Record<
  * it can't fail the job); call it inside a single Inngest `step.run` so it isn't
  * re-sent on a step retry. Resolves the owner from `created_by` → profiles.email.
  *
- * NOTE: currently fires for every completed run. A per-run opt-in (only email
- * when the user actually clicked "Notify me") needs a `notify_email` column —
- * deferred until a prod migration can be applied (the CLI token in use lacks the
- * privilege to push one).
+ * Opt-in: only emails when the row's `notify_email` is true — i.e. the user
+ * clicked "Notify me when it's ready" (the per-module notify button calls
+ * requestRunNotify to set the flag). Migration 00067 added the column.
  */
 export async function notifyRunComplete(
   kind: RunKind,
@@ -50,11 +49,19 @@ export async function notifyRunComplete(
 
     const { data: row } = await admin
       .from(m.table)
-      .select("project_id, created_by")
+      .select("project_id, created_by, notify_email")
       .eq("id", rowId)
       .single();
-    const r = (row as { project_id?: string; created_by?: string } | null) ?? null;
+    const r =
+      (row as {
+        project_id?: string;
+        created_by?: string;
+        notify_email?: boolean;
+      } | null) ?? null;
     if (!r?.created_by || !r.project_id) return;
+    // Opt-in only: email solely when the user clicked "Notify me when ready"
+    // (notify_email defaults false; the per-module notify button sets it).
+    if (!r.notify_email) return;
 
     const { data: prof } = await admin
       .from("profiles")

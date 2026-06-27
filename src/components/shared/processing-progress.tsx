@@ -81,6 +81,12 @@ export interface ProcessingProgressProps {
    * frozen at 95% (the Quote "stuck at the end" report, 2026-06-27).
    */
   estimatedSecs?: number;
+  /**
+   * Called when the user arms "Notify me when it's ready" — the host persists
+   * the opt-in so the server-side completion email fires (the browser
+   * notification only works while the tab is open). Best-effort.
+   */
+  onNotify?: () => void | Promise<void>;
 }
 
 const DEFAULT_TIPS = [
@@ -108,6 +114,7 @@ export function ProcessingProgress({
   leaveAfterSecs = 180,
   accentClass = "text-primary",
   estimatedSecs = 240,
+  onNotify,
 }: ProcessingProgressProps) {
   const router = useRouter();
   const [status, setStatus] = useState<ProcessingStatus>(initialStatus);
@@ -224,12 +231,14 @@ export function ProcessingProgress({
     if (Notification.permission === "granted") {
       notifyRef.current = true;
       setNotifyState("armed");
+      void onNotify?.();
       return;
     }
     const perm = await Notification.requestPermission();
     if (perm === "granted") {
       notifyRef.current = true;
       setNotifyState("armed");
+      void onNotify?.();
     }
   };
 

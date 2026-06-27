@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle, XCircle, Clock, Bell } from "lucide-react";
 import { getComplianceReport } from "@/app/(dashboard)/comply/actions";
+import { requestRunNotify } from "@/app/(dashboard)/notify-actions";
 import { getCategoryLabel } from "@/lib/ai/types";
 
 // A short, reassuring line about what each domain check is actually doing —
@@ -216,12 +217,14 @@ export function CheckProgress({
     if (Notification.permission === "granted") {
       notifyRef.current = true;
       setNotifyState("armed");
+      void requestRunNotify("comply", checkId);
       return;
     }
     const perm = await Notification.requestPermission();
     if (perm === "granted") {
       notifyRef.current = true;
       setNotifyState("armed");
+      void requestRunNotify("comply", checkId);
     }
   };
 

@@ -61,7 +61,7 @@ export async function requestCostEstimation(
 export async function getCostReport(estimateId: string) {
   const { data: estimate, error: estError } = await db()
     .from("cost_estimates")
-    .select("id, project_id, org_id, plan_id, status, summary, total_traditional, total_mmc, total_savings_pct, region, traditional_duration_weeks, mmc_duration_weeks, started_at, completed_at, created_at")
+    .select("id, project_id, org_id, plan_id, status, summary, stage, total_traditional, total_mmc, total_savings_pct, region, traditional_duration_weeks, mmc_duration_weeks, started_at, completed_at, created_at")
     .eq("id", estimateId)
     .single();
 

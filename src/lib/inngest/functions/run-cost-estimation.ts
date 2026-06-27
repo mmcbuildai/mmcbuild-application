@@ -88,6 +88,7 @@ export const runCostEstimation = inngest.createFunction(
         .update({
           status: "processing",
           started_at: new Date().toISOString(),
+          stage: "extract",
         })
         .eq("id", estimate.id);
     });
@@ -156,6 +157,14 @@ export const runCostEstimation = inngest.createFunction(
     });
 
     const fullProjectContext = projectContext + systemsContext;
+
+    // Per-stage signal for the progress UI (cost_estimates.stage).
+    await step.run("stage-pricing", async () => {
+      await db()
+        .from("cost_estimates")
+        .update({ stage: "price" })
+        .eq("id", estimate.id);
+    });
 
     // 5. Phased parallel agentic execution
     const resultMap = new Map<string, CostCategoryResult>();
@@ -311,6 +320,13 @@ export const runCostEstimation = inngest.createFunction(
     const savingsPct = finalTraditional > 0
       ? Math.round(((finalTraditional - finalMmc) / finalTraditional) * 100)
       : 0;
+
+    await step.run("stage-compile", async () => {
+      await db()
+        .from("cost_estimates")
+        .update({ stage: "compile" })
+        .eq("id", estimate.id);
+    });
 
     // 10. Generate summary
     const summary = await step.run("generate-summary", async () => {
