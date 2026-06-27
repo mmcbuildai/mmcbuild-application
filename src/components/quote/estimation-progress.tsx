@@ -6,6 +6,7 @@ import {
   type ProcessingPoll,
 } from "@/components/shared/processing-progress";
 import { getCostReport } from "@/app/(dashboard)/quote/actions";
+import { requestRunNotify } from "@/app/(dashboard)/notify-actions";
 
 interface EstimationProgressProps {
   estimateId: string;
@@ -22,6 +23,14 @@ const TIPS = [
   "Extracting quantities from your plan so the numbers reflect your design.",
 ];
 
+// Real per-stage signal written by the run-cost-estimation job to
+// cost_estimates.stage. Keys must match what the job writes.
+const STAGES = [
+  { key: "extract", label: "Extracting quantities from your plan" },
+  { key: "price", label: "Pricing every category against current rates" },
+  { key: "compile", label: "Comparing traditional vs MMC and compiling the report" },
+];
+
 export function EstimationProgress({
   estimateId,
   initialStatus,
@@ -32,8 +41,12 @@ export function EstimationProgress({
   const poll = async (): Promise<ProcessingPoll | null> => {
     const result = await getCostReport(estimateId);
     if (!result.estimate) return null;
-    const e = result.estimate as { status: string; summary: string | null };
-    return { status: e.status, errorReason: e.summary };
+    const e = result.estimate as {
+      status: string;
+      summary: string | null;
+      stage?: string | null;
+    };
+    return { status: e.status, errorReason: e.summary, currentStage: e.stage ?? null };
   };
 
   return (
@@ -50,7 +63,11 @@ export function EstimationProgress({
       // for both traditional and MMC methods, in sequential phases.
       description="The cost engine works through every building category in phases — extracting quantities from your plan, looking up current supplier rates, and comparing traditional construction against the MMC alternatives. This typically takes 5–8 minutes, and longer for large or complex plans."
       tips={TIPS}
+      stages={STAGES}
       estimatedSecs={360}
+      onNotify={() => {
+        void requestRunNotify("quote", estimateId);
+      }}
       completionTitle="Your cost estimation report is ready"
       completionBody="Your cost estimation report is ready."
       onComplete={() => router.refresh()}
