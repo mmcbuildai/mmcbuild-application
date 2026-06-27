@@ -25,6 +25,16 @@ export function RunOptimisationButton({
       const result = await requestDesignOptimisation(projectId, planId);
 
       if ("error" in result) {
+        // Already running — go to the in-progress optimisation, no duplicate.
+        if (
+          result.error === "already_running" &&
+          (result as { checkId?: string }).checkId
+        ) {
+          router.push(
+            `/build/${projectId}/report/${(result as { checkId: string }).checkId}`,
+          );
+          return;
+        }
         setError(result.error ?? "Unknown error");
         return;
       }

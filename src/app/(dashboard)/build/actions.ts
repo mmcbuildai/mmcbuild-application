@@ -60,6 +60,26 @@ export async function requestDesignOptimisation(
     return { error: "Profile not found" };
   }
 
+  // Duplicate-run guard — don't spawn a second optimisation while one is already
+  // running for this project (mirrors the Comply/Quote guard).
+  {
+    const { data: inFlight } = await db()
+      .from("design_checks")
+      .select("id")
+      .eq("project_id", projectId)
+      .in("status", ["queued", "processing"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (inFlight) {
+      return {
+        error: "already_running",
+        checkId: (inFlight as { id: string }).id,
+        message: "A design optimisation is already running for this project.",
+      };
+    }
+  }
+
   // Create design check record
   const { data: check, error } = await db()
     .from("design_checks")
