@@ -92,7 +92,7 @@ export async function requestDesignOptimisation(
 export async function getDesignReport(checkId: string) {
   const { data: check, error: checkError } = await db()
     .from("design_checks")
-    .select("id, project_id, org_id, plan_id, status, summary, spatial_layout, started_at, completed_at, created_at")
+    .select("id, project_id, org_id, plan_id, status, summary, stage, spatial_layout, started_at, completed_at, created_at")
     .eq("id", checkId)
     .single();
 

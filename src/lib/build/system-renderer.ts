@@ -586,36 +586,42 @@ export function buildFloorPlan3DForSystem(
   layout: SpatialLayout,
   system: MMCSystem,
   variant: TraditionalVariant = "brick-veneer",
+  // Per-storey filter — threaded straight into the canonical buildFloorPlan3D
+  // (NOT a separate renderer; same path the Standard Model view uses). null = all.
+  storeyFilter: number | null = null,
 ): THREE.Group {
   const wallHeight = layout.wall_height || 2.4;
   const masonry = system === "traditional" && variant === "masonry";
 
-  // Start from the base geometry pipeline (gives us walls, roof, openings,
-  // floors, ground — correctly centred)
-  const group = buildFloorPlan3D(layout);
+  // Start from the canonical base geometry pipeline (walls, roof, openings,
+  // floors, ground — correctly centred), filtered to the chosen storey.
+  const group = buildFloorPlan3D(layout, { storeyFilter });
 
   // Recolour materials per system (masonry overrides the traditional palette)
   restyleForSystem(group, system, masonry ? MASONRY_PALETTE : undefined);
 
-  // Add system-specific overlays. They need to be centred the same way the
-  // base group is — buildFloorPlan3D applies a `group.position.set(-cx, 0, -cz)`
-  // translation as its final step, so overlays added as children are
-  // automatically translated with the group.
-  if (system === "panelised") {
-    group.add(buildPanelSeams(layout, wallHeight));
-  } else if (system === "volumetric") {
-    group.add(
-      buildModuleBoxes(
-        layout,
-        wallHeight,
-        PALETTES.volumetric.externalWall,
-        PALETTES.volumetric.overlay,
-      ),
-    );
-  } else if (system === "printed") {
-    group.add(buildPrintLayers(layout, wallHeight, PALETTES.printed.externalWall));
-  } else if (masonry) {
-    group.add(buildMasonryCourses(layout, wallHeight, MASONRY_PALETTE.overlay));
+  // System-specific overlays span the WHOLE building, so only add them in the
+  // "All storeys" view — otherwise a single-storey view would show seams /
+  // module boxes / print layers floating above the filtered geometry. A
+  // per-storey view shows the restyled base geometry for that storey (matching
+  // how the Standard Model view renders a single storey).
+  if (storeyFilter === null) {
+    if (system === "panelised") {
+      group.add(buildPanelSeams(layout, wallHeight));
+    } else if (system === "volumetric") {
+      group.add(
+        buildModuleBoxes(
+          layout,
+          wallHeight,
+          PALETTES.volumetric.externalWall,
+          PALETTES.volumetric.overlay,
+        ),
+      );
+    } else if (system === "printed") {
+      group.add(buildPrintLayers(layout, wallHeight, PALETTES.printed.externalWall));
+    } else if (masonry) {
+      group.add(buildMasonryCourses(layout, wallHeight, MASONRY_PALETTE.overlay));
+    }
   }
 
   return group;

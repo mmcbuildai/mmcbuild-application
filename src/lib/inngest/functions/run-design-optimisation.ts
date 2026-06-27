@@ -103,6 +103,7 @@ export const runDesignOptimisation = inngest.createFunction(
         .update({
           status: "processing",
           started_at: new Date().toISOString(),
+          stage: "analyse",
         } as never)
         .eq("id", check.id);
     });
@@ -203,6 +204,13 @@ export const runDesignOptimisation = inngest.createFunction(
       return Array.isArray(systems) && systems.length > 0 ? systems : null;
     });
 
+    await step.run("stage-suggest", async () => {
+      await db()
+        .from("design_checks")
+        .update({ stage: "suggest" } as never)
+        .eq("id", check.id);
+    });
+
     // 4. Analyse design with AI
     const suggestions = await step.run("analyse-design", async () => {
       const systemsContext = selectedSystems
@@ -273,6 +281,13 @@ export const runDesignOptimisation = inngest.createFunction(
           affected_room_ids: roomIds.length ? roomIds : null,
         } as never);
       }
+    });
+
+    await step.run("stage-compile", async () => {
+      await db()
+        .from("design_checks")
+        .update({ stage: "compile" } as never)
+        .eq("id", check.id);
     });
 
     // 6. Generate executive summary

@@ -14,6 +14,7 @@ import {
   type MMCSystem,
   type TraditionalVariant,
 } from "@/lib/build/system-renderer";
+import { getTopStoreyIndex } from "@/lib/build/spatial";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 
 const SYSTEMS: MMCSystem[] = [
@@ -23,18 +24,26 @@ const SYSTEMS: MMCSystem[] = [
   "printed",
 ];
 
+// Storey index → human label (matches PlanViewer3D). 0 = Ground, 1 = First, etc.
+function storeyLabel(index: number): string {
+  const ordinals = ["Ground", "First", "Second", "Third", "Fourth", "Fifth"];
+  return ordinals[index] ?? `Level ${index}`;
+}
+
 function SystemCanvas({
   layout,
   system,
   variant = "brick-veneer",
+  storeyFilter = null,
 }: {
   layout: SpatialLayout;
   system: MMCSystem;
   variant?: TraditionalVariant;
+  storeyFilter?: number | null;
 }) {
   const sceneGroup = useMemo(
-    () => buildFloorPlan3DForSystem(layout, system, variant),
-    [layout, system, variant],
+    () => buildFloorPlan3DForSystem(layout, system, variant, storeyFilter),
+    [layout, system, variant, storeyFilter],
   );
   // Guard degenerate bounds so a zero-sized layout doesn't collapse the camera
   // and scene to the origin (invisible).
@@ -97,6 +106,12 @@ function SystemCanvas({
 export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
   const [traditionalVariant, setTraditionalVariant] =
     useState<TraditionalVariant>("brick-veneer");
+  // One storey selector controls all four system canvases, so you can compare
+  // the SAME floor across every system (per-floor click-through, like the
+  // Standard Model view). null = all storeys.
+  const [storeyFilter, setStoreyFilter] = useState<number | null>(null);
+  const topStorey = getTopStoreyIndex(layout);
+  const isMultiStorey = topStorey >= 1;
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
@@ -110,6 +125,33 @@ export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
           for <strong>your</strong> design before choosing one.
         </p>
       </div>
+
+      {isMultiStorey && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-zinc-600">Storey:</span>
+          <div className="inline-flex flex-wrap gap-1 rounded-md border bg-white p-0.5">
+            {[null, ...Array.from({ length: topStorey + 1 }, (_, i) => i)].map(
+              (level) => {
+                const selected = storeyFilter === level;
+                return (
+                  <button
+                    key={level === null ? "all" : level}
+                    type="button"
+                    onClick={() => setStoreyFilter(level)}
+                    className={`min-h-9 rounded px-3 py-1 text-xs font-medium transition-colors ${
+                      selected
+                        ? "bg-zinc-900 text-white"
+                        : "text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    {level === null ? "All" : storeyLabel(level)}
+                  </button>
+                );
+              },
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {SYSTEMS.map((sys) => {
@@ -170,6 +212,7 @@ export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
                   layout={layout}
                   system={sys}
                   variant={sys === "traditional" ? traditionalVariant : "brick-veneer"}
+                  storeyFilter={storeyFilter}
                 />
               </div>
 
