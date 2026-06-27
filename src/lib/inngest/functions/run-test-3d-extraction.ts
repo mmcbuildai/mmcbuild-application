@@ -85,6 +85,7 @@ export const runTest3DExtractionFn = inngest.createFunction(
         .update({
           status: "processing",
           started_at: new Date().toISOString(),
+          stage: "reading",
         })
         .eq("id", jobId);
     });
@@ -180,6 +181,13 @@ export const runTest3DExtractionFn = inngest.createFunction(
     // path on any failure.
     const optimisedPath = await step.run("optimise-large-pdf", async () => {
       return await optimiseLargePdfStep(conv.pdfPath, jobId);
+    });
+
+    await step.run("stage-extracting", async () => {
+      await db()
+        .from("test_3d_jobs")
+        .update({ stage: "extracting" })
+        .eq("id", jobId);
     });
 
     const result = await step.run("extract-full-house", async () => {
