@@ -419,3 +419,83 @@ export async function startProjectSystemPreview(
 
   return { jobId: (job as { id: string }).id };
 }
+
+export type CachedSystemPreviewResult =
+  | { state: "done"; layout: SpatialLayout }
+  | { state: "running"; jobId: string }
+  | { state: "none" };
+
+/**
+ * READ-ONLY companion to startProjectSystemPreview. Lets the preview panel, on
+ * mount, (a) restore an already-finished 3D so returning from Quote/another
+ * screen doesn't force a "Show my design" re-click, and (b) re-attach to an
+ * extraction that's still running for this plan instead of orphaning it and
+ * starting a duplicate. No inserts, no Inngest sends.
+ */
+export async function getProjectSystemPreviewCached(
+  planId: string,
+): Promise<CachedSystemPreviewResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { state: "none" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile?.org_id) return { state: "none" };
+
+  const { data: planRow } = await db()
+    .from("plans")
+    .select("org_id, file_path")
+    .eq("id", planId)
+    .single();
+  const plan =
+    (planRow as unknown as { org_id: string; file_path: string | null } | null) ??
+    null;
+  if (!plan || plan.org_id !== profile.org_id || !plan.file_path) {
+    return { state: "none" };
+  }
+
+  // Most recent finished extraction for this plan file → restore instantly.
+  const { data: doneRow } = await db()
+    .from("test_3d_jobs")
+    .select("result")
+    .eq("org_id", profile.org_id)
+    .eq("storage_path", plan.file_path)
+    .eq("status", "done")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const cached =
+    (doneRow as unknown as { result: { layout: SpatialLayout | null } | null } | null) ??
+    null;
+  if (cached?.result?.layout) {
+    return { state: "done", layout: cached.result.layout };
+  }
+
+  // Otherwise re-attach to an extraction that's still running for this plan —
+  // but only a RECENT one (last 15 min), so a stale ghost (worker killed
+  // mid-step, see the reaper task) can't pin the panel to a job that will
+  // never finish.
+  const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const { data: runningRow } = await db()
+    .from("test_3d_jobs")
+    .select("id")
+    .eq("org_id", profile.org_id)
+    .eq("storage_path", plan.file_path)
+    .in("status", ["queued", "processing"])
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const running = (runningRow as unknown as { id: string } | null) ?? null;
+  if (running?.id) {
+    return { state: "running", jobId: running.id };
+  }
+
+  return { state: "none" };
+}
