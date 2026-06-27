@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { HelpButton } from "@/components/ai-assistant/help-button";
+import { RunningJobsChip } from "./running-jobs-chip";
 
 export type DashboardHeaderProps = {
   mobileOpen: boolean;
@@ -51,6 +52,7 @@ export function DashboardHeader({
         <p className="truncate text-sm text-muted-foreground">{orgName}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <RunningJobsChip />
         <HelpButton />
         <div className="hidden text-right sm:block">
           <p className="text-sm font-medium">{fullName ?? "User"}</p>
