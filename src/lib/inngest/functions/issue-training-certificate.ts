@@ -2,7 +2,7 @@ import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { db } from "@/lib/supabase/db";
 import { generateCertificatePdf } from "@/lib/train/certificate-pdf";
-import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/resend";
 import { buildCertificateIssuedEmail } from "@/lib/email/templates/certificate-issued";
 import { COURSE_CATEGORY_LABELS, DIFFICULTY_LABELS } from "@/lib/train/constants";
 
@@ -118,9 +118,7 @@ export const issueTrainingCertificate = inngest.createFunction(
         downloadUrl: `${process.env.NEXT_PUBLIC_APP_URL}/train/dashboard`,
       });
 
-      const resend = getResend();
-      await resend.emails.send({
-        from: FROM_EMAIL,
+      await sendEmail({
         to: authData.user.email,
         subject: `Certificate Issued: ${courseDetails.title} — MMC Train`,
         html,

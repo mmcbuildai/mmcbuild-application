@@ -1,6 +1,6 @@
 import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/resend";
 import { buildRemediationRequestEmail } from "@/lib/email/templates/remediation-request";
 
 export const sendRemediationEmail = inngest.createFunction(
@@ -93,12 +93,36 @@ export const sendRemediationEmail = inngest.createFunction(
         senderCompany: details.orgName,
       });
 
-      const resend = getResend();
-      await resend.emails.send({
-        from: FROM_EMAIL,
+      // Calm, professional subject — the old "Remediation Required: <long
+      // title>" tripped spam filters (Karen's Yahoo, 2026-06-27). A plain-text
+      // alternative + Reply-To to a monitored inbox come from sendEmail().
+      const text = [
+        `Hi ${recipientName ?? "there"},`,
+        ``,
+        `${details.senderName ?? details.orgName ?? "MMC Build"} has flagged a compliance finding on "${details.projectName}" that needs your review.`,
+        ``,
+        `Finding: ${details.finding.title}`,
+        `Severity: ${details.finding.severity}`,
+        details.finding.ncc_citation ? `NCC reference: ${details.finding.ncc_citation}` : "",
+        ``,
+        `${effectiveDescription}`,
+        ``,
+        `Required action:`,
+        `${effectiveAction}`,
+        ``,
+        `Respond to this finding (no login required — link expires in 30 days):`,
+        `${respondUrl}`,
+        ``,
+        `Sent via the MMC Build Compliance Platform.`,
+      ]
+        .filter((line) => line !== "")
+        .join("\n");
+
+      await sendEmail({
         to: recipientEmail,
-        subject: `Remediation Required: ${details.finding.title} — ${details.projectName}`,
+        subject: `Compliance finding for your review — ${details.projectName}`,
         html,
+        text,
       });
     });
 

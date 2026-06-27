@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { db } from "@/lib/supabase/db";
-import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/resend";
 
 const publicListingSchema = z.object({
   company_name: z.string().min(1, "Company name is required").max(200),
@@ -47,9 +47,7 @@ export async function submitPublicListing(input: PublicListingInput) {
 
   // Send confirmation email
   try {
-    const resend = getResend();
-    await resend.emails.send({
-      from: FROM_EMAIL,
+    await sendEmail({
       to: parsed.data.contact_email,
       subject: "MMC Build Directory — Submission Received",
       html: `

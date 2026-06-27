@@ -1,6 +1,6 @@
 import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/resend";
 import { buildRemediationResponseEmail } from "@/lib/email/templates/remediation-response";
 
 // Notifies the builder (the team member who shared the finding) when an external
@@ -111,9 +111,7 @@ export const notifyRemediationResponse = inngest.createFunction(
         findingUrl,
       });
 
-      const resend = getResend();
-      await resend.emails.send({
-        from: FROM_EMAIL,
+      await sendEmail({
         to: details.recipientEmail as string,
         subject: `Response received: ${details.findingTitle} — ${details.projectName}`,
         html,

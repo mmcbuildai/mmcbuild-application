@@ -1,6 +1,6 @@
 import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getResend, FROM_EMAIL } from "@/lib/email/resend";
+import { sendEmail } from "@/lib/email/resend";
 import { buildReviewNotificationEmail } from "@/lib/email/templates/review-notification";
 
 export const sendReviewNotification = inngest.createFunction(
@@ -44,9 +44,7 @@ export const sendReviewNotification = inngest.createFunction(
         dashboardUrl,
       });
 
-      const resend = getResend();
-      await resend.emails.send({
-        from: FROM_EMAIL,
+      await sendEmail({
         to: details.email,
         subject: `New ${rating}-Star Review — MMC Direct`,
         html,
