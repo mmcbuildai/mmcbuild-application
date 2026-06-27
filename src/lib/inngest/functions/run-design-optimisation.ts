@@ -1,5 +1,6 @@
 import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyRunComplete } from "@/lib/email/notify-run-complete";
 import { db } from "@/lib/supabase/db";
 import { retrievePlanChunks } from "@/lib/comply/retriever";
 import { callModel } from "@/lib/ai/models/router";
@@ -306,6 +307,11 @@ export const runDesignOptimisation = inngest.createFunction(
           completed_at: new Date().toISOString(),
         } as never)
         .eq("id", check.id);
+    });
+
+    // Email the owner it's ready (so they can have left the page). Best-effort.
+    await step.run("notify-owner", async () => {
+      await notifyRunComplete("optimisation", check.id, true);
     });
 
     // 8. Save report version

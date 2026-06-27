@@ -1,5 +1,6 @@
 import { inngest } from "../client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyRunComplete } from "@/lib/email/notify-run-complete";
 import {
   analyseCompliance,
   generateSummary,
@@ -534,6 +535,11 @@ export const runComplianceCheck = inngest.createFunction(
           progress_current: null,
         } as never)
         .eq("id", check.id);
+    });
+
+    // Email the owner it's ready (so they can have left the page). Best-effort.
+    await step.run("notify-owner", async () => {
+      await notifyRunComplete("comply", check.id, true);
     });
 
     // 11. Save report version
