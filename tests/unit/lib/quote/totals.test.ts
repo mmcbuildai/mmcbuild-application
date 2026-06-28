@@ -48,4 +48,39 @@ describe("computeCostTotals", () => {
     expect(t.savingsPct).toBe(0);
     expect(t.tbcCount).toBe(0);
   });
+
+  describe("whole-module model (disjoint traditional vs MMC build-up)", () => {
+    const lineItems = [
+      // traditional trades — no mmc figure
+      { cost_category: "frame", traditional_total: 120_000, mmc_total: null },
+      { cost_category: "roof", traditional_total: 80_000, mmc_total: null },
+      // MMC build-up — no traditional figure
+      { cost_category: "mmc_module", traditional_total: null, mmc_total: 150_000 },
+      { cost_category: "mmc_site_works", traditional_total: null, mmc_total: 20_000 },
+      { cost_category: "mmc_margin", traditional_total: null, mmc_total: 34_000 },
+    ];
+
+    it("sums each side independently — never falls mmc→traditional", () => {
+      const t = computeCostTotals(lineItems, null);
+      expect(t.traditional).toBe(200_000); // frame + roof only
+      expect(t.mmc).toBe(204_000); // module + site works + margin only
+    });
+
+    it("does not count MMC build-up lines as TBC", () => {
+      const t = computeCostTotals(lineItems, null);
+      expect(t.tbcCount).toBe(0); // the null traditional_total on mmc lines is not a gap
+    });
+
+    it("a genuine unpriced traditional trade is still a TBC", () => {
+      const t = computeCostTotals(
+        [
+          { cost_category: "frame", traditional_total: null, mmc_total: null },
+          { cost_category: "mmc_module", traditional_total: null, mmc_total: 150_000 },
+        ],
+        null,
+      );
+      expect(t.tbcCount).toBe(1);
+      expect(t.mmc).toBe(150_000);
+    });
+  });
 });

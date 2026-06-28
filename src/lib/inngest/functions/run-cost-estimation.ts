@@ -158,6 +158,45 @@ export const runCostEstimation = inngest.createFunction(
 
     const fullProjectContext = projectContext + systemsContext;
 
+    // 4c. Gross floor area + flags — the cost driver for the MMC whole-module
+    // build-up (computeMmcBuildup). MMC is priced as one module-supply rate per
+    // m² + site works, NOT per traditional trade.
+    const buildupInputs = await step.run("load-gfa", async () => {
+      const admin = createAdminClient();
+      const { data: qr } = await admin
+        .from("questionnaire_responses")
+        .select("responses")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      const r =
+        (qr as { responses: Record<string, unknown> } | null)?.responses ?? {};
+      const num = (v: unknown) => {
+        const n =
+          typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN;
+        return Number.isFinite(n) ? n : 0;
+      };
+      const gfa = num(r.floor_area) + num(r.upper_floor_area);
+      const landscaping =
+        r.has_landscaping === "true" || r.has_landscaping === true;
+      return { gfa, landscaping };
+    });
+
+    // 4d. Live MMC market rates (the "Market Rate (sourced 2026, ±15%)" rows),
+    // keyed by element so admin edits flow through to the build-up.
+    const mmcRateMap = await step.run("load-mmc-rates", async () => {
+      const { data } = await db()
+        .from("cost_reference_rates")
+        .select("element, base_rate")
+        .eq("source_id", "00000000-0000-0000-0000-000000000002");
+      const map: Record<string, number> = {};
+      for (const row of (data ?? []) as { element: string; base_rate: number }[]) {
+        map[row.element] = row.base_rate;
+      }
+      return map;
+    });
+
     // Per-stage signal for the progress UI (cost_estimates.stage).
     await step.run("stage-pricing", async () => {
       await db()
@@ -266,6 +305,18 @@ export const runCostEstimation = inngest.createFunction(
 
     resultMap.set("contingency", contingencyResult);
 
+    // Whole-module MMC build-up. Replaces the per-trade mmc_rate guesses (which
+    // produced nonsense — SIP -194%, pods -177%) with a deterministic module-
+    // supply + site-works model anchored on gross floor area. When GFA is
+    // unknown we can't build it up, so we fall back to the legacy per-trade sum.
+    const { computeMmcBuildup } = await import("@/lib/quote/mmc-buildup");
+    const mmcBuildup =
+      buildupInputs.gfa > 0
+        ? computeMmcBuildup(buildupInputs.gfa, mmcRateMap, {
+            landscaping: buildupInputs.landscaping,
+          })
+        : null;
+
     // 8. Store all line items
     await step.run("store-line-items", async () => {
       let sortOrder = 0;
@@ -282,10 +333,12 @@ export const runCostEstimation = inngest.createFunction(
             unit: li.unit,
             traditional_rate: li.traditional_rate,
             traditional_total: li.traditional_total,
-            mmc_rate: li.mmc_rate,
-            mmc_total: li.mmc_total,
-            mmc_alternative: li.mmc_alternative,
-            savings_pct: li.savings_pct,
+            // Under the whole-module model the traditional trades carry NO MMC
+            // figure — the MMC side is the separate build-up below.
+            mmc_rate: mmcBuildup ? null : li.mmc_rate,
+            mmc_total: mmcBuildup ? null : li.mmc_total,
+            mmc_alternative: mmcBuildup ? null : li.mmc_alternative,
+            savings_pct: mmcBuildup ? null : li.savings_pct,
             source: li.source,
             confidence: li.confidence,
             sort_order: sortOrder++,
@@ -309,14 +362,52 @@ export const runCostEstimation = inngest.createFunction(
       }
     });
 
+    // 8b. Store the MMC build-up as its own line items — disjoint from the
+    // traditional trades (traditional_total null, mmc_total set), so the report
+    // and totals treat them as the MMC side, not a per-trade alternative.
+    if (mmcBuildup) {
+      await step.run("store-mmc-buildup", async () => {
+        let sortOrder = 100000; // render after the traditional trades
+        for (const l of mmcBuildup.lines) {
+          await db()
+            .from("cost_line_items")
+            .insert({
+              estimate_id: estimate.id,
+              cost_category: l.cost_category,
+              element_description: l.element_description,
+              quantity: l.quantity,
+              unit: l.unit,
+              traditional_rate: null,
+              traditional_total: null,
+              mmc_rate: l.rate,
+              mmc_total: l.mmc_total,
+              mmc_alternative: null,
+              savings_pct: null,
+              source: "reference",
+              confidence: 0.85,
+              sort_order: sortOrder++,
+              rate_source_name: "Market Rate (sourced 2026, +/-15%)",
+              rate_source_detail:
+                l.cost_category === "mmc_margin"
+                  ? "Builder margin on the MMC cost base."
+                  : "Market rate (sourced 2026); +/-15% allowance for price creep.",
+            } as never);
+        }
+      });
+    }
+
     // 9. Calculate final totals
     const allFinalItems = [...resultMap.values()].flatMap((r) => r.line_items);
     const finalTraditional = allFinalItems.reduce(
       (sum, li) => sum + (li.traditional_total ?? 0), 0
     );
-    const finalMmc = allFinalItems.reduce(
-      (sum, li) => sum + (li.mmc_total ?? li.traditional_total ?? 0), 0
-    );
+    // Whole-module model: MMC total is the build-up, not a per-trade sum. Legacy
+    // fallback only when GFA was unknown (no build-up).
+    const finalMmc = mmcBuildup
+      ? mmcBuildup.total
+      : allFinalItems.reduce(
+          (sum, li) => sum + (li.mmc_total ?? li.traditional_total ?? 0), 0
+        );
     const savingsPct = finalTraditional > 0
       ? Math.round(((finalTraditional - finalMmc) / finalTraditional) * 100)
       : 0;
@@ -333,14 +424,19 @@ export const runCostEstimation = inngest.createFunction(
       const catSummaries = [...resultMap.entries()]
         .map(([cat, result]) => {
           const trad = result.line_items.reduce((s, li) => s + (li.traditional_total ?? 0), 0);
-          const mmc = result.line_items.reduce(
-            (s, li) => s + (li.mmc_total ?? li.traditional_total ?? 0), 0
-          );
-          return `${getCostCategoryLabel(cat)}: Traditional $${Math.round(trad).toLocaleString()}, MMC $${Math.round(mmc).toLocaleString()} (${result.line_items.length} items)`;
+          return `${getCostCategoryLabel(cat)}: $${Math.round(trad).toLocaleString()} (${result.line_items.length} items)`;
         })
         .join("\n");
 
-      const summaryInput = `Total Traditional: $${Math.round(finalTraditional).toLocaleString()}\nTotal MMC: $${Math.round(finalMmc).toLocaleString()}\nSavings: ${savingsPct}%\n\nBreakdown by category:\n${catSummaries}`;
+      // MMC side described as the whole-module build-up, not per-trade.
+      const mmcBreakdown = mmcBuildup
+        ? `\n\nMMC build-up (${Math.round(buildupInputs.gfa)} m² @ whole-module model):\n` +
+          mmcBuildup.lines
+            .map((l) => `- ${l.element_description}: $${Math.round(l.mmc_total).toLocaleString()}`)
+            .join("\n")
+        : "";
+
+      const summaryInput = `Total Traditional (per-trade): $${Math.round(finalTraditional).toLocaleString()}\nTotal MMC (factory module + site works): $${Math.round(finalMmc).toLocaleString()}\nSavings: ${savingsPct}%\n\nTraditional breakdown by trade:\n${catSummaries}${mmcBreakdown}`;
 
       const result = await callModel("summary", {
         system: "You are a concise technical writer for Australian construction cost reports.",
