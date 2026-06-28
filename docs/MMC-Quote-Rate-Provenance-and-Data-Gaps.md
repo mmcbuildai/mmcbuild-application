@@ -27,15 +27,17 @@ This appears on each line item, and a **"Data Sources"** summary at the foot of 
 - **Finished turnkey benchmark: ~$3,500/m²** (a sanity check; observed market range $3,180–3,944/m²).
 - **Site works** (the work that remains on site after the factory module arrives): install $50/m² volumetric (or ~$180–500/m² flat-pack), transport, crane, per-module install, builder per module.
 - **MMC footings** (eco-anchor screw piles, columns, slab), **decks, fencing, landscaping**, **service connections**, and **preliminaries** (soil test, certification, council fees, levies).
+- **Finished-price evidence** behind the $3,500/m² benchmark — six real market data points across panelised (~$3,570–4,083/m²) and volumetric (~$3,305–3,944/m²) builds.
 
 ## Data gaps we need you to fill
 
-These are the areas still labelled **"Extrapolated from public information"** — please provide real figures (or confirm a supplier we can quote):
+These are the areas still labelled **"Extrapolated from public information"** — please provide real figures (or confirm a supplier we can quote). After cross-checking your Drive, this is now **three** real gaps (the panelised/flat-pack gap is closed — we already hold real panelised install + finished rates):
 
-1. **SIP (structural insulated panels)** — *highest priority.* No real data; this was the worst AI error. Need a panel supply + install rate, or a supplier to quote.
-2. **3D-printed construction** — no data.
-3. **NSW-specific rates** — our sourced MMC rates are interstate; we need either NSW figures or your sign-off on a NSW loading factor. (The traditional-build rates are also generic public figures, not sourced — your real project numbers would sharpen them.)
-4. **Panelised / flat-pack supply** — we have install rates but not a clean panel-supply rate separated from finishes.
+1. **SIP (structural insulated panels) — a clean panel $/m² supply rate.** *Highest priority* (the worst original error). We hold a *panelised proxy* (glued structural panel, flat-pack) and an unpriced SIP roof spec — but not an isolated SIP panel supply rate. Need a real SIP quote.
+2. **3D-printed construction** — no data at all.
+3. **NSW-specific rates** — our sourced MMC rates are WA/TAS/import-based. We need either NSW figures or your sign-off on a NSW loading factor. (The traditional-build rates are also generic public figures, not sourced — your real project numbers would sharpen them.)
+
+*Closed since the last version:* **panelised / flat-pack supply** — covered by the real install ($500/m²) and finished ($3,570–3,814/m²) rates already loaded.
 
 ## How the MMC cost is now calculated (shipped)
 
