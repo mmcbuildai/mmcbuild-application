@@ -12,6 +12,7 @@ import {
   ShadingType,
 } from "docx";
 import { getCostCategoryLabel } from "@/lib/ai/types";
+import { displayRateSource, isMarketSourced } from "@/lib/quote/source-label";
 
 interface LineItem {
   cost_category: string;
@@ -203,7 +204,7 @@ export async function generateCostDocx(data: CostReportData): Promise<Buffer> {
                   align: AlignmentType.RIGHT,
                   color: isPositiveSaving ? "008C00" : isNegativeSaving ? "B40000" : undefined,
                 }),
-                cell(li.rate_source_name === "AI Estimated" ? "AI" : "Ref", { align: AlignmentType.CENTER }),
+                cell(isMarketSourced(li.rate_source_name) ? "Market" : "Est.", { align: AlignmentType.CENTER }),
                 cell(`${Math.round(li.confidence * 100)}%`, { align: AlignmentType.CENTER }),
               ],
             });
@@ -217,7 +218,7 @@ export async function generateCostDocx(data: CostReportData): Promise<Buffer> {
   // Data sources
   const sourceMap = new Map<string, number>();
   for (const li of data.lineItems) {
-    const src = li.rate_source_name ?? "Unknown";
+    const src = displayRateSource(li.rate_source_name);
     sourceMap.set(src, (sourceMap.get(src) ?? 0) + 1);
   }
 
@@ -234,6 +235,21 @@ export async function generateCostDocx(data: CostReportData): Promise<Buffer> {
       })
     );
   }
+  children.push(
+    new Paragraph({
+      alignment: AlignmentType.JUSTIFIED,
+      children: [
+        new TextRun({
+          text:
+            'Market rates are sourced from comparable industry quotes (2026) and carry a ±15% margin to allow for ' +
+            'price creep over time. Items marked "Extrapolated from public information (data gap)" are public-information ' +
+            "estimates, not sourced rates, and should be confirmed with actual figures.",
+          size: 16,
+          color: "787878",
+        }),
+      ],
+    })
+  );
   children.push(new Paragraph({ text: "" }));
 
   // Disclaimer

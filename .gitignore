@@ -90,3 +90,9 @@ supabase/dump-*.sql
 
 # Claude Code local worktrees / session data
 .claude/
+
+# Supplier commercial pricing + data exports (sensitive — never commit; see CLAUDE.md)
+docs/MMC-Reference-Rates-From-Supplier-Quotes-*.xlsx
+docs/MMC-Build-Current-Rates-*.xlsx
+docs/~$*.xlsx
+scripts/_storecheck_out.txt
