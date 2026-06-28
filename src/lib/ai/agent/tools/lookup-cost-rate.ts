@@ -163,8 +163,8 @@ async function queryGlobalRates(
     seen.add(r.element);
 
     const sourceName = hasProvenance(r)
-      ? r.cost_rate_sources?.name ?? "MMC Build Seed Data (NSW 2025)"
-      : "MMC Build Seed Data (NSW 2025)";
+      ? r.cost_rate_sources?.name ?? "Extrapolated from public information (data gap)"
+      : "Extrapolated from public information (data gap)";
     const sourceDetail = hasProvenance(r) ? r.source_detail : null;
 
     results.push({
@@ -226,7 +226,7 @@ export async function executeLookupCostRate(
       ];
       if (catMerged.length > 0) {
         const lines = catMerged.map((r) => formatRateLine(r));
-        return `No exact rate for element "${input.element}" in "${input.category}". Here are ALL available "${input.category}" rates — pick the closest match, or estimate the rate yourself (rate_source_name "AI Estimated"). Do NOT call lookup_cost_rate for this category again:\n${lines.join("\n")}`;
+        return `No exact rate for element "${input.element}" in "${input.category}". Here are ALL available "${input.category}" rates — pick the closest match, or estimate the rate yourself (rate_source_name "Extrapolated from public information (data gap)"). Do NOT call lookup_cost_rate for this category again:\n${lines.join("\n")}`;
       }
     }
 
@@ -251,9 +251,9 @@ export async function executeLookupCostRate(
     // confirmed" placeholder, and do NOT keep searching for what isn't there.
     return JSON.stringify({
       rates: [],
-      source_name: "AI Estimated",
+      source_name: "Extrapolated from public information (data gap)",
       source_detail: null,
-      message: `No reference rates exist for category "${input.category}"${input.element ? ` (element "${input.element}")` : ""}. Estimate the rate from market knowledge and set rate_source_name to "AI Estimated" (a "to be confirmed" placeholder is fine). Do NOT call lookup_cost_rate for this category again — the data is not in the tables.`,
+      message: `No reference rates exist for category "${input.category}"${input.element ? ` (element "${input.element}")` : ""}. Estimate the rate from market knowledge and set rate_source_name to "Extrapolated from public information (data gap)" (a "to be confirmed" placeholder is fine). Do NOT call lookup_cost_rate for this category again — the data is not in the tables.`,
     });
   }
 
@@ -263,7 +263,7 @@ export async function executeLookupCostRate(
     ? `\n\nNote: ${overrideCount} rate(s) are client overrides — use these preferentially.`
     : "";
 
-  return `Reference rates for "${input.category}":\n${lines.join("\n")}\n\nIMPORTANT: For each line item that uses a reference rate, set rate_source_name to the source_name shown above. If you estimate a rate yourself, set rate_source_name to "AI Estimated".${overrideNote}`;
+  return `Reference rates for "${input.category}":\n${lines.join("\n")}\n\nIMPORTANT: For each line item that uses a reference rate, set rate_source_name to the source_name shown above. If you estimate a rate yourself, set rate_source_name to "Extrapolated from public information (data gap)".${overrideNote}`;
 }
 
 /**

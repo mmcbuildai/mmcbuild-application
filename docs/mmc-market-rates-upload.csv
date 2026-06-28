@@ -1,0 +1,29 @@
+category,element,unit,rate,state,notes
+mmc_module_supply,Volumetric module supply (ex-factory delivered),sqm,2175,NSW,Market rate (comparable industry quotes 2026); volumetric ex-factory/national; +/-15% for price creep
+mmc_finished_benchmark,Volumetric/flat-pack turnkey (incl margin + GST),sqm,3500,NSW,Market rate 2026; turnkey sanity anchor (observed $3180-3944/m2); +/-15% for price creep
+mmc_site_works,Volumetric module install (crane + complexing + hookup),sqm,50,NSW,Market rate 2026; +/-15% for price creep
+mmc_site_works,Flat-pack / panelised install crew,sqm,500,NSW,Market rate 2026; envelope basis $180-500/m2; +/-15% for price creep
+mmc_site_works,Install per module (crane complexing hookup),each,6000,NSW,Market rate 2026; +/-15% for price creep
+mmc_site_works,Builder cost per module (licence + supervision),each,5000,NSW,Market rate 2026; +/-15% for price creep
+mmc_site_works,Port/factory to site transport (per module),each,3000,NSW,Market rate 2026; +/-15% for price creep
+mmc_site_works,Factory to site transport (2 containers double-B),each,10000,NSW,Market rate 2026; +/-15% for price creep
+mmc_site_works,Site crane,day,3000,NSW,Market rate 2026; typically 2 days; +/-15% for price creep
+substructure,MMC eco-anchor screw-pile footing,each,185,NSW,Market rate 2026; +/-15% for price creep
+substructure,MMC footing/column - low (~1.2m),lm,600,NSW,Market rate 2026; +/-15% for price creep
+substructure,MMC footing/column - medium (~2.0m),lm,800,NSW,Market rate 2026; +/-15% for price creep
+substructure,MMC footing/column - high pier (~2.8m),lm,1000,NSW,Market rate 2026; +/-15% for price creep
+substructure,MMC slab on ground (concrete),cum,300,NSW,Market rate 2026; +/-15% for price creep
+external_works,MMC covered deck,sqm,750,NSW,Market rate 2026; +/-15% for price creep
+external_works,MMC uncovered deck,sqm,450,NSW,Market rate 2026; +/-15% for price creep
+external_works,MMC fencing,lm,100,NSW,Market rate 2026; +/-15% for price creep
+external_works,MMC landscaping allowance,each,20000,NSW,Market rate 2026; per unit; +/-15% for price creep
+electrical,MMC electric + NBN cable supply connection,each,2000,NSW,Market rate 2026; +/-15% for price creep
+electrical,MMC electric fitout and fix-off,each,5000,NSW,Market rate 2026; +/-15% for price creep
+plumbing,MMC incoming water supply connection,each,4000,NSW,Market rate 2026; +/-15% for price creep
+preliminaries,MMC soil test,each,1500,NSW,Market rate 2026; +/-15% for price creep
+preliminaries,MMC building certification package,each,5000,NSW,Market rate 2026; +/-15% for price creep
+preliminaries,MMC council fees,each,3000,NSW,Market rate 2026; +/-15% for price creep
+preliminaries,MMC state building warranty levy,each,2500,NSW,Market rate 2026; +/-15% for price creep
+preliminaries,MMC state workers compensation levy,each,1000,NSW,Market rate 2026; +/-15% for price creep
+preliminaries,MMC logistics coordination,each,2500,NSW,Market rate 2026; +/-15% for price creep
+preliminaries,MMC site security and preparation,each,2500,NSW,Market rate 2026; +/-15% for price creep

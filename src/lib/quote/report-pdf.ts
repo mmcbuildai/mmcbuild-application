@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { getCostCategoryLabel } from "@/lib/ai/types";
+import { displayRateSource, isMarketSourced } from "@/lib/quote/source-label";
 
 interface LineItem {
   cost_category: string;
@@ -155,7 +156,7 @@ export function generateCostPdf(data: CostReportData): Uint8Array {
       fmtCurrency(li.traditional_total),
       fmtCurrency(li.mmc_total),
       li.savings_pct != null && li.savings_pct !== 0 ? `${li.savings_pct.toFixed(0)}%` : "-",
-      li.rate_source_name === "AI Estimated" ? "AI" : "Ref",
+      isMarketSourced(li.rate_source_name) ? "Market" : "Est.",
       `${Math.round(li.confidence * 100)}%`,
     ]);
 
@@ -204,7 +205,7 @@ export function generateCostPdf(data: CostReportData): Uint8Array {
 
   const sourceMap = new Map<string, number>();
   for (const li of data.lineItems) {
-    const src = li.rate_source_name ?? "Unknown";
+    const src = displayRateSource(li.rate_source_name);
     sourceMap.set(src, (sourceMap.get(src) ?? 0) + 1);
   }
 
@@ -214,7 +215,17 @@ export function generateCostPdf(data: CostReportData): Uint8Array {
     doc.text(`• ${name} (${count} item${count !== 1 ? "s" : ""})`, margin + 2, y);
     y += 4;
   }
-  y += 4;
+  y += 2;
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  const provNote = doc.splitTextToSize(
+    'Market rates are sourced from comparable industry quotes (2026) and carry a +/-15% margin to allow for ' +
+      'price creep over time. Items marked "Extrapolated from public information (data gap)" are public-information ' +
+      "estimates, not sourced rates, and should be confirmed with actual figures.",
+    contentWidth,
+  );
+  doc.text(provNote, margin, y);
+  y += provNote.length * 3.5 + 4;
 
   // --- Disclaimer ---
   if (y > 250) {

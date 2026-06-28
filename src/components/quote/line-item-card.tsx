@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronDown, ChevronUp, Info } from "lucide-react";
 import { getCostCategoryLabel } from "@/lib/ai/types";
+import { rateSourceBadge } from "@/lib/quote/source-label";
 
 interface LineItemCardProps {
   item: {
@@ -30,8 +31,10 @@ export function LineItemCard({ item }: LineItemCardProps) {
   const hasMmc = item.mmc_total != null && item.mmc_total > 0;
   const savings = item.savings_pct ?? 0;
 
-  const isDbSourced = item.source === "reference" || (item.rate_source_name && item.rate_source_name !== "AI Estimated");
-  const sourceBadgeLabel = item.rate_source_name ?? (item.source === "reference" ? "Reference" : "AI Estimated");
+  // Green = market-sourced (+/-15%); amber = extrapolated from public info (data gap).
+  const { label: sourceBadgeLabel, market: isDbSourced } = rateSourceBadge(
+    item.rate_source_name,
+  );
 
   return (
     <Card className="border-l-4 border-l-violet-500">
@@ -122,15 +125,17 @@ export function LineItemCard({ item }: LineItemCardProps) {
             </div>
           </div>
 
-          {/* Source provenance */}
-          {item.rate_source_detail && (
-            <div className="flex items-start gap-2 rounded-md border bg-gray-50 p-2">
-              <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium">Source:</span> {item.rate_source_detail}
-              </p>
-            </div>
-          )}
+          {/* Source provenance — always shown, so data gaps are explicit */}
+          <div className="flex items-start gap-2 rounded-md border bg-gray-50 p-2">
+            <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium">Source:</span>{" "}
+              {item.rate_source_detail ??
+                (isDbSourced
+                  ? "Market rate (sourced 2026); ±15% allowance for price creep."
+                  : "Extrapolated from public information — data gap; confirm an actual rate.")}
+            </p>
+          </div>
 
           {/* MMC alternative */}
           {hasMmc && (
