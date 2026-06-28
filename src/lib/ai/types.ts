@@ -230,9 +230,31 @@ export const COST_CATEGORIES = [
 
 export type CostCategory = (typeof COST_CATEGORIES)[number]["key"];
 
+/**
+ * MMC build-up categories. Unlike the traditional trade categories above, the
+ * MMC side of a quote is NOT priced trade-by-trade — a factory module replaces
+ * most trades in one supply rate, then site works are added on top. These keys
+ * are produced deterministically by computeMmcBuildup (src/lib/quote/mmc-buildup).
+ */
+export const MMC_BUILDUP_CATEGORIES = [
+  { key: "mmc_module", label: "Factory Module Supply" },
+  { key: "mmc_site_works", label: "Site Works & Installation" },
+  { key: "mmc_substructure", label: "Footings & Substructure" },
+  { key: "mmc_services", label: "Service Connections" },
+  { key: "mmc_preliminaries", label: "Preliminaries & Fees" },
+  { key: "mmc_margin", label: "Builder Margin" },
+] as const;
+
+export function isMmcBuildupCategory(category: string): boolean {
+  return category.startsWith("mmc_");
+}
+
 export function getCostCategoryLabel(category: string): string {
   const cat = COST_CATEGORIES.find((c) => c.key === category);
-  return cat?.label ?? category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  if (cat) return cat.label;
+  const mmc = MMC_BUILDUP_CATEGORIES.find((c) => c.key === category);
+  if (mmc) return mmc.label;
+  return category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export interface CostLineItem {

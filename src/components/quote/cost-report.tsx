@@ -1,9 +1,10 @@
 import { LineItemCard } from "./line-item-card";
 import { CostComparisonChart } from "./cost-comparison-chart";
 import { HoldingCostCalculator } from "./holding-cost-calculator";
-import { getCostCategoryLabel } from "@/lib/ai/types";
+import { getCostCategoryLabel, isMmcBuildupCategory } from "@/lib/ai/types";
 import { ReportExportButton } from "@/components/shared/report-export-button";
 import { computeCostTotals } from "@/lib/quote/totals";
+import { displayRateSource, isMarketSourced } from "@/lib/quote/source-label";
 
 interface LineItem {
   id: string;
@@ -63,13 +64,51 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
     tbcCount,
   } = computeCostTotals(lineItems, estimate);
 
-  // Aggregate data sources
+  // Aggregate data sources (honest provenance labels)
   const sourceCountMap = new Map<string, number>();
   for (const li of lineItems) {
-    const name = li.rate_source_name ?? (li.source === "reference" ? "Reference" : "AI Estimated");
+    const name = displayRateSource(li.rate_source_name);
     sourceCountMap.set(name, (sourceCountMap.get(name) ?? 0) + 1);
   }
   const sourceCounts = [...sourceCountMap.entries()].sort((a, b) => b[1] - a[1]);
+
+  // Split into the two disjoint sides of the whole-module model.
+  const tradCategories = categories.filter((c) => !isMmcBuildupCategory(c));
+  const mmcCategories = categories.filter((c) => isMmcBuildupCategory(c));
+
+  const renderCategoryGroup = (category: string, isMmc: boolean) => {
+    const catItems = lineItems.filter((li) => li.cost_category === category);
+    const catTraditional = catItems.reduce(
+      (sum, li) => sum + (li.traditional_total ?? 0),
+      0,
+    );
+    const catMmc = catItems.reduce((sum, li) => sum + (li.mmc_total ?? 0), 0);
+    const label = getCostCategoryLabel(category);
+
+    return (
+      <div key={category}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {label} ({catItems.length})
+          </h3>
+          <div className="text-xs text-muted-foreground">
+            {isMmc ? (
+              <span className="font-medium text-violet-700">
+                MMC: ${Math.round(catMmc).toLocaleString()}
+              </span>
+            ) : (
+              <>Trad: ${Math.round(catTraditional).toLocaleString()}</>
+            )}
+          </div>
+        </div>
+        <div className="space-y-3">
+          {catItems.map((item) => (
+            <LineItemCard key={item.id} item={item} />
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -137,15 +176,14 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
             Data Sources
           </h3>
           <p className="mb-3 text-xs text-muted-foreground">
-            <span className="font-medium text-green-700">Green</span> = rate from
-            a named supplier / reference.{" "}
-            <span className="font-medium text-amber-700">Amber</span> = AI-generated
-            estimate with no named source — indicative only; cross-check against
-            your own supplier pricing.
+            <span className="font-medium text-green-700">Green</span> = market
+            rate sourced from comparable industry quotes (±15% for price creep).{" "}
+            <span className="font-medium text-amber-700">Amber</span> = extrapolated
+            from public information — a data gap; confirm against your own figures.
           </p>
           <div className="flex flex-wrap gap-3">
             {sourceCounts.map(([name, count]) => {
-              const isDb = name !== "AI Estimated";
+              const isDb = isMarketSourced(name);
               return (
                 <div
                   key={name}
@@ -184,50 +222,41 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
       {/* Disclaimer */}
       <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
         <p className="text-xs text-yellow-800">
-          <strong>Disclaimer:</strong> These are AI-generated advisory cost estimates
-          only. They do NOT constitute a formal quantity surveyor report or fixed-price
-          quotation. Rates marked &ldquo;AI Estimated&rdquo; have no named supplier
-          source — <strong>cross-check them against your own supplier pricing</strong>.
-          All estimates must be reviewed by a qualified quantity surveyor. Actual costs
-          will vary based on site conditions, market conditions, and detailed
-          specification. Region: {estimate.region ?? "NSW"}.
+          <strong>Disclaimer:</strong> These are advisory cost estimates only. They do
+          NOT constitute a formal quantity surveyor report or fixed-price quotation. The
+          MMC cost is a whole-module build-up (factory module supply + site works), not a
+          per-trade figure. Rates marked &ldquo;Extrapolated from public information&rdquo;
+          are data gaps — <strong>confirm them against your own supplier pricing</strong>.
+          Market rates carry a ±15% margin for price creep. All estimates must be reviewed
+          by a qualified quantity surveyor. Actual costs will vary based on site and market
+          conditions and detailed specification. Region: {estimate.region ?? "NSW"}.
         </p>
       </div>
 
-      {/* Line items grouped by category */}
-      {categories.map((category) => {
-        const catItems = lineItems.filter((li) => li.cost_category === category);
-        const catTraditional = catItems.reduce(
-          (sum, li) => sum + (li.traditional_total ?? 0), 0
-        );
-        const catMmc = catItems.reduce(
-          (sum, li) => sum + (li.mmc_total ?? li.traditional_total ?? 0), 0
-        );
-        const label = getCostCategoryLabel(category);
+      {/* Traditional build — per trade */}
+      {tradCategories.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-base font-bold text-gray-800 border-b pb-1">
+            Traditional Build — by trade
+          </h2>
+          {tradCategories.map((category) => renderCategoryGroup(category, false))}
+        </div>
+      )}
 
-        return (
-          <div key={category}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                {label} ({catItems.length})
-              </h3>
-              <div className="text-xs text-muted-foreground">
-                Trad: ${Math.round(catTraditional).toLocaleString()}
-                {catMmc < catTraditional && (
-                  <span className="text-green-600 ml-2">
-                    MMC: ${Math.round(catMmc).toLocaleString()}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="space-y-3">
-              {catItems.map((item) => (
-                <LineItemCard key={item.id} item={item} />
-              ))}
-            </div>
-          </div>
-        );
-      })}
+      {/* MMC build — whole-module: factory module supply + site works */}
+      {mmcCategories.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-base font-bold text-violet-800 border-b border-violet-200 pb-1">
+            MMC Build — factory module + site works
+          </h2>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            MMC isn&rsquo;t priced trade-by-trade: a factory module is bought as one
+            supply rate per m², replacing frame, walls, roof, insulation, internal
+            fit-out and services rough-in — then site works are added on top.
+          </p>
+          {mmcCategories.map((category) => renderCategoryGroup(category, true))}
+        </div>
+      )}
 
       {lineItems.length === 0 && (
         <div className="rounded-md border p-8 text-center">

@@ -1,6 +1,8 @@
 export interface CostTotalsLineItem {
   traditional_total: number | null;
   mmc_total: number | null;
+  /** Present on the whole-module model; "mmc_*" marks a deterministic build-up line. */
+  cost_category?: string | null;
 }
 
 export interface CostTotals {
@@ -31,6 +33,35 @@ export function computeCostTotals(
     total_mmc: number | null;
   } | null,
 ): CostTotals {
+  const isMmcBuildup = (li: CostTotalsLineItem) =>
+    (li.cost_category ?? "").startsWith("mmc_");
+
+  // Whole-module model: the traditional trades and the MMC build-up are two
+  // DISJOINT sets of line items (a traditional line has no mmc_total; an MMC
+  // build-up line has no traditional_total). Sum each side independently — never
+  // fall back mmc→traditional, which would double-count against the module rate.
+  const hasBuildup = lineItems.some(isMmcBuildup);
+
+  if (hasBuildup) {
+    const traditional = lineItems.reduce(
+      (s, li) => s + (isMmcBuildup(li) ? 0 : li.traditional_total ?? 0),
+      0,
+    );
+    const mmc = lineItems.reduce(
+      (s, li) => s + (isMmcBuildup(li) ? li.mmc_total ?? 0 : 0),
+      0,
+    );
+    const savings = traditional - mmc;
+    const savingsPct =
+      traditional > 0 ? Math.round((savings / traditional) * 100) : 0;
+    // A TBC is a TRADITIONAL trade line we couldn't price — not an MMC line.
+    const tbcCount = lineItems.filter(
+      (li) => !isMmcBuildup(li) && li.traditional_total == null,
+    ).length;
+    return { traditional, mmc, savings, savingsPct, tbcCount };
+  }
+
+  // Legacy per-trade model (estimates created before the whole-module re-model).
   const fromItemsTraditional = lineItems.reduce(
     (s, li) => s + (li.traditional_total ?? 0),
     0,

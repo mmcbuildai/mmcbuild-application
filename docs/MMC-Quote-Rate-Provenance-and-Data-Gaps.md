@@ -37,6 +37,15 @@ These are the areas still labelled **"Extrapolated from public information"** �
 3. **NSW-specific rates** — our sourced MMC rates are interstate; we need either NSW figures or your sign-off on a NSW loading factor. (The traditional-build rates are also generic public figures, not sourced — your real project numbers would sharpen them.)
 4. **Panelised / flat-pack supply** — we have install rates but not a clean panel-supply rate separated from finishes.
 
-## What's still being built (our side, not a data ask)
+## How the MMC cost is now calculated (shipped)
 
-The deeper fix: MMC is genuinely priced as **one whole-module $/m² + site works**, not trade-by-trade like a traditional build. We're re-shaping the MMC side of the engine to reflect that (anchored on the module-supply + site-works rates above, sanity-checked against the $3,500/m² benchmark) rather than guessing a rate per traditional trade. The rates loaded now are the foundation for that.
+MMC is genuinely priced as **one whole-module $/m² + site works**, not trade-by-trade like a traditional build — so the engine now computes it that way. The MMC side of every quote is a transparent build-up:
+
+1. **Factory module supply** = floor area × ~$2,175/m² (replaces frame, walls, roof, insulation, internal fit-out and services rough-in in one rate)
+2. **Site works** — install, transport, crane
+3. **Footings** — scaled to floor area
+4. **Service connections** — electric/NBN, water
+5. **Preliminaries & fees** — soil test, certification, council, levies
+6. **Builder margin** (20%, to match the margin already inside the traditional rates)
+
+For a 93m² home this lands at ~$3,300/m² — right next to the market benchmark — instead of the old per-trade guesses that produced impossible numbers (SIP −194%). The quote report now shows the **Traditional build (by trade)** and the **MMC build (module + site works)** as two clear sections, with a single Traditional-vs-MMC headline comparison.
