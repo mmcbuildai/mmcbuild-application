@@ -28,6 +28,27 @@ export async function requestCostEstimation(
     return { error: "Profile not found" };
   }
 
+  // Duplicate-run guard — don't spawn (or charge for) a second estimate while
+  // one is already running for this project (mirrors the Comply guard;
+  // re-clicking Run while the progress shows elsewhere burned a wasted run).
+  {
+    const { data: inFlight } = await db()
+      .from("cost_estimates")
+      .select("id")
+      .eq("project_id", projectId)
+      .in("status", ["queued", "processing"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (inFlight) {
+      return {
+        error: "already_running",
+        estimateId: (inFlight as { id: string }).id,
+        message: "A cost estimate is already running for this project.",
+      };
+    }
+  }
+
   // Create cost estimate record
   const { data: estimate, error } = await db()
     .from("cost_estimates")
