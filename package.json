@@ -20,6 +20,7 @@
     "@napi-rs/canvas": "^0.1.97",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "@sentry/nextjs": "^10.62.0",
     "@stripe/stripe-js": "^9.0.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",

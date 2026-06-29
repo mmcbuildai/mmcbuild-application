@@ -210,10 +210,10 @@ verification. The pattern is: read raw body → verify → parse.
 | Module | Route | Stage | Status | Key Actions File | Inngest Function |
 |--------|-------|-------|--------|-----------------|-----------------|
 | MMC Comply | `/comply` | Stage 2 | LIVE | `src/app/(dashboard)/comply/actions.ts` | `run-compliance-check` |
-| MMC Build | `/build` | Stage 3 | LIVE | `src/app/(dashboard)/build/actions.ts` | `run-build-check` |
-| MMC Quote | `/quote` | Stage 4 | LIVE | `src/app/(dashboard)/quote/actions.ts` | `run-cost-estimate` |
-| MMC Direct | `/direct` | Stage 5 | LIVE | `src/app/(dashboard)/direct/actions.ts` | — |
-| MMC Train | `/train` | Stage 6 | LIVE | `src/app/(dashboard)/train/actions.ts` | `generate-training-content` |
+| MMC Build | `/build` | Stage 3 | LIVE | `src/app/(dashboard)/build/actions.ts` | `process-plan` (+ `run-design-optimisation`, `extract-design-attributes`, `run-test-3d-extraction`) |
+| MMC Quote | `/quote` | Stage 4 | LIVE | `src/app/(dashboard)/quote/actions.ts` | `run-cost-estimation` |
+| MMC Direct | `/direct` | Stage 5 | LIVE | `src/app/(dashboard)/direct/actions.ts` | notifications only: `notify-new-professional`, `send-enquiry-notification`, `send-review-notification` |
+| MMC Train | `/train` | Stage 6 | LIVE | `src/app/(dashboard)/train/actions.ts` | `generate-training-content`, `issue-training-certificate` |
 | Billing | `/billing` | Stage 7 | LIVE | `src/app/(dashboard)/billing/actions.ts` | — |
 
 **Current sprint: v0.4.0** — client feedback and iteration phase.
