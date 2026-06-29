@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -31,6 +32,9 @@ export default function RootLayout({
       >
         {children}
         <Toaster />
+        {/* Vercel Web Analytics — privacy-friendly, cookieless page/route metrics.
+            No-op outside Vercel; collects no PII (REGULATED posture). */}
+        <Analytics />
       </body>
     </html>
   );
