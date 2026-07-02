@@ -937,6 +937,16 @@ export function getTopStoreyIndex(layout: SpatialLayout): number {
   return topStoreyIndex(layout);
 }
 
+/**
+ * Y elevation (m) where the roof sits — top of the top storey. Exposed so
+ * renderers that stack storeys themselves (the build-sequence animation) land
+ * the roof on the top storey instead of a single wall-height, matching the
+ * canonical buildFloorPlan3D roof placement. Single-storey → wall height.
+ */
+export function getRoofBaseHeight(layout: SpatialLayout): number {
+  return roofBaseHeight(layout);
+}
+
 /** Inter-floor slab/structure gap between one storey's ceiling and the next
  *  storey's floor (metres). Kept consistent with the elevation maths below. */
 const SLAB_THICKNESS = 0.2;

@@ -34,6 +34,11 @@ import {
   type TraditionalVariant,
 } from "@/lib/build/system-renderer";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
+import {
+  getStoreyBaseElevation,
+  getTopStoreyIndex,
+  getRoofBaseHeight,
+} from "@/lib/build/spatial";
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -67,44 +72,79 @@ interface WallSeg {
   angle: number;
   height: number;
   thickness: number;
+  /** Y elevation (m) of this segment's base — 0 for ground, stacked for upper storeys. */
+  baseY: number;
+  /** Storey index this segment belongs to (0 = ground). */
+  storey: number;
 }
 
-function externalWallSegs(layout: SpatialLayout, wallHeight: number): WallSeg[] {
-  const real = layout.walls
-    .filter((w) => w.type === "external")
-    .map((w, i) => {
-      const len = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y);
-      const angle = Math.atan2(w.end.y - w.start.y, w.end.x - w.start.x);
-      return {
-        id: i,
-        cx: (w.start.x + w.end.x) / 2,
-        cz: (w.start.y + w.end.y) / 2,
-        len,
-        angle,
-        height: w.height_m && w.height_m > 0 ? w.height_m : wallHeight,
-        thickness: w.thickness || 0.12,
-      };
-    })
-    .filter((s) => s.len > 0.3);
-
-  if (real.length >= 3) return real;
-
-  // Fallback: the extraction returned no/too-few external walls (the common
-  // "data but no geometry" case), so the wall-based methodologies would build
-  // nothing while the stepper says walls are going up. Synthesise the footprint
-  // perimeter from the bounds so there is always a wall outline to build up,
-  // matching the labelled sequence.
+/** Synthesise a rectangular footprint perimeter for one storey at `baseY`. */
+function perimeterSegs(
+  layout: SpatialLayout,
+  wallHeight: number,
+  storey: number,
+  baseY: number,
+  idBase: number,
+): WallSeg[] {
   const w =
     layout.bounds?.width && layout.bounds.width > 0.5 ? layout.bounds.width : 12;
   const d =
     layout.bounds?.depth && layout.bounds.depth > 0.5 ? layout.bounds.depth : 10;
   const th = 0.12;
   return [
-    { id: 0, cx: w / 2, cz: 0, len: w, angle: 0, height: wallHeight, thickness: th },
-    { id: 1, cx: w / 2, cz: d, len: w, angle: 0, height: wallHeight, thickness: th },
-    { id: 2, cx: 0, cz: d / 2, len: d, angle: Math.PI / 2, height: wallHeight, thickness: th },
-    { id: 3, cx: w, cz: d / 2, len: d, angle: Math.PI / 2, height: wallHeight, thickness: th },
+    { id: idBase + 0, cx: w / 2, cz: 0, len: w, angle: 0, height: wallHeight, thickness: th, baseY, storey },
+    { id: idBase + 1, cx: w / 2, cz: d, len: w, angle: 0, height: wallHeight, thickness: th, baseY, storey },
+    { id: idBase + 2, cx: 0, cz: d / 2, len: d, angle: Math.PI / 2, height: wallHeight, thickness: th, baseY, storey },
+    { id: idBase + 3, cx: w, cz: d / 2, len: d, angle: Math.PI / 2, height: wallHeight, thickness: th, baseY, storey },
   ];
+}
+
+/**
+ * External wall segments for EVERY storey, each tagged with its base elevation
+ * so the sequence stacks upper floors instead of collapsing everything to the
+ * ground. A storey whose extraction returned too few external walls (the common
+ * "data but no geometry" case — and why a 2nd storey used to be missing here)
+ * gets a synthesised footprint perimeter at its own elevation, so every storey
+ * up to the roof always has a wall outline to build. Uses the same storey
+ * elevation maths as the canonical 3D viewer (getStoreyBaseElevation), so the
+ * build-sequence storeys line up with Compare System / Standard Model.
+ */
+function externalWallSegs(layout: SpatialLayout, wallHeight: number): WallSeg[] {
+  const top = getTopStoreyIndex(layout);
+  const out: WallSeg[] = [];
+  let idc = 0;
+
+  for (let storey = 0; storey <= top; storey++) {
+    const baseY = getStoreyBaseElevation(layout, storey);
+    const real = layout.walls
+      .filter((w) => w.type === "external" && (w.storey ?? 0) === storey)
+      .map((w) => {
+        const len = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y);
+        const angle = Math.atan2(w.end.y - w.start.y, w.end.x - w.start.x);
+        return {
+          id: idc++,
+          cx: (w.start.x + w.end.x) / 2,
+          cz: (w.start.y + w.end.y) / 2,
+          len,
+          angle,
+          height: w.height_m && w.height_m > 0 ? w.height_m : wallHeight,
+          thickness: w.thickness || 0.12,
+          baseY,
+          storey,
+        };
+      })
+      .filter((s) => s.len > 0.3);
+
+    if (real.length >= 3) {
+      out.push(...real);
+    } else {
+      const synth = perimeterSegs(layout, wallHeight, storey, baseY, idc);
+      idc += synth.length;
+      out.push(...synth);
+    }
+  }
+
+  return out;
 }
 
 // ----------------------------------------------------------------------------
@@ -212,21 +252,17 @@ function stageReached(steps: StepWindow[], progress: number, stage: StageKind): 
 // Animated element primitives
 // ----------------------------------------------------------------------------
 
-/** Volumetric module — craned down from above, easing onto the slab. */
-function ModuleBox({ placement, t }: { placement: ModulePlacement; t: number }) {
-  const skinMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: COLORS.moduleSkin,
-        roughness: 0.6,
-        // No env map (Environment removed for offline reliability) → keep
-        // metalness 0; metallic surfaces with no environment render dark.
-        metalness: 0,
-        transparent: true,
-        opacity: 0.6,
-      }),
-    [],
-  );
+/** Volumetric module — craned down from above, easing onto the slab (or the
+ *  storey below it for upper levels, via baseY). */
+function ModuleBox({
+  placement,
+  t,
+  baseY = 0,
+}: {
+  placement: ModulePlacement;
+  t: number;
+  baseY?: number;
+}) {
   const geo = useMemo(
     () => new THREE.BoxGeometry(placement.w, placement.boxH, placement.d),
     [placement.w, placement.boxH, placement.d],
@@ -237,10 +273,21 @@ function ModuleBox({ placement, t }: { placement: ModulePlacement; t: number }) 
   const remaining = (1 - ease) * placement.boxH * 3;
   const active = t > 0 && t < 1;
   const appear = clamp01(t * 2);
-  skinMat.opacity = 0.6 * appear;
   return (
-    <group position={[placement.cx, placement.boxH / 2 + remaining, placement.cz]}>
-      <mesh geometry={geo} material={skinMat} castShadow />
+    <group position={[placement.cx, baseY + placement.boxH / 2 + remaining, placement.cz]}>
+      {/* JSX material (opacity driven by `appear`) rather than mutating a
+          memoized THREE material — keeps the r3f immutability rule happy.
+          No env map (Environment removed for offline reliability) → metalness 0;
+          metallic surfaces with no environment render dark. */}
+      <mesh geometry={geo} castShadow>
+        <meshStandardMaterial
+          color={COLORS.moduleSkin}
+          roughness={0.6}
+          metalness={0}
+          transparent
+          opacity={0.6 * appear}
+        />
+      </mesh>
       <lineSegments geometry={edges}>
         <lineBasicMaterial
           color={active ? "#ffffff" : COLORS.moduleEdge}
@@ -270,7 +317,8 @@ function RisePanel({
   const dirZ = Math.sin(seg.angle);
   const cx = seg.cx + dirX * offset;
   const cz = seg.cz + dirZ * offset;
-  const y = seg.height / 2 - (1 - ease) * seg.height * 1.1; // rises from below
+  // rises from below into place at this storey's elevation
+  const y = seg.baseY + seg.height / 2 - (1 - ease) * seg.height * 1.1;
   const active = t > 0 && t < 1;
   return (
     <group position={[cx, y, cz]} rotation={[0, -seg.angle, 0]}>
@@ -309,7 +357,7 @@ function GrowWall({
     for (let y = coursePitch; y < h; y += coursePitch) courses.push(y);
   }
   return (
-    <group position={[seg.cx, 0, seg.cz]} rotation={[0, -seg.angle, 0]}>
+    <group position={[seg.cx, seg.baseY, seg.cz]} rotation={[0, -seg.angle, 0]}>
       <mesh position={[0, h / 2, 0]} castShadow>
         <boxGeometry args={[seg.len, h, seg.thickness]} />
         <meshStandardMaterial color={color} roughness={0.9} />
@@ -331,7 +379,7 @@ function FrameWall({ seg, t }: { seg: WallSeg; t: number }) {
   const h = seg.height * easeOutCubic(t);
   const studs = Math.max(2, Math.round(seg.len / 0.6));
   return (
-    <group position={[seg.cx, 0, seg.cz]} rotation={[0, -seg.angle, 0]}>
+    <group position={[seg.cx, seg.baseY, seg.cz]} rotation={[0, -seg.angle, 0]}>
       {Array.from({ length: studs + 1 }, (_, k) => {
         const x = (k / studs) * seg.len - seg.len / 2;
         return (
@@ -376,6 +424,12 @@ function Scene({
   const width = rawWidth > 0.5 ? rawWidth : 12;
   const depth = rawDepth > 0.5 ? rawDepth : 10;
   const wallHeight = layout.wall_height || 2.4;
+  // Multi-storey: the roof lands on the TOP storey (not a single wall height),
+  // and each storey's floor plate + walls stack at their own elevation. Uses the
+  // same maths as the canonical 3D viewer so this lines up with Compare System /
+  // Standard Model. Single-storey → roofBase === wallHeight (no behaviour change).
+  const top = getTopStoreyIndex(layout);
+  const roofBase = getRoofBaseHeight(layout);
   const maxDim = Math.max(width, depth);
   const camDist = maxDim * 1.8;
 
@@ -386,6 +440,12 @@ function Scene({
   const segs = useMemo(
     () => externalWallSegs(layout, wallHeight),
     [layout, wallHeight],
+  );
+  // Base elevation of every storey (0 = ground at 0) — used to stack upper-floor
+  // plates and volumetric modules above the ground floor.
+  const storeyBaseYs = useMemo(
+    () => Array.from({ length: top + 1 }, (_, s) => getStoreyBaseElevation(layout, s)),
+    [layout, top],
   );
 
   const slabShown = stageReached(steps, progress, "slab");
@@ -436,7 +496,7 @@ function Scene({
           maxPolarAngle={Math.PI / 2.1}
           minDistance={maxDim * 0.5}
           maxDistance={camDist * 3}
-          target={[0, maxDim * 0.12, 0]}
+          target={[0, maxDim * 0.12 + roofBase * 0.25, 0]}
         />
         {/* Lights only — no <Environment> HDR (its CDN fetch is blocked on
             guest/co-working networks and blanked the whole scene). */}
@@ -509,15 +569,39 @@ function Scene({
               </mesh>
             ))}
 
+          {/* Upper-storey floor plates — appear as the structure rises so each
+              level reads as a real floor (not walls floating in a gap). Ground
+              (storey 0) already has the big slab above; this stacks the floors
+              between it and the roof for a multi-storey plan. */}
+          {wallsStarted &&
+            storeyBaseYs.slice(1).map((by, idx) => (
+              <mesh
+                key={`floor-${idx + 1}`}
+                position={[width / 2, by - 0.09, depth / 2]}
+                receiveShadow
+                castShadow
+              >
+                <boxGeometry args={[width + 0.3, 0.18, depth + 0.3]} />
+                <meshStandardMaterial color={COLORS.slab} roughness={0.95} />
+              </mesh>
+            ))}
+
           {/* ---- System assembly ---- */}
           {system === "volumetric" &&
-            placements.map((p, i) => (
-              <ModuleBox
-                key={`mod-${i}`}
-                placement={p}
-                t={elemT(i, placements.length, modulesT)}
-              />
-            ))}
+            storeyBaseYs.map((by, s) =>
+              placements.map((p, i) => (
+                <ModuleBox
+                  key={`mod-${s}-${i}`}
+                  placement={p}
+                  baseY={by}
+                  t={elemT(
+                    s * placements.length + i,
+                    placements.length * storeyBaseYs.length,
+                    modulesT,
+                  )}
+                />
+              )),
+            )}
 
           {system === "panelised" &&
             segs
@@ -582,12 +666,14 @@ function Scene({
             </>
           )}
 
-          {/* Roof (all systems) — lowers into place onto the walls. */}
+          {/* Roof (all systems) — lowers into place onto the TOP storey's walls
+              (roofBase), so it sits on the building rather than floating a single
+              storey up on a multi-storey plan. */}
           {roofShown && (
             <mesh
               position={[
                 width / 2,
-                wallHeight + 0.2 + (1 - roofT) * wallHeight * 0.9,
+                roofBase + 0.2 + (1 - roofT) * wallHeight * 0.9,
                 depth / 2,
               ]}
               castShadow
@@ -614,8 +700,8 @@ function Scene({
           {/* Crane (volumetric) — fades in while modules are being set. */}
           {showCrane && (
             <group position={[width + 1.6, 0, depth * 0.5]}>
-              <mesh position={[0, wallHeight * 1.8, 0]}>
-                <boxGeometry args={[0.22, wallHeight * 3.6, 0.22]} />
+              <mesh position={[0, roofBase * 1.8, 0]}>
+                <boxGeometry args={[0.22, roofBase * 3.6, 0.22]} />
                 <meshStandardMaterial
                   color="#555c63"
                   metalness={0}
@@ -624,7 +710,7 @@ function Scene({
                   opacity={clamp01(modulesT * 3)}
                 />
               </mesh>
-              <mesh position={[-width * 0.4, wallHeight * 3.4, 0]}>
+              <mesh position={[-width * 0.4, roofBase * 3.4, 0]}>
                 <boxGeometry args={[width * 0.9, 0.16, 0.16]} />
                 <meshStandardMaterial
                   color="#555c63"
@@ -642,7 +728,7 @@ function Scene({
             <group
               position={[
                 width / 2,
-                0.2 + wallHeight * easeOutCubic(printT) + 0.4,
+                0.2 + roofBase * easeOutCubic(printT) + 0.4,
                 depth / 2,
               ]}
             >

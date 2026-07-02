@@ -4,6 +4,7 @@ import {
   buildFloorPlan3D,
   getStoreyBaseElevation,
   getTopStoreyIndex,
+  getRoofBaseHeight,
 } from "@/lib/build/spatial/geometry";
 import type { SpatialLayout, Wall, Room } from "@/lib/build/spatial/types";
 
@@ -107,6 +108,34 @@ describe("storey elevation helpers", () => {
     };
     expect(getTopStoreyIndex(single)).toBe(0);
     expect(getStoreyBaseElevation(single, 0)).toBe(0);
+  });
+});
+
+/**
+ * getRoofBaseHeight — the elevation the Build Sequence storyboard now lands its
+ * roof on. Regression cover for the SCRUM-312 report (2026-07-01): the build
+ * sequence had no 2nd storey and floated the roof one wall-height up. The roof
+ * must sit on TOP of the top storey (base elevation + that storey's height), and
+ * a single-storey plan must be unchanged (roof base === wall height).
+ */
+describe("getRoofBaseHeight — roof lands on the top storey", () => {
+  it("puts the roof on top of the first floor for a 2-storey plan", () => {
+    const layout = twoStoreyLayout();
+    // top storey base (GROUND_H + SLAB) + the first floor's own height.
+    expect(getRoofBaseHeight(layout)).toBeCloseTo(GROUND_H + SLAB + FIRST_H, 6);
+    // And strictly above where a single wall-height would have floated it.
+    expect(getRoofBaseHeight(layout)).toBeGreaterThan(layout.wall_height);
+  });
+
+  it("equals the wall height for a single-storey plan (no behaviour change)", () => {
+    const single: SpatialLayout = {
+      ...twoStoreyLayout(),
+      rooms: [room("r0", 0)],
+      walls: [wall("w0a", 0), wall("w0b", 0), wall("w0c", 0)],
+      storeys: 1,
+      storey_details: undefined,
+    };
+    expect(getRoofBaseHeight(single)).toBeCloseTo(single.wall_height, 6);
   });
 });
 

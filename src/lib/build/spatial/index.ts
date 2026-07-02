@@ -15,6 +15,7 @@ export {
   buildSuggestionHighlight,
   getStoreyBaseElevation,
   getTopStoreyIndex,
+  getRoofBaseHeight,
   type BuildFloorPlanOptions,
 } from "./geometry";
 // Note: extractSpatialLayout and renderPdfPage are server-only —
