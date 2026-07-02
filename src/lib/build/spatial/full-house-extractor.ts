@@ -18,6 +18,7 @@ import {
   classifySinglePageNative,
   type PageTypeClassification,
 } from "./page-classifier";
+import { selectFloorPages, type FloorPagePlan } from "./floor-page-select";
 import {
   extractFloorPlanFromPdf,
   extractElevation,
@@ -519,21 +520,16 @@ export async function extractFullHouse(
     );
   }
 
-  // Build the ordered list of floor-plan pages to extract, each tagged with
-  // its storey index. A manual override forces a single ground-floor extraction
-  // (the test-3d page picker). Otherwise storey 0 = ground (or the best single
-  // fallback when the classifier found none) and each upper floor stacks above.
-  type FloorPage = { pageNumber: number; storey: number };
-  let floorPages: FloorPage[];
-  if (options?.floorPlanPageOverride) {
-    floorPages = [{ pageNumber: options.floorPlanPageOverride, storey: 0 }];
-  } else {
-    const ordered: number[] = [];
-    if (groundFloorPage) ordered.push(groundFloorPage);
-    for (const up of upperFloorPages) if (!ordered.includes(up)) ordered.push(up);
-    if (ordered.length === 0 && floorPlanPage) ordered.push(floorPlanPage);
-    floorPages = ordered.map((pageNumber, i) => ({ pageNumber, storey: i }));
-  }
+  // Build the ordered list of floor-plan pages to extract, each tagged with its
+  // storey index. selectFloorPages caps a multi-unit / pattern-book sheet to one
+  // representative dwelling so alternate-unit upper pages are not stacked as
+  // phantom storeys (SCRUM-312). A manual override forces a single ground-floor
+  // extraction (the test-3d page picker).
+  const floorPages: FloorPagePlan[] = selectFloorPages(
+    classifications,
+    floorPlanPage,
+    options?.floorPlanPageOverride,
+  );
   console.log(
     `[extractFullHouse] floor pages: ${floorPages
       .map((f) => `p${f.pageNumber}→storey${f.storey}`)
