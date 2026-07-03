@@ -22,6 +22,14 @@ export interface ModelCallOptions {
   messages?: ChatMessage[];
   system?: string;
   maxTokens?: number;
+  /**
+   * Sampling temperature (0 = most deterministic). Left undefined by default, so
+   * existing callers are unchanged (provider default). Structured extraction /
+   * classification passes 0 to cut run-to-run variance. NOTE: Anthropic requires
+   * temperature = 1 while extended thinking is enabled, so the Anthropic provider
+   * ignores this when `thinkingBudget` is set (setting both would 400).
+   */
+  temperature?: number;
   tools?: ToolDefinition[];
   /**
    * Anthropic prompt caching: a stable prefix to prepend to the final user

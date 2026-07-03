@@ -74,6 +74,12 @@ export async function callOpenAI(
     model: model.modelId,
     max_tokens: options.maxTokens ?? model.maxOutput,
     messages,
+    // Deterministic sampling when the caller asked for it (vision extraction /
+    // classification passes 0). Omitted when undefined so other callers keep the
+    // provider default. Unlike Anthropic, OpenAI accepts temperature always.
+    ...(options.temperature !== undefined
+      ? { temperature: options.temperature }
+      : {}),
   });
 
   const choice = response.choices[0];

@@ -96,6 +96,14 @@ export async function callAnthropic(
     if (params.max_tokens < minOutput) params.max_tokens = minOutput;
   }
 
+  // Temperature — apply only when the caller asked for one AND extended thinking
+  // is OFF. Anthropic requires temperature = 1 while thinking is enabled, so
+  // setting a low temp alongside a thinking budget 400s. A low temperature makes
+  // structured extraction / classification far more deterministic run-to-run.
+  if (options.temperature !== undefined && !params.thinking) {
+    params.temperature = options.temperature;
+  }
+
   if (systemPrompt) {
     params.system = systemPrompt;
   }

@@ -46,6 +46,12 @@ export async function callVisionModel(
 
   return callModel(fn, {
     ...rest,
+    // Deterministic by default — plan extraction / classification should give
+    // the same answer for the same drawing run-to-run (the flaky storey-count /
+    // intermittent-null behaviour was partly vision sampling variance). Callers
+    // can override. On the one call that uses extended thinking (bbox detect),
+    // the Anthropic provider ignores this (temp must be 1 with thinking).
+    temperature: rest.temperature ?? 0,
     // Only the OpenAI leg uses this; the Anthropic leg reads the PDF natively
     // and ignores it. Undefined when there's no PDF so non-PDF calls are
     // unaffected.
