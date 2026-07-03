@@ -8,6 +8,7 @@ import type { ModuleId } from "@/lib/stripe/plans";
 import {
   allTasksDone,
   taskCount,
+  TESTING_TASKS,
   TASK_AUTO_SIGNALS,
   type AutoSignal,
 } from "@/lib/beta/testing-tasks";
@@ -297,6 +298,78 @@ export async function toggleTask(
   if (error) return { error: error.message };
   revalidatePath("/beta");
   return { completed_tasks: next, status: "in_progress" };
+}
+
+/**
+ * Signal that the tester OPENED the System Explorer (Build task index 2). Unlike
+ * the "run" tasks, opening a view leaves no queryable DB trace, so it can't
+ * auto-tick from a table — the System Explorer view fires this on mount instead.
+ *
+ * Add-only + idempotent (never un-ticks), so it's safe to fire on every mount /
+ * React strict-mode double-invoke. Beta-role ONLY — a no-op for anyone else, so
+ * it never creates stray beta_feedback rows for paying users. Fixes the beta
+ * task that could never tick, which blocked "Complete module" (Karen, 2026-07-03:
+ * "It's missing the same signal … the System Explorer … should be the signal
+ * that says pick that off, it's been done").
+ */
+export async function markSystemExplorerOpened(): Promise<{ ok: boolean }> {
+  let ctx: Awaited<ReturnType<typeof requireUser>>;
+  try {
+    ctx = await requireUser();
+  } catch {
+    return { ok: false };
+  }
+  const { userId, orgId, role } = ctx;
+  if (role !== "beta") return { ok: true }; // no-op for non-beta users
+
+  const moduleId: ModuleId = "build";
+  // Resolve by content so a reorder of TESTING_TASKS can't silently tick the
+  // wrong task; the System Explorer task text carries the feature name.
+  const index = TESTING_TASKS[moduleId].findIndex((t) =>
+    /system explorer/i.test(t),
+  );
+  if (index < 0) return { ok: false };
+
+  const { data: existing } = await db()
+    .from("beta_feedback")
+    .select("id, status, completed_tasks")
+    .eq("user_id", userId)
+    .eq("module_id", moduleId)
+    .maybeSingle();
+
+  if (existing) {
+    const current: number[] = Array.isArray(existing.completed_tasks)
+      ? (existing.completed_tasks as number[])
+      : [];
+    if (current.includes(index)) return { ok: true }; // already ticked
+    const next = [...current, index].sort((a, b) => a - b);
+    const { error } = await db()
+      .from("beta_feedback")
+      .update({
+        completed_tasks: next,
+        status: existing.status === "not_started" ? "in_progress" : existing.status,
+        started_at:
+          existing.status === "not_started"
+            ? new Date().toISOString()
+            : undefined,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id);
+    if (error) return { ok: false };
+  } else {
+    const { error } = await db().from("beta_feedback").insert({
+      user_id: userId,
+      module_id: moduleId,
+      org_id: orgId,
+      status: "in_progress",
+      completed_tasks: [index],
+      started_at: new Date().toISOString(),
+    });
+    if (error) return { ok: false };
+  }
+
+  revalidatePath("/beta");
+  return { ok: true };
 }
 
 export async function startTesting(moduleId: string) {

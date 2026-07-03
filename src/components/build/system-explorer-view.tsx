@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
+import { markSystemExplorerOpened } from "@/app/(dashboard)/beta/actions";
 import {
   OrbitControls,
   PerspectiveCamera,
@@ -112,6 +113,16 @@ export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
   const [storeyFilter, setStoreyFilter] = useState<number | null>(null);
   const topStorey = getTopStoreyIndex(layout);
   const isMultiStorey = topStorey >= 1;
+
+  // Opening the System Explorer is the completion signal for the Build beta task
+  // "Open the System Explorer …" — it leaves no queryable DB trace, so we tick it
+  // on mount here (the single chokepoint every host of this view renders). The
+  // action is add-only, idempotent, and a no-op for non-beta users, so a repeat
+  // mount / strict-mode double-invoke is harmless.
+  useEffect(() => {
+    void markSystemExplorerOpened();
+  }, []);
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
