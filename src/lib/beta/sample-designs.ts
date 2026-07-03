@@ -39,18 +39,17 @@ export interface SampleDesign {
 // plan-uploads) on 2026-06-27, sizes matching below. TH01 is 33.4MB — over
 // Anthropic's 32MB document ceiling — but pdf-vision-prep shrinks it under the
 // limit (the exact TH01 case it was built for), so the Build 3D step succeeds.
+// REMOVED 2026-07-03: the "2-storey terrace house" sample was the Carter
+// Williamson NSW Pattern Book — a 33.4MB / 70-page CATALOGUE of several different
+// terrace designs (LMR / Non-LMR / Rear-Lane / Tunnel-Back adaptations), not a
+// single dwelling. That made it an extraction outlier with a high failure rate:
+// the 3D extraction returned a valid layout only intermittently (storeys=2 or 3
+// on some runs, layout-null on others), which left Design Optimisation gated off
+// unpredictably for testers. Pulled from the picker so testers only ever see
+// plans that extract cleanly (the curation rule above). A pattern book is the
+// wrong shape for a per-building tool; if we want a terrace sample back, use a
+// SINGLE-dwelling terrace DA set, not a multi-design catalogue.
 export const SAMPLE_DESIGNS: SampleDesign[] = [
-  {
-    id: "terrace",
-    name: "2-storey terrace house (Class 1)",
-    description:
-      "A two-storey attached terrace (Carter Williamson, NSW Pattern Book) — a Class 1 residential form. Renders as a multi-storey 3D model with a per-floor selector.",
-    samplePath:
-      "71d9fefc-97ec-442c-b22c-eb01be1c5583/929b572f-0bfd-469e-8068-683c1a7cbe7e/1781405698797_TH01_Terraces_01_by_Carter_Williamson-01.pdf",
-    fileName: "Sample — 2-storey terrace house.pdf",
-    fileKind: "pdf",
-    sizeBytes: 33_430_484,
-  },
   {
     id: "townhouses",
     name: "Multi-dwelling townhouses (DA set)",
