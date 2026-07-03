@@ -4,7 +4,6 @@ import { db } from "@/lib/supabase/db";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { TermsGate } from "@/components/legal/terms-gate";
-import { BetaPageFeedbackButton } from "@/components/beta/beta-page-feedback-button";
 import { isOperatorEmail } from "@/lib/auth/operator";
 import { provisionUser } from "@/lib/auth/provision";
 
@@ -112,9 +111,9 @@ export default async function DashboardLayout({
     >
       {children}
       <TermsGate needsTerms={needsTerms} />
-      {/* Beta-only per-page feedback (issue #4) — logs the page URL against the
-          tester for follow-up. Live users get a separate path later. */}
-      {profile?.role === "beta" && <BetaPageFeedbackButton />}
+      {/* Beta-only per-page feedback (issue #4) now lives in the top header
+          (DashboardHeader), gated to the beta role — moved out of a fixed
+          bottom-left float that overlapped the sidebar Sign Out button. */}
     </DashboardShell>
   );
 }
