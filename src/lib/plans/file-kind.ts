@@ -44,6 +44,22 @@ export const ACCEPTED_PLAN_ACCEPT_ATTR =
  */
 export const ANTHROPIC_PDF_MAX_BYTES = 32 * 1024 * 1024;
 
+/**
+ * True when a PDF genuinely can't be processed for vision: over Anthropic's
+ * per-document ceiling AND a single page, so it can't be split into a smaller
+ * slice. A large MULTI-page set is fine — the extractor sends one single-page
+ * slice at a time, never the whole file — so total size alone must NOT reject
+ * it. (SCRUM-312 follow-up: the old whole-document guard wrongly rejected
+ * big-but-splittable sets such as the 70-page / 33MB NSW pattern book, which was
+ * the "Design Optimisation not running" root cause.)
+ */
+export function isUnsplittableOversizePdf(
+  decodedBytes: number,
+  pageCount: number,
+): boolean {
+  return decodedBytes > ANTHROPIC_PDF_MAX_BYTES && pageCount <= 1;
+}
+
 /** Friendly, actionable message for an over-limit plan file. */
 export function planTooLargeMessage(bytes: number): string {
   const mb = (bytes / 1024 / 1024).toFixed(1);

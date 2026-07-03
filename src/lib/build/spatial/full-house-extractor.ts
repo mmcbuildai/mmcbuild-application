@@ -18,6 +18,7 @@ import {
   classifySinglePageNative,
   type PageTypeClassification,
 } from "./page-classifier";
+import { selectFloorPages, type FloorPagePlan } from "./floor-page-select";
 import {
   extractFloorPlanFromPdf,
   extractElevation,
@@ -33,6 +34,7 @@ import {
   MIN_READABLE_PLAN_BYTES,
   NO_READABLE_PLAN_MESSAGE,
   planTooLargeMessage,
+  isUnsplittableOversizePdf,
 } from "@/lib/plans/file-kind";
 import { detectAiProviderUnavailable } from "@/lib/ai/provider-errors";
 import type { SpatialLayout, RoofForm, Wall, Room, Point2D } from "./types";
@@ -362,26 +364,15 @@ export async function extractFullHouse(
     };
   }
 
-  // Size guard. A file over Anthropic's 32 MB document ceiling can't be
-  // processed: it strains the worker (rasterising a render-heavy set) and the
-  // browser (the base64 round-trip), and the vision calls would be rejected.
-  // Fail fast with an actionable message instead of spinning for minutes and
-  // crashing the tab — the failure mode the Gladesville 36 MB plan hit.
-  if (decodedBytes > ANTHROPIC_PDF_MAX_BYTES) {
-    console.error(
-      `[extractFullHouse] rejected — ${Math.round(decodedBytes / 1024 / 1024)} MB exceeds ${ANTHROPIC_PDF_MAX_BYTES / 1024 / 1024} MB limit`,
-    );
-    return {
-      layout: null,
-      classifications: [],
-      floorPlanPage: null,
-      elevationsExtracted: [],
-      sectionExtracted: null,
-      scheduleExtracted: null,
-      totalPages: null,
-      error: planTooLargeMessage(decodedBytes),
-    };
-  }
+  // NOTE: the whole-document 32 MB check is deliberately DEFERRED until after we
+  // know the page count (below). Anthropic's 32 MB limit is PER DOCUMENT SENT,
+  // and this extractor never sends the whole file — classification and
+  // extraction both send one single-page slice at a time, and the decomposer
+  // rasterises page 1 via CloudConvert (server-side, not local memory). So a
+  // large MULTI-page set (e.g. the 33 MB / 70-page NSW pattern book — the
+  // "Design Optimisation not running" case) is fine; only a single oversized
+  // page is genuinely unprocessable. Guarding on total bytes up front wrongly
+  // rejected big-but-splittable sets. (SCRUM-312 follow-up.)
 
   // 1. Parse source PDF once with pdf-lib. Used to (a) cap the classifier
   // input at the first CLASSIFIER_PAGE_CAP pages and (b) split per-page
@@ -405,6 +396,33 @@ export async function extractFullHouse(
   }
   const sourcePageCount = sourceDoc.getPageCount();
   console.log(`[extractFullHouse] source has ${sourcePageCount} pages`);
+
+  // Page-aware size guard (see the deferral note above). A multi-page set is
+  // split into single-page slices before any vision call, so its TOTAL size
+  // doesn't matter — each slice is small. Only reject when the file is over the
+  // ceiling AND is a single page (unsplittable: that one slice would exceed
+  // Anthropic's per-document limit). Over-ceiling multi-page sets proceed with a
+  // warning rather than a false "too large" dead-end.
+  if (isUnsplittableOversizePdf(decodedBytes, sourcePageCount)) {
+    console.error(
+      `[extractFullHouse] rejected — ${Math.round(decodedBytes / 1024 / 1024)} MB single-page PDF exceeds the ${ANTHROPIC_PDF_MAX_BYTES / 1024 / 1024} MB per-document limit (cannot be split)`,
+    );
+    return {
+      layout: null,
+      classifications: [],
+      floorPlanPage: null,
+      elevationsExtracted: [],
+      sectionExtracted: null,
+      scheduleExtracted: null,
+      totalPages: sourcePageCount,
+      error: planTooLargeMessage(decodedBytes),
+    };
+  }
+  if (decodedBytes > ANTHROPIC_PDF_MAX_BYTES) {
+    console.warn(
+      `[extractFullHouse] ${Math.round(decodedBytes / 1024 / 1024)} MB over the ${ANTHROPIC_PDF_MAX_BYTES / 1024 / 1024} MB ceiling but ${sourcePageCount} pages — proceeding via per-page slices (each slice is well under the limit)`,
+    );
+  }
 
   // 2. Classify pages — ONE focused call per page (parallel, title-block first),
   // which reliably distinguishes ground vs upper floor plans (the whole-set call
@@ -519,21 +537,16 @@ export async function extractFullHouse(
     );
   }
 
-  // Build the ordered list of floor-plan pages to extract, each tagged with
-  // its storey index. A manual override forces a single ground-floor extraction
-  // (the test-3d page picker). Otherwise storey 0 = ground (or the best single
-  // fallback when the classifier found none) and each upper floor stacks above.
-  type FloorPage = { pageNumber: number; storey: number };
-  let floorPages: FloorPage[];
-  if (options?.floorPlanPageOverride) {
-    floorPages = [{ pageNumber: options.floorPlanPageOverride, storey: 0 }];
-  } else {
-    const ordered: number[] = [];
-    if (groundFloorPage) ordered.push(groundFloorPage);
-    for (const up of upperFloorPages) if (!ordered.includes(up)) ordered.push(up);
-    if (ordered.length === 0 && floorPlanPage) ordered.push(floorPlanPage);
-    floorPages = ordered.map((pageNumber, i) => ({ pageNumber, storey: i }));
-  }
+  // Build the ordered list of floor-plan pages to extract, each tagged with its
+  // storey index. selectFloorPages caps a multi-unit / pattern-book sheet to one
+  // representative dwelling so alternate-unit upper pages are not stacked as
+  // phantom storeys (SCRUM-312). A manual override forces a single ground-floor
+  // extraction (the test-3d page picker).
+  const floorPages: FloorPagePlan[] = selectFloorPages(
+    classifications,
+    floorPlanPage,
+    options?.floorPlanPageOverride,
+  );
   console.log(
     `[extractFullHouse] floor pages: ${floorPages
       .map((f) => `p${f.pageNumber}→storey${f.storey}`)

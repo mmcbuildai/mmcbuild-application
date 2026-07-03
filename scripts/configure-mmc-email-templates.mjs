@@ -6,31 +6,57 @@
  * email: confirm-signup, invite (this is the beta-tester invite, sent via
  * inviteUserByEmail), magic-link, password recovery, and email-change.
  *
- * Sender shows as "MMC Build"; the body is signed by Karen Van Den Engel,
- * Director — MMC Build.
+ * Sender shows as "Karen Engel" <karen.engel@app.mmcbuild.com.au> (Karen's
+ * 2026-06-30 anti-spam request — a human sender, not "noreply"); the body is
+ * signed by Karen Van Den Engel, Director — MMC Build. Invite subject is the
+ * plain "Your MMC Build beta invite".
+ *
+ * ── What this DOES and does NOT change ──────────────────────────────────────
+ * DOES:  the global auth sender name + From address, and every auth-email
+ *        subject + branded HTML body (confirm / invite / magic-link / recovery
+ *        / email-change). One CTA each, no images, no attachments, no shortened
+ *        URLs — already matches Karen's "plain and minimal" ask.
+ * CANNOT (Supabase Auth API limits — do these elsewhere):
+ *   • Reply-To — GoTrue has no separate Reply-To field, so the From address IS
+ *     the reply target. Point karen.engel@app.mmcbuild.com.au at Karen's real
+ *     inbox (mailbox or forward to karen.engel@mmcbuild.com.au) so replies land.
+ *   • Plain-text alternative — GoTrue sends custom templates as HTML only. Our
+ *     APP emails (Resend, src/lib/email/resend.ts) already carry a text part;
+ *     the auth emails can't via this API.
+ *   • SPF/DKIM/DMARC — already configured + passing at the DNS level (verified
+ *     2026-07-01); nothing to do here.
  *
  * ── Access ────────────────────────────────────────────────────────────────
  * The MMC Build Supabase project (lztzyfeivpsbqbsfzctw) lives in MMC's OWN
  * Supabase account. The CAS operator token does NOT have access (403), so this
- * must be run by someone with an MMC Supabase access token:
+ * must be run by someone with an MMC Supabase access token (Karthik, or Karen's
+ * own login → Account → Access Tokens):
  *
  *   SUPABASE_ACCESS_TOKEN=<mmc-token> node scripts/configure-mmc-email-templates.mjs
  *
- * Optionally override the project ref or sender:
- *   PROJECT_REF=lztzyfeivpsbqbsfzctw \
- *   SENDER_NAME="MMC Build" \
- *   SENDER_EMAIL="noreply@app.mmcbuild.com.au" \   # switch to @mmcbuild.com.au once SCRUM-280 verifies
+ * Optionally override the sender (defaults already match Karen's request):
+ *   SENDER_NAME="Karen Engel — MMC Build" \   # alt: keep the MMC Build context
+ *   SENDER_EMAIL="karen.engel@app.mmcbuild.com.au" \  # MUST stay on the app. subdomain
  *   node scripts/configure-mmc-email-templates.mjs
  *
- * Dry-run (print payload, don't PATCH):  DRY_RUN=1 node scripts/...
+ * Dry-run (print payload, don't PATCH):  DRY_RUN=1 node scripts/configure-mmc-email-templates.mjs
  */
 
 const PROJECT_REF = process.env.PROJECT_REF || "lztzyfeivpsbqbsfzctw";
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
-const SENDER_NAME = process.env.SENDER_NAME || "MMC Build";
-// Until SCRUM-280 verifies the apex domain on Resend, the only verified sender
-// is the app. subdomain. Switch SENDER_EMAIL to noreply@mmcbuild.com.au then.
-const SENDER_EMAIL = process.env.SENDER_EMAIL || "noreply@app.mmcbuild.com.au";
+// Karen's deliverability request (2026-06-30): send from a real HUMAN name +
+// mailbox rather than an anonymous "noreply". A personal sender is a well-known
+// inbox-placement signal (recipients recognise + trust it, and are more likely
+// to reply — which itself boosts reputation). Overridable via env.
+const SENDER_NAME = process.env.SENDER_NAME || "Karen Engel";
+// MUST stay on the Resend-VERIFIED sending domain — `app.mmcbuild.com.au`. The
+// bare apex (`mmcbuild.com.au`) is NOT verified on Resend, so a From on it is
+// silently rejected (see project_auth_email_smtp_500). Karen asked for exactly
+// karen.engel@app.mmcbuild.com.au — on the verified subdomain, so it works.
+// ⚠️ Supabase Auth has NO separate Reply-To field, so THIS address is also where
+// replies land. Make sure karen.engel@app.mmcbuild.com.au is a real mailbox OR
+// forwards to karen.engel@mmcbuild.com.au, or replies will bounce/vanish.
+const SENDER_EMAIL = process.env.SENDER_EMAIL || "karen.engel@app.mmcbuild.com.au";
 const SIGNOFF_NAME = "Karen Van Den Engel";
 const SIGNOFF_TITLE = "Director — MMC Build";
 const SUPPORT_EMAIL = "info@mmcbuild.com.au";
@@ -107,7 +133,8 @@ const templates = {
     ),
   },
   invite: {
-    subject: "You're invited to MMC Build",
+    // Karen's request (2026-06-30): a simple, plain subject line.
+    subject: "Your MMC Build beta invite",
     content: shell(
       "You've been invited to MMC Build",
       `<p style="margin:0 0 16px;">You've been invited to join MMC Build — our AI-powered platform for compliance, design optimisation and cost estimation in Australian residential construction.</p>
