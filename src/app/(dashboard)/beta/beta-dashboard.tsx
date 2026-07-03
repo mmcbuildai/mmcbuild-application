@@ -609,6 +609,41 @@ export function BetaDashboard({
         </div>
       )}
 
+      {/* Projects CTA when the org already has projects — mirrors the main
+          dashboard (dashboard-modules.tsx) so a tester who arrives on /beta via
+          an accepted invite still sees a persistent "Start Here" entry point,
+          not just in the empty state. Without this branch, an invited user
+          whose org already has projects lands on /beta with no Start Here,
+          while the same user on /dashboard sees one (Karen, 2026-07-03). */}
+      {hasProjects && (
+        <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-blue-50 p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 p-3">
+                <FolderKanban className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-zinc-900">
+                  Your Projects
+                </h2>
+                <p className="mt-0.5 text-sm text-zinc-600">
+                  Open a project to run a module, or create another. Every
+                  module — Comply, Build, Quote and the rest — runs inside a
+                  project.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/projects"
+              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
+            >
+              Start Here
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         {progress.map((p) => (
           <ModuleCard
