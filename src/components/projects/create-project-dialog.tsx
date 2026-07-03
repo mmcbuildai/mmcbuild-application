@@ -222,9 +222,20 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
             )}
 
             {property.error && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm text-destructive">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {property.error}
+              // Site intelligence is best-effort enrichment, not a gate: the
+              // project is created (and site intel back-filled) even if this
+              // derive fails. So a derive failure is a calm, non-blocking note,
+              // NOT a destructive red alert that reads as "your project failed"
+              // — and we never surface the raw upstream error string (e.g. a
+              // property-services gateway "Missing authorization header"), which
+              // is meaningless and alarming to a tester. (Karen, 2026-07-03.)
+              <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  We couldn&apos;t auto-derive site intelligence (climate zone,
+                  wind region, council) for this address right now. You can
+                  still create the project — these details can be added later.
+                </span>
               </div>
             )}
 

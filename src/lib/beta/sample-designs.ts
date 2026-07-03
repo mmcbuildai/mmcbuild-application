@@ -53,8 +53,15 @@ export const SAMPLE_DESIGNS: SampleDesign[] = [
   {
     id: "townhouses",
     name: "Multi-dwelling townhouses (DA set)",
+    // NOTE (2026-07-03, Karen feedback): this is a DENSE multi-dwelling DA set
+    // (4 attached units at 1:200). The 3D extractor reliably resolves the
+    // ground floor but NOT the upper storey on a set this dense — the Build
+    // Sequence shows a second storey with no walls. Do NOT claim "renders all
+    // storeys in 3D" here (it's not true for this plan). The real fix is to
+    // seed a SINGLE-dwelling two-storey AU DA set (none currently in storage);
+    // tracked as a follow-up. Copy below is scoped to what actually works.
     description:
-      "A two-storey multi-dwelling townhouse DA set (Mittagong) — a multi-page architectural set of attached dwellings. Renders all storeys in 3D.",
+      "A multi-dwelling townhouse DA set (Mittagong) — a multi-page architectural set of attached dwellings. Good for trying Comply and Quote; the ground-floor plan renders in 3D.",
     samplePath:
       "71d9fefc-97ec-442c-b22c-eb01be1c5583/39ec1435-5b31-411a-b658-c0c9e858bf24/1780455022360_Mittagong_Townhouses_Architectural_DA_20241018.pdf",
     fileName: "Sample — Multi-dwelling townhouses.pdf",
