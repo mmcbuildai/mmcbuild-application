@@ -13,6 +13,7 @@ import {
 import type { DesignOptimisationResult } from "@/lib/ai/types";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 import { backfillWallsFromRooms } from "@/lib/build/spatial/full-house-extractor";
+import { filterSuggestionsBySystems } from "@/lib/build/system-category-map";
 import { createReportVersion } from "@/lib/report-versions";
 
 /**
@@ -214,7 +215,7 @@ export const runDesignOptimisation = inngest.createFunction(
     // 4. Analyse design with AI
     const suggestions = await step.run("analyse-design", async () => {
       const systemsContext = selectedSystems
-        ? `\n\nSELECTED CONSTRUCTION SYSTEMS:\nThe project owner has selected the following MMC systems of interest: ${selectedSystems.join(", ")}.\nPrioritise suggestions for these systems, but still include other opportunities if relevant.`
+        ? `\n\nSELECTED CONSTRUCTION SYSTEMS:\nThe project owner has selected ONLY the following MMC systems: ${selectedSystems.join(", ")}.\nOnly produce suggestions for these selected systems. Do NOT suggest alternatives for construction systems the owner did not select — they were deliberately excluded and will not be shown.`
         : "";
 
       // Pass a compact spatial layout into the prompt so the AI can map
@@ -248,7 +249,13 @@ export const runDesignOptimisation = inngest.createFunction(
       });
 
       const parsed = extractJson<DesignOptimisationResult>(result.text);
-      return parsed.suggestions;
+      // Narrow to the owner's selected systems so the report/export/summary only
+      // show what they picked (Karen, 2026-07-03). The hard prompt above should
+      // already keep the model on-selection; this is the guarantee. Filtering
+      // here (not just at store time) keeps the executive summary and the
+      // suggestion count consistent with what gets stored. Empty-result guard
+      // inside the helper means a report is never left empty.
+      return filterSuggestionsBySystems(parsed.suggestions, selectedSystems);
     });
 
     // 5. Store suggestions (with spatial mapping when present)

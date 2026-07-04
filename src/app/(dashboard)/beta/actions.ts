@@ -301,18 +301,21 @@ export async function toggleTask(
 }
 
 /**
- * Signal that the tester OPENED the System Explorer (Build task index 2). Unlike
- * the "run" tasks, opening a view leaves no queryable DB trace, so it can't
- * auto-tick from a table — the System Explorer view fires this on mount instead.
+ * Add-only tick of a beta task that leaves NO queryable DB trace at the moment
+ * the action happens — opening a view, or firing an async re-check whose
+ * "completed" row only lands later. Such tasks can't tick from the pull-based
+ * signal at action time, so the surface fires this directly.
  *
- * Add-only + idempotent (never un-ticks), so it's safe to fire on every mount /
- * React strict-mode double-invoke. Beta-role ONLY — a no-op for anyone else, so
- * it never creates stray beta_feedback rows for paying users. Fixes the beta
- * task that could never tick, which blocked "Complete module" (Karen, 2026-07-03:
- * "It's missing the same signal … the System Explorer … should be the signal
- * that says pick that off, it's been done").
+ * The task is resolved by CONTENT (a regex on the task text), so a reorder of
+ * TESTING_TASKS can never silently tick the wrong one. Add-only + idempotent
+ * (never un-ticks) → safe on every mount / React strict-mode double-invoke.
+ * Beta-role ONLY — a no-op for anyone else, so it never creates stray
+ * beta_feedback rows for paying users.
  */
-export async function markSystemExplorerOpened(): Promise<{ ok: boolean }> {
+async function tickBetaTaskByText(
+  moduleId: ModuleId,
+  matcher: RegExp,
+): Promise<{ ok: boolean }> {
   let ctx: Awaited<ReturnType<typeof requireUser>>;
   try {
     ctx = await requireUser();
@@ -322,12 +325,7 @@ export async function markSystemExplorerOpened(): Promise<{ ok: boolean }> {
   const { userId, orgId, role } = ctx;
   if (role !== "beta") return { ok: true }; // no-op for non-beta users
 
-  const moduleId: ModuleId = "build";
-  // Resolve by content so a reorder of TESTING_TASKS can't silently tick the
-  // wrong task; the System Explorer task text carries the feature name.
-  const index = TESTING_TASKS[moduleId].findIndex((t) =>
-    /system explorer/i.test(t),
-  );
+  const index = TESTING_TASKS[moduleId].findIndex((t) => matcher.test(t));
   if (index < 0) return { ok: false };
 
   const { data: existing } = await db()
@@ -370,6 +368,28 @@ export async function markSystemExplorerOpened(): Promise<{ ok: boolean }> {
 
   revalidatePath("/beta");
   return { ok: true };
+}
+
+/**
+ * Signal that the tester OPENED the System Explorer (Build task). Fired on mount
+ * by the System Explorer view. (Karen, 2026-07-03: "the System Explorer … should
+ * be the signal that says pick that off, it's been done".)
+ */
+export async function markSystemExplorerOpened(): Promise<{ ok: boolean }> {
+  return tickBetaTaskByText("build", /system explorer/i);
+}
+
+/**
+ * Signal that the tester RE-CHECKED compliance after resolving items (Comply
+ * task "Re-check compliance after resolving items"). The pull-based `recheck`
+ * signal can't tick at action time because the re-check completes asynchronously
+ * (inngest) and the tester is redirected away from the surface that runs
+ * getBetaProgress — so the box only ticked on a later return to /comply. Fired
+ * directly from recheckCompliance instead, mirroring the System Explorer fix
+ * (Karen, 2026-07-03: same missing signal on the Comply re-check task).
+ */
+export async function markComplianceRechecked(): Promise<{ ok: boolean }> {
+  return tickBetaTaskByText("comply", /re-?check/i);
 }
 
 export async function startTesting(moduleId: string) {
