@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { inngest } from "@/lib/inngest/client";
 import { randomBytes } from "crypto";
 import { addProjectContributor } from "@/app/(dashboard)/projects/actions";
+import { markComplianceRechecked } from "@/app/(dashboard)/beta/actions";
 import { checkAndIncrementUsage } from "@/lib/stripe/subscription";
 import {
   computeFindingLifecycle,
@@ -309,6 +310,16 @@ export async function recheckCompliance(
     });
   } catch (e) {
     console.error("Failed to send Inngest event:", e);
+  }
+
+  // Auto-tick the beta "Re-check compliance after resolving items" task at the
+  // moment the re-check is fired. The pull-based signal can't tick here because
+  // the re-check finishes asynchronously and the tester is redirected away from
+  // the surface that runs getBetaProgress. Best-effort + beta-role-gated inside.
+  try {
+    await markComplianceRechecked();
+  } catch (e) {
+    console.error("Failed to auto-tick beta re-check task:", e);
   }
 
   return { success: true, checkId: (check as { id: string }).id };
