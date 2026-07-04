@@ -39,8 +39,10 @@ export const RUN_LIMITED_MODULES: ModuleId[] = ["comply", "build", "quote"];
 
 export const TRIAL_RUN_LIMIT = 10;
 
+// Every tier except Enterprise (and the always-unlimited custom case) has a
+// finite monthly run cap — trial, Essential, and Professional are all limited.
 export function isRunLimited(tier: string | null | undefined): boolean {
-  return !tier || tier === "trial";
+  return tier !== "enterprise";
 }
 
 export function isRunLimitedModule(moduleId: ModuleId): boolean {

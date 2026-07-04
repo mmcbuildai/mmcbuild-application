@@ -62,16 +62,18 @@ export const syncStripeSubscription = inngest.createFunction(
         throw new Error(`Failed to upsert subscription: ${error.message}`);
       }
 
-      // Update org subscription tier
+      // Update org subscription tier. planId arrives as a current tier id
+      // (essential/professional/enterprise); "basic" is a legacy alias.
       const tierMap: Record<string, string> = {
-        basic: "basic",
+        basic: "essential",
+        essential: "essential",
         professional: "professional",
         enterprise: "enterprise",
       };
 
       const tier = status === "canceled"
         ? "trial"
-        : tierMap[planId] || "basic";
+        : tierMap[planId] || "essential";
 
       await admin
         .from("organisations")

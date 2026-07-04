@@ -127,8 +127,8 @@ export function DashboardModules({
                   used
                 </p>
                 <p className="text-xs text-blue-600 mt-2">
-                  After your trial, subscribe to individual modules to keep
-                  access. Everyone keeps MMC Comply as the base module.
+                  After your trial, subscribe to a plan to keep access —
+                  Essential or Professional, both with every module included.
                 </p>
               </div>
             </div>
@@ -153,8 +153,8 @@ export function DashboardModules({
               <div>
                 <h3 className="font-semibold text-red-900">Trial Expired</h3>
                 <p className="text-sm text-red-700 mt-1">
-                  Subscribe to modules to continue using MMC Build. Start with
-                  Comply and add more as you need them.
+                  Subscribe to a plan to continue using MMC Build — Essential
+                  ($49/mo) or Professional ($199/mo), every module included.
                 </p>
               </div>
             </div>
@@ -276,15 +276,15 @@ export function DashboardModules({
         </div>
       </div>
 
-      {/* Bundle upsell */}
-      {!isExpired && status.activeModules.length < 5 && (
+      {/* Upgrade upsell — Essential → Professional */}
+      {!isExpired && status.tier === "essential" && (
         <div className="rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h3 className="font-semibold">Get all 5 modules for $375/mo</h3>
+              <h3 className="font-semibold">Upgrade to Professional — $199/mo</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Save vs subscribing individually. Full platform access with
-                compliance, design, costing, directory, and training.
+                30 combined runs/month (up from 10), 10 plan uploads, multi-user
+                collaboration, API access, and priority support.
               </p>
             </div>
             <Link

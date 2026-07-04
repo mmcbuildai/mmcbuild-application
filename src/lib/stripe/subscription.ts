@@ -1,8 +1,15 @@
 import { db } from "@/lib/supabase/db";
-import { PLANS, MODULES, TRIAL_RUN_LIMIT, ALL_MODULE_IDS, type ModuleId } from "./plans";
+import {
+  PLANS,
+  MODULES,
+  TRIAL_RUN_LIMIT,
+  ALL_MODULE_IDS,
+  normalizePlanId,
+  type ModuleId,
+} from "./plans";
 
 export type SubscriptionStatus = {
-  tier: "trial" | "basic" | "professional" | "enterprise" | "modules" | "expired";
+  tier: "trial" | "essential" | "professional" | "enterprise" | "modules" | "expired";
   status: "active" | "past_due" | "canceled" | "trialing" | "expired" | "incomplete";
   usageCount: number;
   usageLimit: number;
@@ -36,15 +43,16 @@ export async function getSubscriptionStatus(orgId: string): Promise<Subscription
     let tier: SubscriptionStatus["tier"] = "modules";
 
     for (const sub of subs) {
-      // Check if this is a legacy plan subscription
-      const plan = PLANS[sub.plan_id as keyof typeof PLANS];
+      // Resolve the tier, normalising any legacy plan_id (e.g. "basic" → Essential).
+      const normalisedPlanId = normalizePlanId(sub.plan_id);
+      const plan = PLANS[normalisedPlanId as keyof typeof PLANS];
       if (plan) {
-        // Legacy plan — includes specific modules
+        // Tier subscription — every tier unlocks all modules.
         for (const mod of plan.modules) {
           activeModules.add(mod);
         }
         totalUsageLimit = Math.max(totalUsageLimit, plan.runLimit === Infinity ? 999999 : plan.runLimit);
-        tier = sub.plan_id as SubscriptionStatus["tier"];
+        tier = normalisedPlanId as SubscriptionStatus["tier"];
       } else {
         // Per-module subscription — plan_id is module id
         const moduleId = sub.plan_id as ModuleId;

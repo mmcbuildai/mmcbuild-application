@@ -17,10 +17,10 @@ type Plan = {
 
 const plans: Plan[] = [
   {
-    name: "Basic",
-    monthlyPrice: 149,
+    name: "Essential",
+    monthlyPrice: 49,
     description: "Individual builders, architects, designers, early adopters",
-    freeNote: "Available free for 1 month",
+    freeNote: "Early-adopter price · free for 1 month",
     features: [
       "10 combined runs / month (MMC Build + MMC Comply)",
       "5 plan uploads per month",
@@ -36,7 +36,7 @@ const plans: Plan[] = [
   },
   {
     name: "Professional",
-    monthlyPrice: 399,
+    monthlyPrice: 199,
     description: "Active builders, architects & consultants managing multiple projects",
     features: [
       "30 combined runs / month (MMC Build + MMC Comply)",
@@ -182,7 +182,7 @@ const faqs = [
   },
   {
     q: "Is there a free trial?",
-    a: "Yes! Our Basic plan is available free for 1 month so you can explore all the essential features.",
+    a: "Yes! Our Essential plan is available free for 1 month so you can explore all the essential features.",
   },
   {
     q: "What payment methods do you accept?",
@@ -378,7 +378,7 @@ export function PricingClient() {
                     <tr>
                       <th className="w-2/5 px-4 py-4 text-left text-sm font-bold sm:px-6 sm:py-6 sm:text-lg">Feature</th>
                       <th className="w-1/5 border-l border-slate-700 px-3 py-4 text-center text-sm font-bold sm:px-6 sm:py-6 sm:text-lg">
-                        Basic
+                        Essential
                       </th>
                       <th className="w-1/5 border-l border-slate-700 px-3 py-4 text-center text-sm font-bold sm:px-6 sm:py-6 sm:text-lg">
                         Professional

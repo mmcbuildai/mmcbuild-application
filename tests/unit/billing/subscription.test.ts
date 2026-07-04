@@ -56,7 +56,7 @@ describe("getSubscriptionStatus", () => {
 
   it("returns canRunCheck=false when at usage limit", async () => {
     const sub = {
-      plan_id: "basic",
+      plan_id: "essential",
       status: "active",
       usage_count: 10,
       current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -67,9 +67,28 @@ describe("getSubscriptionStatus", () => {
 
     const status = await getSubscriptionStatus("org-1");
 
+    expect(status.tier).toBe("essential");
     expect(status.canRunCheck).toBe(false);
     expect(status.usageCount).toBe(10);
     expect(status.usageLimit).toBe(10);
+  });
+
+  it("resolves a legacy 'basic' subscription to the Essential tier", async () => {
+    const sub = {
+      plan_id: "basic",
+      status: "active",
+      usage_count: 2,
+      current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      cancel_at_period_end: false,
+    };
+
+    mockFrom.mockReturnValue(mockChain([sub]));
+
+    const status = await getSubscriptionStatus("org-1");
+
+    expect(status.tier).toBe("essential");
+    expect(status.usageLimit).toBe(10);
+    expect(status.canRunCheck).toBe(true);
   });
 
   it("returns canRunCheck=false for past_due subscription", async () => {
@@ -148,7 +167,7 @@ describe("checkAndIncrementUsage", () => {
 
   it("blocks when usage limit reached", async () => {
     const sub = {
-      plan_id: "basic",
+      plan_id: "essential",
       status: "active",
       usage_count: 10,
       current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),

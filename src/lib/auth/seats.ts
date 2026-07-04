@@ -23,7 +23,7 @@ export type SeatType = "internal" | "external" | "viewer" | "beta";
  */
 const SEAT_LIMITS: Record<SubscriptionStatus["tier"], number> = {
   trial: 5,
-  basic: 1,
+  essential: 1,
   professional: 5,
   enterprise: Infinity,
   modules: 5,
@@ -41,8 +41,8 @@ const SEAT_LIMITS: Record<SubscriptionStatus["tier"], number> = {
  */
 const TIER_PRICE_AUD: Record<SubscriptionStatus["tier"], number | null> = {
   trial: null,
-  basic: 149,
-  professional: 399,
+  essential: 99,
+  professional: 299,
   enterprise: null,
   modules: null,
   expired: null,
