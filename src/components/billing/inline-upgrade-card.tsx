@@ -38,11 +38,11 @@ export function InlineUpgradeCard({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <PlanCard
-          name={PLANS.basic.name}
-          price={PLANS.basic.price}
-          features={PLANS.basic.features}
-          runLimit={PLANS.basic.runLimit}
-          onSelect={() => onSelectPlan("basic")}
+          name={PLANS.essential.name}
+          price={PLANS.essential.price}
+          features={PLANS.essential.features}
+          runLimit={PLANS.essential.runLimit}
+          onSelect={() => onSelectPlan("essential")}
           disabled={loading}
         />
         <PlanCard

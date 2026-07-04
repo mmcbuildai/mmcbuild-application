@@ -95,69 +95,114 @@ export const MODULES = {
 
 export const ALL_MODULE_IDS: ModuleId[] = ["comply", "build", "quote", "direct", "train"];
 
-// Legacy plan support for existing subscriptions
+// Subscription TIERS — the confirmed model (mmcbuild.com.au/pricing, 2026-07-04).
+// Replaces the old per-module + basic/professional/enterprise pricing. Every
+// paid tier unlocks ALL modules; tiers differ only on runs, uploads, and seats.
+//
+// Each tier carries TWO Stripe prices: `stripePriceId` is the price actually
+// charged at checkout (the early-adopter / intro price active during launch),
+// and `standardPriceId` is the standard price for when the intro window ends.
+// `getPlanByPriceId` matches EITHER, so a subscription bought at either price
+// resolves to the same tier.
+//
+// `uploadLimit` is defined here but NOT yet enforced (no per-period upload
+// counter exists today) — enforcement is a tracked follow-up.
 export const PLANS = {
-  basic: {
-    id: "basic",
-    name: "Basic",
-    price: 149,
+  essential: {
+    id: "essential",
+    name: "Essential",
+    price: 49, // early-adopter price charged now
+    standardPrice: 99,
     currency: "aud",
     interval: "month" as const,
     runLimit: 10,
-    modules: ["comply"] as ModuleId[],
+    uploadLimit: 5,
+    seatLimit: 1,
+    modules: ALL_MODULE_IDS,
     features: [
-      "MMC Comply module",
-      "10 compliance runs per month",
-      "Standard processing",
-      "Email support",
+      "AI-powered whole-of-house NCC compliance",
+      "MMC Build & Comply reports",
+      "AI Copilot for design, cost & constructability",
+      "MMC Directory access",
+      "10 combined runs/month · 5 plan uploads/month",
+      "Single user · standard email support",
     ],
-    stripePriceId: process.env.STRIPE_BASIC_PRICE_ID || "",
+    stripePriceId: process.env.STRIPE_ESSENTIAL_EARLY_PRICE_ID || "",
+    standardPriceId: process.env.STRIPE_ESSENTIAL_STD_PRICE_ID || "",
   },
   professional: {
     id: "professional",
     name: "Professional",
-    price: 399,
+    price: 199, // intro price charged now
+    standardPrice: 299,
     currency: "aud",
     interval: "month" as const,
     runLimit: 30,
+    uploadLimit: 10,
+    seatLimit: 5,
     modules: ALL_MODULE_IDS,
     features: [
-      "All modules included",
-      "30 compliance runs per month",
-      "Priority processing",
-      "Tier 2 cross-validation",
-      "Priority support",
+      "Everything in Essential",
+      "30 combined runs/month · 10 plan uploads/month",
+      "Multi-user collaboration & role-based permissions",
+      "Advanced NCC compliance reporting",
+      "API access · integrations roadmap (BIM/SketchUp)",
+      "Priority email support",
     ],
-    stripePriceId: process.env.STRIPE_PROFESSIONAL_PRICE_ID || "",
+    stripePriceId: process.env.STRIPE_PROFESSIONAL_INTRO_PRICE_ID || "",
+    standardPriceId: process.env.STRIPE_PROFESSIONAL_STD_PRICE_ID || "",
     popular: true,
   },
   enterprise: {
     id: "enterprise",
     name: "Enterprise",
     price: null,
+    standardPrice: null,
     currency: "aud",
     interval: "month" as const,
     runLimit: Infinity,
+    uploadLimit: Infinity,
+    seatLimit: Infinity,
     modules: ALL_MODULE_IDS,
     features: [
-      "All modules included",
-      "Unlimited compliance runs",
-      "Custom knowledge bases",
-      "Dedicated support",
-      "API access",
+      "Everything in Professional",
+      "Unlimited runs & plan uploads",
+      "Multi-organisation management",
+      "Team training (MMC Train included)",
+      "Dedicated account manager · SLA-backed support",
     ],
     stripePriceId: "",
+    standardPriceId: "",
     isCustom: true,
   },
 } as const;
 
 export type PlanId = keyof typeof PLANS;
 
+/**
+ * Legacy `subscriptions.plan_id` values from before the tier migration
+ * (2026-07-04). Existing rows still carry these; normalise them so resolution
+ * keeps working. "basic" was the entry tier → Essential.
+ */
+export const LEGACY_PLAN_ALIASES: Record<string, PlanId> = {
+  basic: "essential",
+};
+
+/** Map a stored plan_id (possibly legacy) to a current tier id. */
+export function normalizePlanId(planId: string): string {
+  return LEGACY_PLAN_ALIASES[planId] ?? planId;
+}
+
 export const TRIAL_RUN_LIMIT = 3;
 export const TRIAL_DAYS = 14;
 
 export function getPlanByPriceId(priceId: string) {
-  return Object.values(PLANS).find((p) => p.stripePriceId === priceId);
+  if (!priceId) return undefined;
+  return Object.values(PLANS).find(
+    (p) =>
+      (p.stripePriceId && p.stripePriceId === priceId) ||
+      ("standardPriceId" in p && p.standardPriceId && p.standardPriceId === priceId),
+  );
 }
 
 export function getModuleByPriceId(priceId: string) {

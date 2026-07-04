@@ -98,13 +98,21 @@ async function sendSyncEvent(
 
   const now = new Date().toISOString();
 
+  // usage_limit is a numeric column — Enterprise's Infinity run limit must be
+  // written as a finite sentinel, not Infinity.
+  const usageLimit = plan
+    ? plan.runLimit === Infinity
+      ? 999999
+      : plan.runLimit
+    : 10;
+
   await inngest.send({
     name: "stripe/subscription.sync",
     data: {
       customerId: subscription.customer as string,
       subscriptionId: subscription.id,
       status: subscription.status,
-      planId: plan?.id || subscription.metadata?.plan_id || "basic",
+      planId: plan?.id || subscription.metadata?.plan_id || "essential",
       orgId: orgId || "",
       currentPeriodEnd: sub.current_period_end
         ? new Date(sub.current_period_end * 1000).toISOString()
@@ -116,7 +124,7 @@ async function sendSyncEvent(
         ? new Date(subscription.trial_end * 1000).toISOString()
         : null,
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
-      usageLimit: plan?.runLimit ?? 10,
+      usageLimit,
       resetUsage: options?.resetUsage ?? false,
     },
   });
