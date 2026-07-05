@@ -21,10 +21,18 @@ export function SystemSelectChips({
   projectId,
   initialSystems,
   hasDownstreamReports,
+  onSaved,
 }: {
   projectId: string;
   initialSystems: string[];
   hasDownstreamReports: boolean;
+  // Notified with the persisted systems after a successful save, so a parent
+  // (the preview panel) can unlock the inline Run Design Optimisation action
+  // from client state without waiting on a server refresh to re-evaluate the
+  // gate. (Multi-storey extraction runs for minutes in-place, and relying on a
+  // single router.refresh() to unlock a separate server-rendered button left
+  // the button dead — Karen, 2026-07-05.)
+  onSaved?: (systems: string[]) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(
     new Set(initialSystems),
@@ -59,6 +67,7 @@ export function SystemSelectChips({
       const result = await updateSelectedSystems(projectId, [...selected]);
       if (!("error" in result)) {
         setSaved(new Set(selected));
+        onSaved?.([...selected]);
         router.refresh();
       }
     });

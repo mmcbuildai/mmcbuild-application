@@ -17,7 +17,6 @@ import {
   getProjectSelectedSystems,
   hasValidExtraction,
 } from "../actions";
-import { RunOptimisationButton } from "@/components/build/run-optimisation-button";
 import { SystemPreviewPanel } from "@/components/build/system-preview-panel";
 import { ReportVersionList } from "@/components/shared/report-version-list";
 import { ProjectContextSummary } from "@/components/shared/project-context-summary";
@@ -97,7 +96,6 @@ export default async function ProjectBuildPage({
   // there's nothing to optimise against otherwise. Systems are now selected in
   // the preview (the standalone checkbox panel is deprecated).
   const hasSystemSelected = selectedSystems.length > 0;
-  const canRun = !!readyPlan && hasValidDesign && hasSystemSelected;
 
   return (
     <div className="space-y-6">
@@ -190,10 +188,17 @@ export default async function ProjectBuildPage({
                 you do.
               </p>
             ) : (
-              <RunOptimisationButton
-                projectId={projectId}
-                planId={readyPlan.id}
-              />
+              // The Run Design Optimisation button lives in the preview panel
+              // above, driven by client state so it unlocks the instant the
+              // design is ready and a system is saved. Rendering it here too
+              // (a) duplicated the button and (b) depended on a server refresh
+              // landing — the race that stranded the button on multi-storey
+              // plans (Karen, 2026-07-05). Point to the reliable one instead.
+              <p className="text-sm text-muted-foreground">
+                Your design is ready. Use the{" "}
+                <span className="font-medium">Run Design Optimisation</span>{" "}
+                button in the preview above to start the analysis.
+              </p>
             )}
           </CardContent>
         </Card>

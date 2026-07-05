@@ -8,6 +8,8 @@ import { BuildSequence } from "./build-sequence";
 import { SystemExplorerView } from "./system-explorer-view";
 import { PlanComparison3D } from "./plan-comparison-3d";
 import { SystemSelectChips } from "./system-select-chips";
+import { RunOptimisationButton } from "./run-optimisation-button";
+import { canRunOptimisationInline } from "@/lib/build/optimisation-gate";
 import {
   startProjectSystemPreview,
   getProjectSystemPreviewCached,
@@ -79,6 +81,12 @@ export function SystemPreviewPanel({
   const [layout, setLayout] = useState<SpatialLayout | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("build-sequence");
+  // The systems currently persisted on the project. Seeded from the server and
+  // kept in sync when the chips save, so the inline Run Design Optimisation
+  // action below can unlock from client state the instant the design is ready
+  // and a system is chosen — no dependency on a server refresh landing (the
+  // multi-storey refresh race that stranded the button, Karen 2026-07-05).
+  const [savedSystems, setSavedSystems] = useState<string[]>(initialSystems);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
@@ -411,7 +419,35 @@ export function SystemPreviewPanel({
             projectId={projectId}
             initialSystems={initialSystems}
             hasDownstreamReports={hasDownstreamReports}
+            onSaved={setSavedSystems}
           />
+
+          {/* Run Design Optimisation — anchored here in the preview, driven by
+              client state (the design is reconstructed = this panel is in
+              `ready`; a system is saved = savedSystems is non-empty). Placing it
+              here removes the reliance on a server refresh unlocking a separate
+              gated card, which stranded the button on multi-storey plans whose
+              extraction runs for minutes in-place (Karen, 2026-07-05). */}
+          <div className="mt-6 border-t pt-4">
+            <p className="text-base font-medium text-zinc-900">
+              Run Design Optimisation
+            </p>
+            <p className="mt-0.5 text-sm text-zinc-500">
+              AI-powered MMC opportunity analysis for your saved system(s).
+            </p>
+            {/* phase === "ready" is guaranteed here (this block only renders in
+                the ready phase), so designReady is true. */}
+            {canRunOptimisationInline({ designReady: true, savedSystems }) ? (
+              <div className="mt-3">
+                <RunOptimisationButton projectId={projectId} planId={planId} />
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-amber-700">
+                Choose and save at least one construction system above to run
+                Design Optimisation.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>
