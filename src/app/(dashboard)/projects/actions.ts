@@ -107,10 +107,20 @@ export async function createProject(formData: FormData) {
         council_name: intel.council_name,
         council_code: intel.council_code,
         zoning: intel.zoning,
-        overlays: {},
+        overlays: (intel.overlays ?? []) as never,
         static_map_url: staticMapUrl || null,
         derived_at: new Date().toISOString(),
       } as never);
+
+      // Persist the full PropertyProfile + denormalised constructability inputs on
+      // the project (property_profile was a dead column). Captures the entire dataset
+      // — terrain, zoning envelope, overlays, subdivision — for Build/Comply/Quote.
+      if (intel.profile) {
+        await admin
+          .from("projects")
+          .update({ property_profile: intel.profile, lot_size_sqm: intel.lot_size_sqm } as never)
+          .eq("id", project.id);
+      }
     } catch (e) {
       // Site intel derivation is best-effort — project still created
       console.error("[createProject] Site intel derivation failed:", e);
@@ -448,10 +458,17 @@ export async function updateProject(
         council_name: intel.council_name,
         council_code: intel.council_code,
         zoning: intel.zoning,
-        overlays: {},
+        overlays: (intel.overlays ?? []) as never,
         static_map_url: staticMapUrl || null,
         derived_at: new Date().toISOString(),
       } as never);
+
+      if (intel.profile) {
+        await admin
+          .from("projects")
+          .update({ property_profile: intel.profile, lot_size_sqm: intel.lot_size_sqm } as never)
+          .eq("id", projectId);
+      }
     } catch (e) {
       console.error("[updateProject] Site intel derivation failed:", e);
     }
@@ -572,11 +589,19 @@ export async function rederiveSiteIntel(projectId: string) {
       council_name: intel.council_name,
       council_code: intel.council_code,
       zoning: intel.zoning,
+      overlays: (intel.overlays ?? []) as never,
       static_map_url: staticMapUrl || null,
       derived_at: new Date().toISOString(),
     } as never)
     .eq("project_id", projectId)
     .eq("org_id", profile.org_id);
+
+  if (intel.profile) {
+    await admin
+      .from("projects")
+      .update({ property_profile: intel.profile, lot_size_sqm: intel.lot_size_sqm } as never)
+      .eq("id", projectId);
+  }
 
   if (error) throw new Error(`Re-derive failed: ${error.message}`);
 
@@ -832,7 +857,7 @@ export async function createProjectFromSample(
         council_name: intel.council_name,
         council_code: intel.council_code,
         zoning: intel.zoning,
-        overlays: {},
+        overlays: (intel.overlays ?? []) as never,
         static_map_url: staticMapUrl || null,
         derived_at: new Date().toISOString(),
       } as never);
