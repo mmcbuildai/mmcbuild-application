@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@caistech/property-services-sdk": "^0.7.0",
     "@hookform/resolvers": "^5.2.2",
     "@huggingface/inference": "^4.13.14",
     "@napi-rs/canvas": "^0.1.97",

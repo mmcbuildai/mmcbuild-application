@@ -1,9 +1,11 @@
 /**
  * Property Services SDK — re-export shim.
  *
- * Folded into the app at src/lib/services/property-services-sdk (was the
- * @caistech/property-services-sdk package before the 2026-05-24 fold-in).
- * Named exports are listed explicitly so Turbopack resolves them statically.
+ * Sources the canonical published @caistech/property-services-sdk (0.7.0+) — the
+ * single approved property feed. The 2026-05-24 local fold-in under
+ * src/lib/services/property-services-sdk was retired on 2026-07-05 (it had frozen
+ * at ~0.4-era: no comparables/dossier/suggest/contribute/terrain). Named exports
+ * are listed explicitly so Turbopack resolves them statically.
  */
 
 export {
@@ -12,7 +14,7 @@ export {
   createPropertyServices,
   usePropertyOnboarding,
   PropertyAssessment,
-} from '@/lib/services/property-services-sdk';
+} from '@caistech/property-services-sdk';
 
 export type {
   PropertyProfile,
@@ -29,4 +31,4 @@ export type {
   PropertyServicesConfig,
   UsePropertyOnboardingReturn,
   OnboardingStage,
-} from '@/lib/services/property-services-sdk';
+} from '@caistech/property-services-sdk';

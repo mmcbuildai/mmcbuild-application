@@ -12,7 +12,7 @@
  * "[climate] Failed to load GeoJSON" production error.)
  */
 
-import { createPropertyServices } from "@/lib/services/property-services-sdk/client";
+import { createPropertyServices } from "@caistech/property-services-sdk";
 
 export interface SiteIntelResult {
   climate_zone: number | null;
