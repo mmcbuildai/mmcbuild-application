@@ -13,6 +13,7 @@
  */
 
 import { createPropertyServices } from "@caistech/property-services-sdk";
+import type { PropertyProfile, PlanningOverlay } from "@caistech/property-services-sdk";
 
 export interface SiteIntelResult {
   climate_zone: number | null;
@@ -21,6 +22,14 @@ export interface SiteIntelResult {
   council_name: string | null;
   council_code: string | null;
   zoning: string | null;
+  /** Authoritative overlays (bushfire/flood/heritage/…) — previously hardcoded to {}. */
+  overlays: PlanningOverlay[];
+  /** Denormalised constructability inputs (previously dropped). */
+  lot_size_sqm: number | null;
+  slope_percent: number | null;
+  buildability: string | null;
+  /** The full PropertyProfile → persisted to projects.property_profile (was dead). */
+  profile: PropertyProfile | null;
 }
 
 export interface DeriveSiteIntelInput {
@@ -40,6 +49,11 @@ const EMPTY: SiteIntelResult = {
   council_name: null,
   council_code: null,
   zoning: null,
+  overlays: [],
+  lot_size_sqm: null,
+  slope_percent: null,
+  buildability: null,
+  profile: null,
 };
 
 export async function deriveSiteIntel(
@@ -96,6 +110,11 @@ export async function deriveSiteIntel(
       council_name: profile.metadata.lgaName,
       council_code: profile.metadata.lgaCode,
       zoning: profile.zoning?.name ?? null,
+      overlays: profile.overlays ?? [],
+      lot_size_sqm: profile.lot?.lotSize ?? null,
+      slope_percent: profile.terrain?.slopePercent ?? null,
+      buildability: profile.terrain?.buildability ?? null,
+      profile,
     };
   } catch (e) {
     console.error("[deriveSiteIntel] property-services derive failed:", e);
