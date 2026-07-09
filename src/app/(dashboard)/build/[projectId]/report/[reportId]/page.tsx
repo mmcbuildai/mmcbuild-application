@@ -5,6 +5,12 @@ import { DesignReport } from "@/components/build/design-report";
 import { OptimisationProgress } from "@/components/build/optimisation-progress";
 import { ReportNextSteps } from "@/components/shared/report-next-steps";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
+import { createClient } from "@/lib/supabase/server";
+import {
+  buildComplianceContext,
+  checkSuggestionCompliance,
+} from "@/lib/build/suggestion-compliance";
+import type { PropertyProfile } from "@caistech/property-services-sdk";
 
 export default async function ReportPage({
   params,
@@ -47,6 +53,40 @@ export default async function ReportPage({
     decision_note: string | null;
   }[];
 
+  // Inline compliance check (SCRUM-174): deterministically flag suggestions that
+  // would likely fail NCC for THIS site (bushfire/BAL, Type A/B, party wall),
+  // using the authoritative property profile + the project questionnaire, so a
+  // user is warned before pursuing a non-compliant MMC choice — not after a
+  // separate Comply run. Advisory; links to the full Comply pass.
+  const supabase = await createClient();
+  const [{ data: projectRow }, { data: questionnaireRow }] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("property_profile")
+      .eq("id", projectId)
+      .maybeSingle(),
+    supabase
+      .from("questionnaire_responses")
+      .select("responses")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const complianceContext = buildComplianceContext(
+    (questionnaireRow as { responses?: Record<string, unknown> } | null)
+      ?.responses ?? null,
+    ((projectRow as { property_profile?: PropertyProfile | null } | null)
+      ?.property_profile ?? null) as PropertyProfile | null,
+  );
+  const suggestionsWithCompliance = suggestions.map((s) => ({
+    ...s,
+    complianceFlag: checkSuggestionCompliance({
+      technologyCategory: s.technology_category,
+      context: complianceContext,
+    }),
+  }));
+
   return (
     <div className="max-w-5xl space-y-6">
       <div>
@@ -65,7 +105,11 @@ export default async function ReportPage({
               that used to sit here was removed — it duplicated the 3D the user
               already runs on the Build page ("See your design built in the 4
               MMC systems") before optimisation. */}
-          <DesignReport check={check} suggestions={suggestions} />
+          <DesignReport
+            check={check}
+            suggestions={suggestionsWithCompliance}
+            complyHref={`/comply/${projectId}`}
+          />
           <ReportNextSteps
             projectId={projectId}
             steps={[
