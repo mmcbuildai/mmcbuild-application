@@ -17,8 +17,22 @@ export function getResend(): Resend {
 // only — the bare apex (`mmcbuild.com.au`) is NOT verified, so sending from it is
 // silently rejected by Resend. Keep this default aligned with the Supabase Auth
 // SMTP sender (`noreply@app.mmcbuild.com.au`). See memory: project_auth_email_smtp_500.
-export const FROM_EMAIL =
-  process.env.RESEND_FROM_EMAIL || "MMC Build <noreply@app.mmcbuild.com.au>";
+/** The verified-subdomain fallback sender (see the note above). */
+export const DEFAULT_FROM_EMAIL = "MMC Build <noreply@app.mmcbuild.com.au>";
+
+/**
+ * Resolve the sender from RESEND_FROM_EMAIL, falling back to the verified
+ * subdomain when it is unset/empty. Pure (env passed in) so it is deterministically
+ * unit-testable — testing the module-level `FROM_EMAIL` constant through
+ * env-mutation + dynamic import was order-flaky across vitest's shared module cache.
+ */
+export function resolveFromEmail(
+  raw: string | undefined = process.env.RESEND_FROM_EMAIL,
+): string {
+  return raw || DEFAULT_FROM_EMAIL;
+}
+
+export const FROM_EMAIL = resolveFromEmail();
 
 // A real, monitored reply inbox. Routing every send through a Reply-To that a
 // human reads (a) lets recipients reply instead of hitting a dead noreply, and
