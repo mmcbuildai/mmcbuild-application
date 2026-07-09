@@ -62,6 +62,15 @@ export const reapStuckJobs = inngest.createFunction(
     // own sweep. Build previews were leaving ghosts stuck at "processing" for
     // weeks (4 found 2026-06-27) because the client poll only times out the UI,
     // never the DB row.
+    //
+    // Unlike the single-function RUN_TABLES above, test-3d extraction is a
+    // MULTI-STEP pipeline (CloudConvert DWG→PDF, then classify → extract →
+    // decompose, each its own invocation) that can legitimately run past the
+    // 15-min window in wall-clock. Reaping on `created_at` (total age) therefore
+    // FALSELY killed still-progressing heavy terrace jobs (SCRUM-309). So this
+    // sweep keys off the `updated_at` HEARTBEAT (bumped on every stage update by
+    // the 00075 trigger) — a job is only reaped when it has made NO progress for
+    // the stale window, i.e. it is genuinely dead, not merely slow.
     reaped["test_3d_jobs"] = await step.run("reap-test_3d_jobs", async () => {
       // test_3d_jobs isn't in the generated Supabase types — address it via the
       // loose db() helper (cast to any), the same way build/actions.ts does.
@@ -75,7 +84,7 @@ export const reapStuckJobs = inngest.createFunction(
         } as never)
         .is("finished_at", null)
         .in("status", ["queued", "processing"])
-        .lt("created_at", cutoff)
+        .lt("updated_at", cutoff)
         .select("id");
 
       if (error) {
