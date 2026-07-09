@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +13,7 @@ import {
   CircleHelp,
   XCircle,
   StickyNote,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getTechnologyLabel,
@@ -23,6 +25,7 @@ import {
   setSuggestionDecision,
   type SuggestionDecision,
 } from "@/app/(dashboard)/build/actions";
+import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
 
 interface SuggestionCardProps {
   suggestion: {
@@ -39,7 +42,24 @@ interface SuggestionCardProps {
     decision?: SuggestionDecision | null;
     decision_note?: string | null;
   };
+  /** Inline NCC compliance flag for this suggestion on this site (SCRUM-174). */
+  complianceFlag?: SuggestionComplianceFlag | null;
+  /** Where the "see Comply for details" link points. */
+  complyHref?: string;
 }
+
+const FLAG_STYLES = {
+  warning: {
+    badge: "bg-rose-100 text-rose-700",
+    panel: "border-rose-300 bg-rose-50 text-rose-900",
+    icon: "text-rose-600",
+  },
+  caution: {
+    badge: "bg-amber-100 text-amber-800",
+    panel: "border-amber-300 bg-amber-50 text-amber-900",
+    icon: "text-amber-600",
+  },
+} as const;
 
 const DECISION_BORDER: Record<SuggestionDecision, string> = {
   undecided: "border-l-teal-500",
@@ -48,7 +68,11 @@ const DECISION_BORDER: Record<SuggestionDecision, string> = {
   rejected: "border-l-rose-500",
 };
 
-export function SuggestionCard({ suggestion }: SuggestionCardProps) {
+export function SuggestionCard({
+  suggestion,
+  complianceFlag,
+  complyHref,
+}: SuggestionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [decision, setDecision] = useState<SuggestionDecision>(
     suggestion.decision ?? "undecided",
@@ -102,6 +126,15 @@ export function SuggestionCard({ suggestion }: SuggestionCardProps) {
               >
                 {COMPLEXITY_LABELS[complexity] ?? complexity} effort
               </span>
+              {complianceFlag && (
+                <span
+                  title={complianceFlag.detail}
+                  className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full cursor-help ${FLAG_STYLES[complianceFlag.severity].badge}`}
+                >
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {complianceFlag.title}
+                </span>
+              )}
             </div>
             <CardTitle className="text-sm font-medium">
               {suggestion.suggested_alternative}
@@ -138,6 +171,39 @@ export function SuggestionCard({ suggestion }: SuggestionCardProps) {
 
       {expanded && (
         <CardContent className="pt-0 space-y-4">
+          {complianceFlag && (
+            <div
+              className={`rounded-md border p-3 ${FLAG_STYLES[complianceFlag.severity].panel}`}
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle
+                  className={`h-4 w-4 shrink-0 mt-0.5 ${FLAG_STYLES[complianceFlag.severity].icon}`}
+                />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">
+                    {complianceFlag.severity === "warning"
+                      ? "Compliance risk"
+                      : "Compliance check needed"}
+                    : {complianceFlag.title}
+                  </p>
+                  <p className="text-sm">{complianceFlag.detail}</p>
+                  <p className="text-xs opacity-80">
+                    Reference: {complianceFlag.nccClause}
+                  </p>
+                  {complyHref && (
+                    <Link
+                      href={complyHref}
+                      className="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2"
+                    >
+                      See Comply for the full NCC check
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border bg-red-50 p-3">
               <p className="text-xs font-semibold text-red-700 mb-1">Current Approach</p>

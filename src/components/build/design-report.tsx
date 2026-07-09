@@ -5,6 +5,7 @@ import { DaeDownloadButton } from "./dae-download-button";
 import { ReportLegend } from "./report-legend";
 import { DecisionSummary } from "./decision-summary";
 import type { SuggestionDecision } from "@/app/(dashboard)/build/actions";
+import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
 
 interface Suggestion {
   id: string;
@@ -20,6 +21,7 @@ interface Suggestion {
   sort_order: number;
   decision?: SuggestionDecision | null;
   decision_note?: string | null;
+  complianceFlag?: SuggestionComplianceFlag | null;
 }
 
 interface DesignReportProps {
@@ -30,9 +32,11 @@ interface DesignReportProps {
     spatial_layout?: unknown;
   };
   suggestions: Suggestion[];
+  /** Where the inline compliance warnings link for the full NCC pass. */
+  complyHref?: string;
 }
 
-export function DesignReport({ check, suggestions }: DesignReportProps) {
+export function DesignReport({ check, suggestions, complyHref }: DesignReportProps) {
   const categories = [...new Set(suggestions.map((s) => s.technology_category))];
 
   return (
@@ -86,7 +90,12 @@ export function DesignReport({ check, suggestions }: DesignReportProps) {
             </h3>
             <div className="space-y-3">
               {catSuggestions.map((suggestion) => (
-                <SuggestionCard key={suggestion.id} suggestion={suggestion} />
+                <SuggestionCard
+                  key={suggestion.id}
+                  suggestion={suggestion}
+                  complianceFlag={suggestion.complianceFlag}
+                  complyHref={complyHref}
+                />
               ))}
             </div>
           </div>
