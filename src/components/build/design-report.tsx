@@ -2,6 +2,7 @@ import { SuggestionCard } from "./suggestion-card";
 import { getTechnologyLabel } from "@/lib/ai/types";
 import { ReportExportButton } from "@/components/shared/report-export-button";
 import { DaeDownloadButton } from "./dae-download-button";
+import { DxfDownloadButton } from "./dxf-download-button";
 import { ReportLegend } from "./report-legend";
 import { DecisionSummary } from "./decision-summary";
 import type { SuggestionDecision } from "@/app/(dashboard)/build/actions";
@@ -41,7 +42,12 @@ export function DesignReport({ check, suggestions, complyHref }: DesignReportPro
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-wrap justify-end gap-3">
+        <DxfDownloadButton
+          checkId={check.id}
+          fallbackFilename={`mmc-build-modified-${check.id.slice(0, 8)}.dxf`}
+          available={Boolean(check.spatial_layout)}
+        />
         <DaeDownloadButton
           checkId={check.id}
           fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.dae`}
