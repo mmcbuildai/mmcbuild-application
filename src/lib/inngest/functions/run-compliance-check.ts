@@ -21,6 +21,12 @@ import { getFewShotExamples } from "@/lib/ai/feedback/prompt-enricher";
 import { calibrateConfidence } from "@/lib/ai/feedback/confidence-calibrator";
 import { createReportVersion } from "@/lib/report-versions";
 import { carryForwardWaivers } from "@/lib/comply/check-delta";
+import {
+  reconcileAuthoritative,
+  buildAuthoritativeContext,
+} from "@/lib/comply/property-reconciliation";
+import type { PropertyProfile } from "@caistech/property-services-sdk";
+import type { DesignAttributes } from "@/lib/comply/questionnaire-prefill";
 
 const ENABLE_CROSS_VALIDATION = process.env.ENABLE_CROSS_VALIDATION !== "false";
 const CROSS_VALIDATION_TIER = parseInt(process.env.CROSS_VALIDATION_TIER ?? "2", 10);
@@ -206,7 +212,32 @@ export const runComplianceCheck = inngest.createFunction(
       return `\n\nSELECTED CONSTRUCTION SYSTEMS:\nThe project uses the following MMC systems: ${systems.join(", ")}.\nFocus compliance analysis on NCC clauses relevant to these construction methods (e.g. fire rating for CLT, bracing for steel frame).`;
     });
 
-    const fullContext = projectContext + certContext + systemsContext;
+    // 4d. Load the authoritative property profile (ground truth from the
+    // property register) + the plan-extracted design attributes, so the AI
+    // categories reason against ground truth AND we can run the deterministic
+    // plan-vs-register reconciliation below (PR: property → Build + Comply).
+    const authoritative = await step.run("load-authoritative-site-data", async () => {
+      const admin = createAdminClient();
+      const { data: proj } = await admin
+        .from("projects")
+        .select("property_profile")
+        .eq("id", projectId)
+        .single();
+      const { data: plan } = await admin
+        .from("plans")
+        .select("design_attributes")
+        .eq("id", planId)
+        .single();
+      return {
+        profile: ((proj as { property_profile?: PropertyProfile | null } | null)
+          ?.property_profile ?? null) as PropertyProfile | null,
+        attrs: ((plan as { design_attributes?: DesignAttributes | null } | null)
+          ?.design_attributes ?? null) as DesignAttributes | null,
+      };
+    });
+
+    const authoritativeContext = buildAuthoritativeContext(authoritative.profile);
+    const fullContext = projectContext + certContext + systemsContext + authoritativeContext;
 
     // 5. Determine which categories to analyse
     const categoriesToAnalyse = await step.run("select-categories", async () => {
@@ -339,6 +370,78 @@ export const runComplianceCheck = inngest.createFunction(
             review_status: "pending",
           } as never);
         }
+      }
+    });
+
+    // 8-recon. Cross-check the plan against the authoritative site register
+    // (deterministic, no AI): height/storeys/setback breaches, BAL adequacy,
+    // planning overlays the plan must address, terrain constructability, lot
+    // size. This catches what a plan-only reading cannot — a plan that ignores a
+    // flood/heritage overlay or states the wrong height/BAL. On a scoped
+    // re-check, only insert the reconciliation findings for the re-scoped
+    // categories; out-of-scope ones carry forward from the parent (8a) so they
+    // are neither lost nor duplicated. Best-effort: never fail the whole check.
+    await step.run("reconcile-authoritative-site-data", async () => {
+      try {
+        const reconFindings = reconcileAuthoritative({
+          profile: authoritative.profile,
+          attrs: authoritative.attrs,
+          questionnaire: questionnaireData as Record<
+            string,
+            string | number | boolean
+          >,
+        });
+        const toInsert = scopedCategories
+          ? reconFindings.filter((f) => scopedCategories.has(f.category))
+          : reconFindings;
+        if (toInsert.length === 0) return { inserted: 0 };
+
+        const admin = createAdminClient();
+        // Continue the sort order after the AI findings already stored.
+        const { count } = await admin
+          .from("compliance_findings")
+          .select("id", { count: "exact", head: true })
+          .eq("check_id", check.id);
+        let sortOrder = count ?? 0;
+
+        for (const f of toInsert) {
+          const { error: insErr } = await admin
+            .from("compliance_findings")
+            .insert({
+              check_id: check.id,
+              ncc_section: f.ncc_section,
+              category: f.category,
+              title: f.title,
+              description: f.description,
+              recommendation: f.recommendation,
+              severity: f.severity,
+              confidence: f.confidence,
+              ncc_citation: f.ncc_citation,
+              page_references: f.page_references,
+              sort_order: sortOrder++,
+              validation_tier: 0,
+              responsible_discipline:
+                f.responsible_discipline ??
+                CATEGORY_DEFAULT_DISCIPLINE[f.category] ??
+                "builder",
+              remediation_action: f.remediation_action ?? f.recommendation,
+              review_status: "pending",
+            } as never);
+          if (insErr) {
+            console.error(
+              `[runComplianceCheck.reconcile] insert failed: ${insErr.message}`,
+            );
+          }
+        }
+        console.log(
+          `[runComplianceCheck.reconcile] inserted ${toInsert.length} authoritative-site findings for check ${check.id}`,
+        );
+        return { inserted: toInsert.length };
+      } catch (e) {
+        console.error(
+          `[runComplianceCheck.reconcile] threw (non-fatal): ${(e as Error).message}`,
+        );
+        return { inserted: 0 };
       }
     });
 
