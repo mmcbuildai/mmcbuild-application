@@ -14,6 +14,8 @@ import type { DesignOptimisationResult } from "@/lib/ai/types";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 import { backfillWallsFromRooms } from "@/lib/build/spatial/full-house-extractor";
 import { filterSuggestionsBySystems } from "@/lib/build/system-category-map";
+import { buildDesignConstraints } from "@/lib/build/property-constraints";
+import type { PropertyProfile } from "@caistech/property-services-sdk";
 import { createReportVersion } from "@/lib/report-versions";
 
 /**
@@ -205,6 +207,21 @@ export const runDesignOptimisation = inngest.createFunction(
       return Array.isArray(systems) && systems.length > 0 ? systems : null;
     });
 
+    // 3d. Load the authoritative property profile so the optimiser designs
+    // WITHIN the site's ground-truth planning/site limits (height/setback
+    // envelope, bushfire/flood/heritage overlays, terrain) instead of proposing
+    // an alternative that would breach them. Degrades to null (no constraints)
+    // when the site has no profile — the optimiser then runs exactly as before.
+    const propertyProfile = await step.run("load-property-profile", async () => {
+      const { data } = await db()
+        .from("projects")
+        .select("property_profile")
+        .eq("id", projectId)
+        .single();
+      return ((data as { property_profile?: PropertyProfile | null } | null)
+        ?.property_profile ?? null) as PropertyProfile | null;
+    });
+
     await step.run("stage-suggest", async () => {
       await db()
         .from("design_checks")
@@ -217,6 +234,10 @@ export const runDesignOptimisation = inngest.createFunction(
       const systemsContext = selectedSystems
         ? `\n\nSELECTED CONSTRUCTION SYSTEMS:\nThe project owner has selected ONLY the following MMC systems: ${selectedSystems.join(", ")}.\nOnly produce suggestions for these selected systems. Do NOT suggest alternatives for construction systems the owner did not select — they were deliberately excluded and will not be shown.`
         : "";
+
+      // Authoritative site limits — keep every suggested alternative within the
+      // zone envelope + overlay requirements (empty string when no profile).
+      const siteConstraints = buildDesignConstraints(propertyProfile);
 
       // Pass a compact spatial layout into the prompt so the AI can map
       // suggestions to specific walls / rooms by ID. Strip out anything we
@@ -237,7 +258,7 @@ export const runDesignOptimisation = inngest.createFunction(
         "No text specification could be extracted from this plan (e.g. a CAD/DWG drawing with no text layer). Analyse the design using the spatial layout below and the selected MMC construction systems.";
 
       const result = await callModel("design_primary", {
-        system: OPTIMISATION_SYSTEM_PROMPT + systemsContext,
+        system: OPTIMISATION_SYSTEM_PROMPT + systemsContext + siteConstraints,
         messages: [{ role: "user", content: OPTIMISATION_USER_PROMPT(effectiveContent, spatialLayoutJson) }],
         // 4096 truncated a multi-suggestion response mid-array → the JSON came
         // back unparseable ("```json { \"suggestions\": [ … " then cut off),

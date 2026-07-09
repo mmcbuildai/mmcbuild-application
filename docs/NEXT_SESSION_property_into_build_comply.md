@@ -1,7 +1,9 @@
 # NEXT SESSION — Feed the captured property dataset into Build + Comply
 
-> **Status:** OPEN / not started. This is the flagged **larger, separate build** that follows the
-> 2026-07-05 property-services *capture* work (PR #87, merged). Capture is done; **consumption** is not.
+> **Status:** IMPLEMENTED (2026-07-09, branch `feat/property-into-build-comply`) — see
+> `docs/PRD_property_into_build_comply.md` for the delivered design, decisions and known limitation.
+> This was the flagged **larger, separate build** that follows the
+> 2026-07-05 property-services *capture* work (PR #87, merged). Capture is done; **consumption** is now wired.
 > **Tier:** REGULATED — compliance logic must be correct, not convenient. Read `~/.claude/CLAUDE.md` + this repo's CLAUDE.md first.
 
 ---
