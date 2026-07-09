@@ -26,18 +26,24 @@ import type { Test3DResult } from "@/lib/build/test-3d-types";
  * Pipeline:
  *   mark-processing       — write started_at
  *   IF image:
- *     extract-image       — direct image → SpatialLayout, write done
+ *     extract-image       — direct image → SpatialLayout, persist done in-step
  *   IF dwg:
- *     dwg-dxf-path        — try DWG → DXF → wall-layer extract
- *     write-dxf-result    — early exit if DXF won
+ *     dwg-dxf-path        — DWG → DXF → wall-layer extract, persist done in-step
+ *                           (returns a small ok/skip flag, early-exits on ok)
  *   convert-to-pdf        — pass-through native PDFs, CloudConvert others.
  *                           Intermediate PDF written to a temp path in the
  *                           plan-uploads bucket; only the path string
  *                           passes through Inngest (avoids the per-step
  *                           1MB result-size limit on base64 payloads).
  *   extract-full-house    — read PDF from temp path, run classifier +
- *                           extractor + decomposer, return Test3DResult.
- *   write-result          — final status='done' + result jsonb.
+ *                           extractor + decomposer, then persist the
+ *                           SpatialLayout to test_3d_jobs IN-STEP.
+ *
+ * Every extract step PERSISTS its layout to the DB inside the step and returns
+ * only a small handle — the full layout must never become a step's return value,
+ * or Inngest serialises it as step output and a many-walled plan intermittently
+ * blows the per-step output cap (output_too_large), erroring the job AFTER the
+ * geometry succeeded (SCRUM-309, the terrace).
  *
  * Intermediate temp PDFs accumulate in <org_id>/test-3d/intermediate/.
  * Best-effort cleanup is a future cron — not blocking shipping.
@@ -98,37 +104,41 @@ export const runTest3DExtractionFn = inngest.createFunction(
 
     // Image kind — skip everything else, extract directly
     if (kind === "image") {
-      const result = await step.run("extract-image", async () => {
-        return await extractImagePath(storagePath, fileName, kind);
-      });
-      await step.run("write-image-result", async () => {
+      // Persist in-step; never return the layout across the step boundary
+      // (output_too_large guard, SCRUM-309).
+      await step.run("extract-image", async () => {
+        const layout = await extractImagePath(storagePath, fileName, kind);
         await db()
           .from("test_3d_jobs")
           .update({
             status: "done",
-            result,
+            result: layout,
             finished_at: new Date().toISOString(),
           })
           .eq("id", jobId);
+        return { persisted: true };
       });
       return { jobId, status: "done" };
     }
 
     // DWG kind — try DXF-direct first
     if (kind === "dwg") {
-      const dxfResult = await step.run("dwg-dxf-path", async () => {
+      // Persist the layout IN-STEP and return only a small ok/skip flag — same
+      // output_too_large guard as the full-house path (SCRUM-309): the full
+      // Test3DResult must never become step output.
+      const dxfOutcome = await step.run("dwg-dxf-path", async () => {
         const buf = await downloadFromBucket(storagePath);
-        if (!buf) return null;
+        if (!buf) return { ok: false };
         const dxfConv = await convertViaCloudConvert(buf, fileName, "dwg", "dxf");
         if ("error" in dxfConv) {
           console.log(
             "[run-test-3d-extraction] DWG→DXF failed:",
             dxfConv.error,
           );
-          return null;
+          return { ok: false };
         }
         const layout = extractSpatialLayoutFromDxf(dxfConv.buffer);
-        if (!layout) return null;
+        if (!layout) return { ok: false };
         if (!layout.roof) {
           layout.roof = {
             form: "gable",
@@ -142,20 +152,18 @@ export const runTest3DExtractionFn = inngest.createFunction(
           convertedFrom: "dwg",
           extractedVia: "dxf-direct",
         };
-        return result;
+        await db()
+          .from("test_3d_jobs")
+          .update({
+            status: "done",
+            result,
+            finished_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+        return { ok: true };
       });
 
-      if (dxfResult) {
-        await step.run("write-dxf-result", async () => {
-          await db()
-            .from("test_3d_jobs")
-            .update({
-              status: "done",
-              result: dxfResult,
-              finished_at: new Date().toISOString(),
-            })
-            .eq("id", jobId);
-        });
+      if (dxfOutcome.ok) {
         return { jobId, status: "done", extractedVia: "dxf-direct" };
       }
     }
@@ -190,27 +198,37 @@ export const runTest3DExtractionFn = inngest.createFunction(
         .eq("id", jobId);
     });
 
-    const result = await step.run("extract-full-house", async () => {
-      return await extractFromPdfPath(
+    // Persist the extracted layout INSIDE the extraction step, and return only a
+    // small handle. Returning the full layout across the Inngest step boundary
+    // serialised it as this step's OUTPUT, which intermittently exceeded the
+    // step-output size cap on plans with many walls — a terrace extracted 55
+    // walls, then failed with output_too_large so the job errored even though the
+    // geometry was produced (SCRUM-309; matches the "more walls → error, fewer →
+    // clean" pattern). Writing to test_3d_jobs in-step keeps the big blob out of
+    // the step output entirely. (Same latent pattern noted in the Inngest
+    // pitfalls memo: never RETURN a big blob from step.run.)
+    const summary = await step.run("extract-full-house", async () => {
+      const layout = await extractFromPdfPath(
         optimisedPath,
         kind,
         conv.convertedFrom,
         pageInput,
       );
-    });
-
-    await step.run("write-result", async () => {
       await db()
         .from("test_3d_jobs")
         .update({
           status: "done",
-          result,
+          result: layout,
           finished_at: new Date().toISOString(),
         })
         .eq("id", jobId);
+      const wallCount =
+        (layout as { layout?: { walls?: unknown[] } } | null)?.layout?.walls
+          ?.length ?? null;
+      return { wallCount };
     });
 
-    return { jobId, status: "done" };
+    return { jobId, status: "done", wallCount: summary.wallCount };
   },
 );
 
