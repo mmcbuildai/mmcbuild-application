@@ -35,6 +35,16 @@ export function RunEstimateButton({
       const result = await requestCostEstimation(projectId, planId, region);
 
       if ("error" in result) {
+        // Already running — go to the in-progress estimate, don't start a duplicate.
+        if (
+          result.error === "already_running" &&
+          (result as { estimateId?: string }).estimateId
+        ) {
+          router.push(
+            `/quote/${projectId}/report/${(result as { estimateId: string }).estimateId}`,
+          );
+          return;
+        }
         setError(result.error ?? "Unknown error");
         return;
       }
