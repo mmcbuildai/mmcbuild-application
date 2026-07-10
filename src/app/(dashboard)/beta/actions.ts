@@ -192,6 +192,7 @@ export interface BetaFeedbackRow {
 }
 
 export async function getBetaProgress(): Promise<BetaFeedbackRow[]> {
+  // @cross-tenant-ok: session-scoped — all queries filter on userId/profileId/orgId derived from requireUser()
   const { userId, orgId, profileId } = await requireUser();
 
   // Auto-tick "ran the module" tasks from the run tables before reading back.

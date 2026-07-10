@@ -67,6 +67,7 @@ export async function createRateSource(
 }
 
 export async function toggleRateSource(id: string, isActive: boolean) {
+  // @cross-tenant-ok: global cost_rate_sources config (no org_id), admin-role gated operator action
   await requireAdmin();
 
   const { error } = await db()
@@ -225,12 +226,16 @@ export async function upsertOrgOverride(rate: {
 }
 
 export async function deleteOrgOverride(id: string) {
-  await requireAdmin();
+  const profile = await requireAdmin();
 
+  // Cross-tenant isolation (SCRUM-343): db() bypasses RLS and org_rate_overrides
+  // is org-scoped — constrain the delete to the caller's org so an admin can't
+  // delete another org's rate override by id (mirrors upsertOrgOverride).
   const { error } = await db()
     .from("org_rate_overrides")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("org_id", profile.org_id);
 
   if (error) throw new Error(`Failed to delete override: ${error.message}`);
   revalidatePath("/settings/cost-rates");

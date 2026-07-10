@@ -110,8 +110,19 @@ export async function updateTimeEntry(
 }
 
 export async function deleteTimeEntry(entryId: string) {
-  await getProfile();
+  const profile = await getProfile();
   const admin = createAdminClient();
+
+  // Cross-tenant isolation (SCRUM-343): verify the entry is the caller's org's
+  // before deleting (mirrors updateTimeEntry) — regulated R&D-tax record.
+  const { data: entry } = await admin
+    .from("rd_time_entries")
+    .select("org_id")
+    .eq("id", entryId)
+    .single();
+  if (!entry || entry.org_id !== profile.org_id) {
+    throw new Error("Entry not found");
+  }
 
   const { error } = await admin
     .from("rd_time_entries")
@@ -174,8 +185,19 @@ export async function updateExperiment(
   id: string,
   updates: { outcome?: string; status?: ExperimentStatus }
 ) {
-  await getProfile();
+  const profile = await getProfile();
   const admin = createAdminClient();
+
+  // Cross-tenant isolation (SCRUM-343): verify the experiment is the caller's
+  // org's before updating (mirrors deleteExperiment) — regulated R&D record.
+  const { data: experiment } = await admin
+    .from("rd_experiments")
+    .select("org_id")
+    .eq("id", id)
+    .single();
+  if (!experiment || experiment.org_id !== profile.org_id) {
+    throw new Error("Experiment not found");
+  }
 
   const { error } = await admin
     .from("rd_experiments")

@@ -10,6 +10,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  // @cross-tenant-ok: opaque-token-gated public retrieval; estimate_id comes from the validated token row (not caller-supplied) and expiry is enforced
   const { token } = await params;
   const admin = createAdminClient();
 

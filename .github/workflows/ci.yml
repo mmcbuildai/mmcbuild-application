@@ -44,6 +44,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Hard gate (SCRUM-343): fails the build if any server action / route runs
+      # an RLS-bypassing db()/admin query filtered by a caller-supplied id with no
+      # org-ownership assert (the SCRUM-340/342 cross-tenant class). Genuine
+      # cross-org/public/user-owned reads opt out with a // @cross-tenant-ok marker.
+      - name: Cross-tenant guard check
+        run: pnpm check:cross-tenant
+
       # Soft — allow pre-existing errors from the in-flight @caistech/*
       # migration to not block CI. Tighten to a hard fail once migration
       # completes (SCRUM follow-up).

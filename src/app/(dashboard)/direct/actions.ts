@@ -359,6 +359,7 @@ export async function searchProfessionals(filters: {
 }
 
 export async function getProfessionalProfile(id: string) {
+  // @cross-tenant-ok: public cross-org professionals directory profile (returns null if deregistered)
   const { data: professional } = await db()
     .from("professionals")
     .select("*")
@@ -441,6 +442,7 @@ export async function submitReview(professionalId: string, input: ReviewInput) {
 }
 
 export async function getProfessionalReviews(professionalId: string, page: number = 1) {
+  // @cross-tenant-ok: public directory reviews for a public listing
   const pageSize = 10;
   const offset = (page - 1) * pageSize;
 
@@ -558,6 +560,7 @@ export async function markEnquiryRead(enquiryId: string) {
 // ─── Admin ───
 
 export async function approveProfessional(id: string) {
+  // @cross-tenant-ok: moderation of the shared public directory, admin-role gated (operator-gating tracked separately, SCRUM-342)
   const profile = await getAuthProfile();
   if (!profile) return { error: "Not authenticated" };
   if (profile.role !== "owner" && profile.role !== "admin") {
@@ -574,6 +577,7 @@ export async function approveProfessional(id: string) {
 }
 
 export async function suspendProfessional(id: string) {
+  // @cross-tenant-ok: moderation of the shared public directory, admin-role gated (operator-gating tracked separately, SCRUM-342)
   const profile = await getAuthProfile();
   if (!profile) return { error: "Not authenticated" };
   if (profile.role !== "owner" && profile.role !== "admin") {

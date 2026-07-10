@@ -98,6 +98,7 @@ export type Test3DStatus =
   | { status: "unauthorised" };
 
 export async function getTest3DStatus(jobId: string): Promise<Test3DStatus> {
+  // @cross-tenant-ok: fetches the job then rejects unless row.user_id === session user.id
   const supabase = await createClient();
   const {
     data: { user },

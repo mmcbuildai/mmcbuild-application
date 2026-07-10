@@ -56,6 +56,7 @@ export async function getDirectoryListings(statusFilter?: string) {
 }
 
 export async function approveDirectoryListing(listingId: string) {
+  // @cross-tenant-ok: global directory-submission moderation queue (no org_id), admin-role gated operator action
   const profile = await requireAdmin();
 
   const { error } = await db()
@@ -80,6 +81,7 @@ export async function approveDirectoryListing(listingId: string) {
 }
 
 export async function rejectDirectoryListing(listingId: string, notes?: string) {
+  // @cross-tenant-ok: global directory-submission moderation queue (no org_id), admin-role gated operator action
   const profile = await requireAdmin();
 
   const { error } = await db()
@@ -99,6 +101,7 @@ export async function rejectDirectoryListing(listingId: string, notes?: string) 
 }
 
 export async function requestInfoDirectoryListing(listingId: string, notes: string) {
+  // @cross-tenant-ok: global directory-submission moderation queue (no org_id), admin-role gated operator action
   const profile = await requireAdmin();
 
   const { error } = await db()

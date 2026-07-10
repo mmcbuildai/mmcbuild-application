@@ -103,6 +103,7 @@ export async function updateTestResult(
   status: "pending" | "passed" | "failed",
   notes: string | null
 ) {
+  // @cross-tenant-ok: global internal QA test-regime table (no org_id), admin-gated
   const admin = await requireAdmin();
   const tc = TEST_CASES.find((t) => t.tcId === tcId);
   if (!tc) return { error: "Invalid test case ID" };
@@ -153,6 +154,7 @@ export async function addScreenshot(
   filePath: string,
   fileSize: number
 ) {
+  // @cross-tenant-ok: global internal QA test-regime table (no org_id), admin-gated
   await requireAdmin();
 
   // Get or create the test result
@@ -197,6 +199,7 @@ export async function addScreenshot(
 }
 
 export async function deleteScreenshot(screenshotId: string) {
+  // @cross-tenant-ok: global internal QA test-screenshots table (no org_id), admin-gated
   await requireAdmin();
 
   // Get file path for storage cleanup

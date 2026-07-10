@@ -21,6 +21,7 @@ export async function requestRunNotify(
   kind: RunKind,
   rowId: string,
 ): Promise<{ ok: true } | { error: string }> {
+  // @cross-tenant-ok: update is scoped to the caller-owned row via .eq('created_by', profile.id)
   const supabase = await createClient();
   const {
     data: { user },

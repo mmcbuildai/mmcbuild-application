@@ -165,7 +165,35 @@ export async function getProjectCostEstimates(projectId: string) {
   return data ?? [];
 }
 
+// Cross-tenant isolation (SCRUM-343): holding_cost_variables has no org_id, so
+// gate via its parent estimate — the cost_estimate for estimateId must belong to
+// the caller's org. Returns false for unauth / foreign estimate.
+async function estimateInCallerOrg(estimateId: string): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) return false;
+  const { data: est } = await db()
+    .from("cost_estimates")
+    .select("org_id")
+    .eq("id", estimateId)
+    .single();
+  return (
+    !!est &&
+    (est as { org_id: string }).org_id === (profile as { org_id: string }).org_id
+  );
+}
+
 export async function getHoldingCostVariables(estimateId: string) {
+  if (!(await estimateInCallerOrg(estimateId))) return null;
+
   const { data } = await db()
     .from("holding_cost_variables")
     .select("*")
@@ -197,6 +225,10 @@ export async function saveHoldingCostVariables(
     custom_items: { label: string; amount: number }[];
   }
 ) {
+  if (!(await estimateInCallerOrg(estimateId))) {
+    return { error: "Estimate not found" };
+  }
+
   const { error } = await db()
     .from("holding_cost_variables")
     .upsert(
