@@ -529,6 +529,23 @@ export async function markEnquiryRead(enquiryId: string) {
   const profile = await getAuthProfile();
   if (!profile) return { error: "Not authenticated" };
 
+  // Ownership (SCRUM-342): db() bypasses RLS, so the enquiry's recipient
+  // professional must belong to the caller's org before we mutate it —
+  // otherwise any authed user could mark another org's enquiry as read.
+  const { data: enquiry } = await db()
+    .from("directory_enquiries")
+    .select("professional_id")
+    .eq("id", enquiryId)
+    .single();
+  if (!enquiry) return { error: "Enquiry not found" };
+
+  const { data: pro } = await db()
+    .from("professionals")
+    .select("org_id")
+    .eq("id", (enquiry as { professional_id: string }).professional_id)
+    .single();
+  if (!pro || pro.org_id !== profile.org_id) return { error: "Not authorised" };
+
   const { error } = await db()
     .from("directory_enquiries")
     .update({ status: "read", read_at: new Date().toISOString() })

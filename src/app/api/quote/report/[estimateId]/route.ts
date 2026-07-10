@@ -21,11 +21,20 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const admin = db();
 
   const { data: estimate, error: estError } = await admin
     .from("cost_estimates")
-    .select("id, status, summary, total_traditional, total_mmc, total_savings_pct, region, traditional_duration_weeks, mmc_duration_weeks, completed_at, project_id")
+    .select("id, status, summary, total_traditional, total_mmc, total_savings_pct, region, traditional_duration_weeks, mmc_duration_weeks, completed_at, project_id, org_id")
     .eq("id", estimateId)
     .single();
 
@@ -37,8 +46,15 @@ export async function GET(
     id: string; status: string; summary: string | null;
     total_traditional: number | null; total_mmc: number | null; total_savings_pct: number | null;
     region: string | null; traditional_duration_weeks: number | null; mmc_duration_weeks: number | null;
-    completed_at: string | null; project_id: string;
+    completed_at: string | null; project_id: string; org_id: string;
   };
+
+  // Cross-tenant isolation (SCRUM-342): db() bypasses RLS — the estimate must
+  // belong to the caller's org, else this exports another org's financial cost
+  // report. Same 404 as not-found (no existence leak).
+  if (rec.org_id !== profile.org_id) {
+    return NextResponse.json({ error: "Estimate not found" }, { status: 404 });
+  }
 
   if (rec.status !== "completed") {
     return NextResponse.json({ error: "Report not yet completed" }, { status: 400 });

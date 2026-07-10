@@ -42,6 +42,23 @@ export async function requestComplianceCheck(
     return { error: "Profile not found" };
   }
 
+  // Cross-tenant isolation (SCRUM-342): the projectId must belong to the caller's
+  // org before any project-scoped read/write below (admin bypasses RLS).
+  {
+    const admin = createAdminClient();
+    const { data: ownerProject } = await admin
+      .from("projects")
+      .select("org_id")
+      .eq("id", projectId)
+      .single();
+    if (
+      !ownerProject ||
+      (ownerProject as { org_id: string }).org_id !== profile.org_id
+    ) {
+      return { error: "Project not found" };
+    }
+  }
+
   // Duplicate-run guard — BEFORE the paywall, so a second click never consumes
   // a paid run. If a check is already queued/processing for this project, return
   // the existing one so the UI can point the user at the run in progress instead
@@ -76,6 +93,7 @@ export async function requestComplianceCheck(
       .from("questionnaire_responses")
       .select("responses")
       .eq("id", questionnaireId)
+      .eq("project_id", projectId)
       .single();
 
     if (qr) {
@@ -335,6 +353,15 @@ export async function getComplianceReport(checkId: string) {
     return { error: "Not authenticated" };
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) {
+    return { error: "Profile not found" };
+  }
+
   const admin = createAdminClient();
 
   const { data: check, error: checkError } = await admin
@@ -344,6 +371,12 @@ export async function getComplianceReport(checkId: string) {
     .single();
 
   if (checkError || !check) {
+    return { error: "Check not found" };
+  }
+
+  // Cross-tenant isolation (SCRUM-342): admin bypasses RLS — the check must
+  // belong to the caller's org, else this returns another org's report + findings.
+  if ((check as { org_id: string }).org_id !== profile.org_id) {
     return { error: "Check not found" };
   }
 
@@ -631,12 +664,27 @@ export async function getActionableFindingsForCheck(checkId: string): Promise<{
 }
 
 export async function getProjectChecks(projectId: string) {
+  // Cross-tenant isolation (SCRUM-342): authenticate + scope to the caller's org —
+  // admin bypasses RLS, so a foreign projectId must not return another org's checks.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) return [];
+
   const admin = createAdminClient();
 
   const { data } = await admin
     .from("compliance_checks")
     .select("id, status, summary, overall_risk, created_at, completed_at")
     .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
     .order("created_at", { ascending: false });
 
   return data ?? [];
@@ -906,22 +954,11 @@ export async function reviewFinding(
   action: "accepted" | "rejected",
   data?: { rejection_reason?: string }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: "Not authenticated" };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, org_id")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!profile) return { error: "Profile not found" };
-
-  const admin = createAdminClient();
+  // Org-gate the finding (SCRUM-342): verifies the finding belongs to the
+  // caller's org via its parent check (admin below bypasses RLS).
+  const auth = await authorizeFindingResolution(findingId);
+  if ("error" in auth) return { error: auth.error };
+  const { profile, admin } = auth;
 
   const updateData: Record<string, unknown> = {
     review_status: action,
@@ -960,22 +997,10 @@ export async function amendFinding(
     assigned_contributor_id?: string;
   }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: "Not authenticated" };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, org_id")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!profile) return { error: "Profile not found" };
-
-  const admin = createAdminClient();
+  // Org-gate the finding (SCRUM-342).
+  const auth = await authorizeFindingResolution(findingId);
+  if ("error" in auth) return { error: auth.error };
+  const { profile, admin } = auth;
 
   const { error } = await admin
     .from("compliance_findings")
@@ -1003,8 +1028,13 @@ export async function amendFinding(
 }
 
 export async function sendFindingToContributor(findingId: string) {
+  // Org-gate up front (SCRUM-342): the finding must belong to the caller's org
+  // before we read it or mark it sent (admin bypasses RLS).
+  const auth = await authorizeFindingResolution(findingId);
+  if ("error" in auth) return { error: auth.error };
+  const { profile, admin } = auth;
+
   // Legacy redirect — now calls shareFindingWithContributor if contributor is assigned
-  const admin = createAdminClient();
   const { data: finding } = await admin
     .from("compliance_findings")
     .select("assigned_contributor_id" as never)
@@ -1020,21 +1050,6 @@ export async function sendFindingToContributor(findingId: string) {
   }
 
   // Fallback to mark-as-sent if no contributor
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return { error: "Not authenticated" };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, org_id")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!profile) return { error: "Profile not found" };
-
   const { error } = await admin
     .from("compliance_findings")
     .update({
@@ -1059,32 +1074,23 @@ export async function shareFindingWithContributor(
   findingId: string,
   contributorId: string
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Org-gate the finding (SCRUM-342): it must belong to the caller's org before
+  // we share it or mutate it.
+  const auth = await authorizeFindingResolution(findingId);
+  if ("error" in auth) return { error: auth.error };
+  const { profile, admin } = auth;
 
-  if (!user) return { error: "Not authenticated" };
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, org_id")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!profile) return { error: "Profile not found" };
-
-  const admin = createAdminClient();
-
-  // Load contributor
+  // Load contributor — and verify it belongs to the caller's org too, so a
+  // foreign contributorId can't be emailed another org's finding.
   const { data: contributor } = await admin
     .from("project_contributors" as never)
-    .select("id, project_id, contact_name, contact_email")
+    .select("id, project_id, org_id, contact_name, contact_email")
     .eq("id", contributorId)
     .single();
 
   if (!contributor) return { error: "Contributor not found" };
-  const c = contributor as { id: string; project_id: string; contact_name: string; contact_email: string | null };
+  const c = contributor as { id: string; project_id: string; org_id: string; contact_name: string; contact_email: string | null };
+  if (c.org_id !== profile.org_id) return { error: "Contributor not found" };
 
   if (!c.contact_email) {
     return { error: "Contributor has no email address" };
@@ -1158,12 +1164,17 @@ export async function addContributorAndShareFinding(
     company_name?: string;
   }
 ) {
+  // Org-gate the finding before creating/attaching anything (SCRUM-342). The
+  // projectId passed to addProjectContributor is org-verified inside that action.
+  const auth = await authorizeFindingResolution(findingId);
+  if ("error" in auth) return { error: auth.error };
+  const { admin } = auth;
+
   // Step 1: Create contributor
   const result = await addProjectContributor(projectId, contributorData);
   if ("error" in result) return result;
 
   // Step 2: Assign contributor to finding
-  const admin = createAdminClient();
   await admin
     .from("compliance_findings")
     .update({
@@ -1197,6 +1208,29 @@ export async function bulkReviewFindings(
 
   const admin = createAdminClient();
 
+  // Cross-tenant isolation (SCRUM-342): keep only findings whose parent check is
+  // in the caller's org — never mass-update another tenant's findings via a raw
+  // .in("id", findingIds).
+  const { data: findingRows } = await admin
+    .from("compliance_findings")
+    .select("id, check_id")
+    .in("id", findingIds);
+  const rows = (findingRows ?? []) as { id: string; check_id: string }[];
+  const checkIds = Array.from(new Set(rows.map((r) => r.check_id)));
+  const { data: ownChecks } = await admin
+    .from("compliance_checks")
+    .select("id, org_id")
+    .in("id", checkIds);
+  const ownedCheckIds = new Set(
+    ((ownChecks ?? []) as { id: string; org_id: string }[])
+      .filter((c) => c.org_id === profile.org_id)
+      .map((c) => c.id),
+  );
+  const ownedFindingIds = rows
+    .filter((r) => ownedCheckIds.has(r.check_id))
+    .map((r) => r.id);
+  if (ownedFindingIds.length === 0) return { error: "No findings found" };
+
   const updateData: Record<string, unknown> = {
     review_status: action,
     reviewed_by: profile.id,
@@ -1210,12 +1244,12 @@ export async function bulkReviewFindings(
   const { error } = await admin
     .from("compliance_findings")
     .update(updateData as never)
-    .in("id", findingIds);
+    .in("id", ownedFindingIds);
 
   if (error) return { error: `Failed to bulk review: ${error.message}` };
 
   // Log activity for each finding
-  for (const findingId of findingIds) {
+  for (const findingId of ownedFindingIds) {
     await admin.from("finding_activity_log").insert({
       finding_id: findingId,
       action: `bulk_${action}`,
@@ -1244,7 +1278,30 @@ export async function bulkShareFindings(findingIds: string[]) {
 }
 
 export async function getShareTokensForCheck(checkId: string) {
+  // Cross-tenant isolation (SCRUM-342): these tokens carry contributor PII —
+  // authenticate and verify the check belongs to the caller's org first.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) return [];
+
   const admin = createAdminClient();
+
+  const { data: ownerCheck } = await admin
+    .from("compliance_checks")
+    .select("org_id")
+    .eq("id", checkId)
+    .single();
+  if (!ownerCheck || (ownerCheck as { org_id: string }).org_id !== profile.org_id) {
+    return [];
+  }
 
   // Get finding IDs for this check
   const { data: findings } = await admin
@@ -1275,14 +1332,39 @@ export async function getShareTokensForCheck(checkId: string) {
 }
 
 export async function getWorkflowSummary(checkId: string) {
+  const empty = { total: 0, pending: 0, accepted: 0, amended: 0, rejected: 0, sent: 0 };
+
+  // Cross-tenant isolation (SCRUM-342): authenticate + verify the check is the
+  // caller's org's before returning any workflow counts.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return empty;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) return empty;
+
   const admin = createAdminClient();
+
+  const { data: ownerCheck } = await admin
+    .from("compliance_checks")
+    .select("org_id")
+    .eq("id", checkId)
+    .single();
+  if (!ownerCheck || (ownerCheck as { org_id: string }).org_id !== profile.org_id) {
+    return empty;
+  }
 
   const { data: findings } = await admin
     .from("compliance_findings")
     .select("review_status, responsible_discipline" as never)
     .eq("check_id", checkId);
 
-  if (!findings) return { total: 0, pending: 0, accepted: 0, amended: 0, rejected: 0, sent: 0 };
+  if (!findings) return empty;
 
   const rows = findings as unknown as { review_status: string | null }[];
 

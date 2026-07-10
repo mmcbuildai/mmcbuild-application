@@ -21,16 +21,32 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const admin = createAdminClient();
 
   // Load check with project info
   const { data: check, error: checkError } = await admin
     .from("compliance_checks")
-    .select("id, status, summary, overall_risk, completed_at, project_id")
+    .select("id, status, summary, overall_risk, completed_at, project_id, org_id")
     .eq("id", checkId)
     .single();
 
   if (checkError || !check) {
+    return NextResponse.json({ error: "Check not found" }, { status: 404 });
+  }
+
+  // Cross-tenant isolation (SCRUM-342): admin bypasses RLS — the check must
+  // belong to the caller's org, else this exports another org's compliance
+  // report. Same 404 as not-found (no existence leak).
+  if ((check as { org_id: string }).org_id !== profile.org_id) {
     return NextResponse.json({ error: "Check not found" }, { status: 404 });
   }
 

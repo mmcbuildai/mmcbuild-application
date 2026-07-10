@@ -359,11 +359,14 @@ export async function activateProject(projectId: string) {
 }
 
 export async function getProjectSiteIntel(projectId: string) {
+  // Cross-tenant isolation (SCRUM-342): admin bypasses RLS — scope to the caller's org.
+  const profile = await getProfile();
   const admin = createAdminClient();
   const { data } = await admin
     .from("project_site_intel")
     .select("*")
     .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
     .maybeSingle();
 
   return data;
@@ -562,6 +565,7 @@ export async function rederiveSiteIntel(projectId: string) {
     .from("project_site_intel")
     .select("latitude, longitude, formatted_address, suburb, state, postcode")
     .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
     .single();
 
   if (!existing?.latitude || !existing?.longitude) {
@@ -600,7 +604,8 @@ export async function rederiveSiteIntel(projectId: string) {
     await admin
       .from("projects")
       .update({ property_profile: intel.profile, lot_size_sqm: intel.lot_size_sqm } as never)
-      .eq("id", projectId);
+      .eq("id", projectId)
+      .eq("org_id", profile.org_id);
   }
 
   if (error) throw new Error(`Re-derive failed: ${error.message}`);
@@ -914,6 +919,8 @@ export async function retryPlanProcessing(planId: string) {
 }
 
 export async function getProjectPlans(projectId: string) {
+  // Cross-tenant isolation (SCRUM-342): admin bypasses RLS — scope to the caller's org.
+  const profile = await getProfile();
   const admin = createAdminClient();
 
   // Select * because file_kind and extracted_layers are added by recent
@@ -922,6 +929,7 @@ export async function getProjectPlans(projectId: string) {
     .from("plans")
     .select("*")
     .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
     .order("created_at", { ascending: false });
 
   return (data ?? []) as unknown as Array<{
@@ -1062,12 +1070,15 @@ export async function saveQuestionnaire(
 }
 
 export async function getProjectQuestionnaire(projectId: string) {
+  // Cross-tenant isolation (SCRUM-342): admin bypasses RLS — scope to the caller's org.
+  const profile = await getProfile();
   const admin = createAdminClient();
 
   const { data } = await admin
     .from("questionnaire_responses")
     .select("id, responses, completed, created_at, updated_at")
     .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
     .order("created_at", { ascending: false })
     .limit(1)
     .single();
@@ -1471,12 +1482,15 @@ export async function deleteCertification(certId: string) {
 }
 
 export async function getProjectCertifications(projectId: string) {
+  // Cross-tenant isolation (SCRUM-342): admin bypasses RLS — scope to the caller's org.
+  const profile = await getProfile();
   const admin = createAdminClient();
 
   const { data } = await admin
     .from("project_certifications")
     .select("id, cert_type, file_name, file_size_bytes, status, issuer_name, issue_date, notes, error_message, created_at")
     .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
     .order("created_at", { ascending: false });
 
   return data ?? [];
@@ -1513,6 +1527,22 @@ export async function addProjectContributor(
   if (!profile) return { error: "Profile not found" };
 
   const admin = createAdminClient();
+
+  // Cross-tenant isolation (SCRUM-342): the projectId must belong to the caller's
+  // org before attaching a contributor to it (admin bypasses RLS). Also closes the
+  // path via comply.addContributorAndShareFinding, which passes projectId here.
+  const { data: ownerProject } = await admin
+    .from("projects")
+    .select("org_id")
+    .eq("id", projectId)
+    .single();
+  if (
+    !ownerProject ||
+    (ownerProject as { org_id: string }).org_id !== profile.org_id
+  ) {
+    return { error: "Project not found" };
+  }
+
   const { data: contributor, error } = await admin
     .from("project_contributors" as never)
     .insert({
@@ -1621,12 +1651,16 @@ export async function removeProjectContributor(contributorId: string) {
 }
 
 export async function getProjectContributors(projectId: string) {
+  // Cross-tenant isolation (SCRUM-342): contributor PII — admin bypasses RLS, so
+  // scope to the caller's org.
+  const profile = await getProfile();
   const admin = createAdminClient();
 
   const { data } = await admin
     .from("project_contributors" as never)
     .select("id, discipline, company_name, contact_name, contact_email, contact_phone, notes, created_at")
     .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
     .order("created_at", { ascending: true });
 
   return (data ?? []) as {
