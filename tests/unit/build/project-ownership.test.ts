@@ -34,6 +34,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import {
   requestDesignOptimisation,
   getDesignReport,
+  getProjectSelectedSystems,
+  getProjectDesignChecks,
 } from "@/app/(dashboard)/build/actions";
 
 // Thenable query-builder mock (mirrors the Supabase chain shape).
@@ -133,5 +135,60 @@ describe("getDesignReport — cross-tenant isolation (SCRUM-340)", () => {
 
     expect(result.error).toBe("Not authenticated");
     expect(result.check).toBeNull();
+  });
+});
+
+describe("getProjectSelectedSystems — cross-tenant isolation (SCRUM-340)", () => {
+  it("returns [] for a project owned by another org", async () => {
+    mockDbFrom.mockReturnValueOnce(
+      mockChain({ data: { selected_systems: ["sip"], org_id: "org-2" } }),
+    );
+
+    const result = await getProjectSelectedSystems("proj-foreign");
+
+    expect(result).toEqual([]);
+  });
+
+  it("returns the systems for a project owned by the caller's org", async () => {
+    mockDbFrom.mockReturnValueOnce(
+      mockChain({ data: { selected_systems: ["sip", "clt"], org_id: "org-1" } }),
+    );
+
+    const result = await getProjectSelectedSystems("proj-1");
+
+    expect(result).toEqual(["sip", "clt"]);
+  });
+
+  it("returns [] for an unauthenticated caller", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const result = await getProjectSelectedSystems("proj-1");
+
+    expect(result).toEqual([]);
+    expect(mockDbFrom).not.toHaveBeenCalled();
+  });
+});
+
+describe("getProjectDesignChecks — cross-tenant isolation (SCRUM-340)", () => {
+  it("scopes the query to the caller's org", async () => {
+    const chain = mockChain({ data: [{ id: "check-1" }] });
+    mockDbFrom.mockReturnValueOnce(chain);
+
+    const result = await getProjectDesignChecks("proj-1");
+
+    expect(result).toEqual([{ id: "check-1" }]);
+    // The org filter is what enforces isolation — a foreign project's rows
+    // carry a different org_id and are excluded by this eq.
+    expect(chain.eq).toHaveBeenCalledWith("org_id", "org-1");
+    expect(chain.eq).toHaveBeenCalledWith("project_id", "proj-1");
+  });
+
+  it("returns [] for an unauthenticated caller without querying", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const result = await getProjectDesignChecks("proj-1");
+
+    expect(result).toEqual([]);
+    expect(mockDbFrom).not.toHaveBeenCalled();
   });
 });
