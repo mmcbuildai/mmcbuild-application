@@ -45,6 +45,25 @@ function slugify(text: string): string {
     .slice(0, 100);
 }
 
+// Ownership guard (SCRUM-342): db() bypasses RLS, so a lesson mutation by id must
+// prove the lesson's parent course belongs to the caller's org — otherwise an org
+// admin could edit/delete another org's course content.
+async function lessonInOrg(lessonId: string, orgId: string): Promise<boolean> {
+  const { data: lesson } = await db()
+    .from("lessons")
+    .select("course_id")
+    .eq("id", lessonId)
+    .single();
+  if (!lesson) return false;
+  const { data: course } = await db()
+    .from("courses")
+    .select("id")
+    .eq("id", (lesson as { course_id: string }).course_id)
+    .eq("created_by_org_id", orgId)
+    .single();
+  return !!course;
+}
+
 // ============================================================
 // Admin: Course CRUD
 // ============================================================
@@ -192,6 +211,17 @@ export async function createLesson(
   const parsed = lessonSchema.safeParse(data);
   if (!parsed.success) return { error: parsed.error.message };
 
+  // Ownership (SCRUM-342): db() bypasses RLS, so the target course must belong
+  // to the caller's org before we add a lesson to it — an org admin must not be
+  // able to attach lessons to another org's course.
+  const { data: ownerCourse } = await db()
+    .from("courses")
+    .select("id")
+    .eq("id", courseId)
+    .eq("created_by_org_id", profile.org_id)
+    .single();
+  if (!ownerCourse) return { error: "Course not found" };
+
   const { data: lesson, error } = await db()
     .from("lessons")
     .insert({
@@ -226,6 +256,10 @@ export async function updateLesson(
   if (!profile) return { error: "Not authenticated" };
   if (!isAdmin(profile.role)) return { error: "Admin access required" };
 
+  if (!(await lessonInOrg(lessonId, profile.org_id))) {
+    return { error: "Lesson not found" };
+  }
+
   const updateData: Record<string, unknown> = {
     ...data,
     updated_at: new Date().toISOString(),
@@ -247,6 +281,10 @@ export async function deleteLesson(lessonId: string) {
   const profile = await getAuthProfile();
   if (!profile) return { error: "Not authenticated" };
   if (!isAdmin(profile.role)) return { error: "Admin access required" };
+
+  if (!(await lessonInOrg(lessonId, profile.org_id))) {
+    return { error: "Lesson not found" };
+  }
 
   const { error } = await db()
     .from("lessons")
