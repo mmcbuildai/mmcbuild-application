@@ -217,22 +217,51 @@ export async function updateSelectedSystems(
 }
 
 export async function getProjectSelectedSystems(projectId: string): Promise<string[]> {
+  // Cross-tenant isolation (SCRUM-340): db() bypasses RLS, so scope this read to
+  // the caller's org — a foreign projectId must not return another org's systems.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) return [];
+
   const { data } = await db()
     .from("projects")
-    .select("selected_systems")
+    .select("selected_systems, org_id")
     .eq("id", projectId)
     .single();
 
-  if (!data) return [];
+  if (!data || (data as { org_id: string }).org_id !== profile.org_id) return [];
   const systems = (data as { selected_systems: string[] | null }).selected_systems;
   return Array.isArray(systems) ? systems : [];
 }
 
 export async function getProjectDesignChecks(projectId: string) {
+  // Cross-tenant isolation (SCRUM-340): db() bypasses RLS, so scope this list to
+  // the caller's org — a foreign projectId must not return another org's runs.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) return [];
+
   const { data } = await db()
     .from("design_checks")
     .select("id, status, summary, created_at, completed_at")
     .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
     .order("created_at", { ascending: false });
 
   return data ?? [];

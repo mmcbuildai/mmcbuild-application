@@ -27,6 +27,7 @@ vi.mock("@/lib/inngest/client", () => ({
 import {
   requestCostEstimation,
   getCostReport,
+  getProjectCostEstimates,
 } from "@/app/(dashboard)/quote/actions";
 
 // Thenable query-builder mock (mirrors the Supabase chain shape).
@@ -114,5 +115,27 @@ describe("getCostReport — cross-tenant isolation (SCRUM-340)", () => {
 
     expect(result.error).toBe("Not authenticated");
     expect(result.estimate).toBeNull();
+  });
+});
+
+describe("getProjectCostEstimates — cross-tenant isolation (SCRUM-340)", () => {
+  it("scopes the query to the caller's org", async () => {
+    const chain = mockChain({ data: [{ id: "est-1" }] });
+    mockDbFrom.mockReturnValueOnce(chain);
+
+    const result = await getProjectCostEstimates("proj-1");
+
+    expect(result).toEqual([{ id: "est-1" }]);
+    expect(chain.eq).toHaveBeenCalledWith("org_id", "org-1");
+    expect(chain.eq).toHaveBeenCalledWith("project_id", "proj-1");
+  });
+
+  it("returns [] for an unauthenticated caller without querying", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+
+    const result = await getProjectCostEstimates("proj-1");
+
+    expect(result).toEqual([]);
+    expect(mockDbFrom).not.toHaveBeenCalled();
   });
 });

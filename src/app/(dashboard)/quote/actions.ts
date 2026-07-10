@@ -140,10 +140,26 @@ export async function getCostReport(estimateId: string) {
 }
 
 export async function getProjectCostEstimates(projectId: string) {
+  // Cross-tenant isolation (SCRUM-340): db() bypasses RLS, so scope this list to
+  // the caller's org — a foreign projectId must not return another org's
+  // estimates (which carry dollar totals + savings figures).
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) return [];
+
   const { data } = await db()
     .from("cost_estimates")
     .select("id, status, summary, total_traditional, total_mmc, total_savings_pct, created_at, completed_at")
     .eq("project_id", projectId)
+    .eq("org_id", profile.org_id)
     .order("created_at", { ascending: false });
 
   return data ?? [];
