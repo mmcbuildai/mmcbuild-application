@@ -4,11 +4,17 @@ import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { revalidatePath } from "next/cache";
 import { inngest } from "@/lib/inngest/client";
+import { isOperatorEmail } from "@/lib/auth/operator";
 
-async function requireAdmin() {
+// SCRUM-345: the professionals directory is a GLOBAL shared marketplace, so
+// moderating it is a platform-OPERATOR action (email allowlist), NOT a per-org
+// owner/admin role — every self-signup is the owner of their own personal org,
+// so role can't mean "our staff".
+async function requireOperator() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
+  if (!isOperatorEmail(user.email)) throw new Error("Not authorised");
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -17,15 +23,12 @@ async function requireAdmin() {
     .single();
 
   if (!profile) throw new Error("Profile not found");
-  if (profile.role !== "owner" && profile.role !== "admin") {
-    throw new Error("Not authorised");
-  }
 
   return profile as { id: string; org_id: string; role: string };
 }
 
 export async function getDirectoryListings(statusFilter?: string) {
-  await requireAdmin();
+  await requireOperator();
 
   let query = db()
     .from("directory_listings")
@@ -56,8 +59,8 @@ export async function getDirectoryListings(statusFilter?: string) {
 }
 
 export async function approveDirectoryListing(listingId: string) {
-  // @cross-tenant-ok: global directory-submission moderation queue (no org_id), admin-role gated operator action
-  const profile = await requireAdmin();
+  // @cross-tenant-ok: global directory-submission moderation queue (no org_id), operator-allowlist gated (SCRUM-345)
+  const profile = await requireOperator();
 
   const { error } = await db()
     .from("directory_listings")
@@ -81,8 +84,8 @@ export async function approveDirectoryListing(listingId: string) {
 }
 
 export async function rejectDirectoryListing(listingId: string, notes?: string) {
-  // @cross-tenant-ok: global directory-submission moderation queue (no org_id), admin-role gated operator action
-  const profile = await requireAdmin();
+  // @cross-tenant-ok: global directory-submission moderation queue (no org_id), operator-allowlist gated (SCRUM-345)
+  const profile = await requireOperator();
 
   const { error } = await db()
     .from("directory_listings")
@@ -101,8 +104,8 @@ export async function rejectDirectoryListing(listingId: string, notes?: string) 
 }
 
 export async function requestInfoDirectoryListing(listingId: string, notes: string) {
-  // @cross-tenant-ok: global directory-submission moderation queue (no org_id), admin-role gated operator action
-  const profile = await requireAdmin();
+  // @cross-tenant-ok: global directory-submission moderation queue (no org_id), operator-allowlist gated (SCRUM-345)
+  const profile = await requireOperator();
 
   const { error } = await db()
     .from("directory_listings")

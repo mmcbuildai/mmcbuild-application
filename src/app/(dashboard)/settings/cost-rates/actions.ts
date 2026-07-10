@@ -5,6 +5,19 @@ import { db } from "@/lib/supabase/db";
 import { inngest } from "@/lib/inngest/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { isOperatorEmail } from "@/lib/auth/operator";
+
+// SCRUM-345: cost_rate_sources is GLOBAL config feeding EVERY org's quote
+// calculations, so managing sources is a platform-OPERATOR action (email
+// allowlist), not a per-org owner/admin role. Org-scoped rate overrides below
+// stay on requireAdmin.
+async function requireOperator() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !isOperatorEmail(user.email)) redirect("/dashboard");
+}
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -51,7 +64,7 @@ export async function createRateSource(
   sourceType: "api" | "csv" | "manual",
   config: Record<string, unknown>
 ) {
-  await requireAdmin();
+  await requireOperator();
 
   const { error } = await db()
     .from("cost_rate_sources")
@@ -67,8 +80,8 @@ export async function createRateSource(
 }
 
 export async function toggleRateSource(id: string, isActive: boolean) {
-  // @cross-tenant-ok: global cost_rate_sources config (no org_id), admin-role gated operator action
-  await requireAdmin();
+  // @cross-tenant-ok: global cost_rate_sources config (no org_id), operator-allowlist gated (SCRUM-345)
+  await requireOperator();
 
   const { error } = await db()
     .from("cost_rate_sources")
@@ -80,7 +93,7 @@ export async function toggleRateSource(id: string, isActive: boolean) {
 }
 
 export async function triggerSync(sourceId: string) {
-  await requireAdmin();
+  await requireOperator();
 
   await inngest.send({
     name: "cost/rates.ingest-requested",
