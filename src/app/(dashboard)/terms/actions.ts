@@ -13,6 +13,7 @@ const TERMS_VERSION = "beta-2026-06";
  * user, so it works regardless of the profiles RLS update policy.
  */
 export async function acceptTerms(): Promise<{ ok: true } | { error: string }> {
+  // @cross-tenant-ok: self-update of profiles scoped to the session user via .eq('user_id', user.id)
   const supabase = await createClient();
   const {
     data: { user },

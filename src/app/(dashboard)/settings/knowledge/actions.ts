@@ -27,6 +27,43 @@ async function getProfile() {
   return profile as { id: string; org_id: string; role: string };
 }
 
+// Cross-tenant isolation (SCRUM-343): admin bypasses RLS, and getProfile() only
+// proves the caller is an admin of SOME org. A KB is visible only when it is a
+// shared `system` KB or belongs to the caller's org — mirrors the visibility
+// predicate in listKnowledgeBases. Throws "KB not found" otherwise.
+async function assertKbInScope(
+  admin: ReturnType<typeof createAdminClient>,
+  kbId: string,
+  orgId: string,
+): Promise<void> {
+  const { data: kb } = await admin
+    .from("knowledge_bases")
+    .select("scope, org_id")
+    .eq("id", kbId)
+    .single();
+  const row = kb as { scope: string; org_id: string } | null;
+  if (!row || (row.scope !== "system" && row.org_id !== orgId)) {
+    throw new Error("KB not found");
+  }
+}
+
+// Same guard for a document, via its parent KB — a caller-supplied docId must
+// belong to a KB in the caller's scope.
+async function assertDocInScope(
+  admin: ReturnType<typeof createAdminClient>,
+  docId: string,
+  orgId: string,
+): Promise<void> {
+  const { data: doc } = await admin
+    .from("knowledge_documents")
+    .select("kb_id")
+    .eq("id", docId)
+    .single();
+  const d = doc as { kb_id: string } | null;
+  if (!d) throw new Error("Document not found");
+  await assertKbInScope(admin, d.kb_id, orgId);
+}
+
 /**
  * Non-throwing admin check for the Knowledge UI. `getProfile()` THROWS for a
  * non-admin, which crashes the page into the app error boundary (Karen's demo
@@ -34,6 +71,7 @@ async function getProfile() {
  * to block gracefully instead.
  */
 export async function isKnowledgeAdmin(): Promise<boolean> {
+  // @cross-tenant-ok: session-scoped role check by user_id, returns a boolean only
   const supabase = await createClient();
   const {
     data: { user },
@@ -102,8 +140,9 @@ export async function listKnowledgeBases() {
 }
 
 export async function getKnowledgeBase(kbId: string) {
-  await getProfile();
+  const profile = await getProfile();
   const admin = createAdminClient();
+  await assertKbInScope(admin, kbId, profile.org_id);
 
   const { data, error } = await admin
     .from("knowledge_bases")
@@ -119,8 +158,9 @@ export async function updateKnowledgeBase(
   kbId: string,
   updates: { name?: string; description?: string; is_active?: boolean }
 ) {
-  await getProfile();
+  const profile = await getProfile();
   const admin = createAdminClient();
+  await assertKbInScope(admin, kbId, profile.org_id);
 
   const { error } = await admin
     .from("knowledge_bases")
@@ -132,8 +172,9 @@ export async function updateKnowledgeBase(
 }
 
 export async function deleteKnowledgeBase(kbId: string) {
-  await getProfile();
+  const profile = await getProfile();
   const admin = createAdminClient();
+  await assertKbInScope(admin, kbId, profile.org_id);
 
   const { error } = await admin
     .from("knowledge_bases")
@@ -145,8 +186,9 @@ export async function deleteKnowledgeBase(kbId: string) {
 }
 
 export async function listKbDocuments(kbId: string) {
-  await getProfile();
+  const profile = await getProfile();
   const admin = createAdminClient();
+  await assertKbInScope(admin, kbId, profile.org_id);
 
   const { data, error } = await admin
     .from("knowledge_documents")
@@ -325,13 +367,14 @@ export async function uploadKbUrl(kbId: string, url: string, title?: string) {
 }
 
 export async function updateKbDocumentTitle(docId: string, kbId: string, newTitle: string) {
-  await getProfile();
+  const profile = await getProfile();
 
   if (!newTitle?.trim()) {
     throw new Error("Title is required");
   }
 
   const admin = createAdminClient();
+  await assertDocInScope(admin, docId, profile.org_id);
 
   const { error } = await admin
     .from("knowledge_documents")
@@ -343,8 +386,9 @@ export async function updateKbDocumentTitle(docId: string, kbId: string, newTitl
 }
 
 export async function deleteKbDocument(docId: string, kbId: string) {
-  await getProfile();
+  const profile = await getProfile();
   const admin = createAdminClient();
+  await assertDocInScope(admin, docId, profile.org_id);
 
   // Get file path for storage cleanup
   const { data: doc } = await admin

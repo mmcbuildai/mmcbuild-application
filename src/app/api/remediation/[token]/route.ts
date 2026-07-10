@@ -77,6 +77,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
+  // @cross-tenant-ok: opaque-token-gated public respond endpoint; finding/project/org ids come from the validated (non-expired) token row, not the caller
   const { token } = await params;
   const admin = createAdminClient();
 

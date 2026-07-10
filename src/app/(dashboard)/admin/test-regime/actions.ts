@@ -3,6 +3,7 @@
 import { db } from "@/lib/supabase/db";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { isOperatorEmail } from "@/lib/auth/operator";
 
 // Test catalog for the v1.0 regime. Persona-based flows were removed in
 // favour of behavioural beta observation, so the original onboarding /
@@ -35,10 +36,13 @@ const TEST_CASES = [
   { tcId: "TC-ACCESS-002", title: "Unauthenticated user is redirected to /login", section: "Access Control" },
 ];
 
-async function requireAdmin() {
+// SCRUM-345: the QA test-regime is a GLOBAL internal catalog, so it is a
+// platform-OPERATOR surface (email allowlist), not a per-org owner/admin role.
+async function requireOperator() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
+  if (!isOperatorEmail(user.email)) throw new Error("Not authorised");
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -46,9 +50,7 @@ async function requireAdmin() {
     .eq("user_id", user.id)
     .single();
 
-  if (!profile || (profile.role !== "owner" && profile.role !== "admin")) {
-    throw new Error("Not authorised");
-  }
+  if (!profile) throw new Error("Not authorised");
 
   return { ...profile, userId: user.id };
 }
@@ -80,7 +82,7 @@ function emptyResult(tc: { tcId: string; title: string; section: string }): Test
 }
 
 export async function getTestResults(): Promise<TestResultRow[]> {
-  await requireAdmin();
+  await requireOperator();
 
   const { data: results } = await db()
     .from("test_results")
@@ -103,7 +105,8 @@ export async function updateTestResult(
   status: "pending" | "passed" | "failed",
   notes: string | null
 ) {
-  const admin = await requireAdmin();
+  // @cross-tenant-ok: global internal QA test-regime table (no org_id), operator-allowlist gated (SCRUM-345)
+  const admin = await requireOperator();
   const tc = TEST_CASES.find((t) => t.tcId === tcId);
   if (!tc) return { error: "Invalid test case ID" };
 
@@ -153,7 +156,8 @@ export async function addScreenshot(
   filePath: string,
   fileSize: number
 ) {
-  await requireAdmin();
+  // @cross-tenant-ok: global internal QA test-regime table (no org_id), operator-allowlist gated (SCRUM-345)
+  await requireOperator();
 
   // Get or create the test result
   let { data: result } = await db()
@@ -197,7 +201,8 @@ export async function addScreenshot(
 }
 
 export async function deleteScreenshot(screenshotId: string) {
-  await requireAdmin();
+  // @cross-tenant-ok: global internal QA test-screenshots table (no org_id), operator-allowlist gated (SCRUM-345)
+  await requireOperator();
 
   // Get file path for storage cleanup
   const { data: screenshot } = await db()
@@ -223,7 +228,7 @@ export async function deleteScreenshot(screenshotId: string) {
 }
 
 export async function resetAllTests() {
-  await requireAdmin();
+  await requireOperator();
 
   const { error } = await db()
     .from("test_results")

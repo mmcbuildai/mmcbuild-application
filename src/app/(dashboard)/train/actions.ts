@@ -305,6 +305,7 @@ export async function searchCourses(filters?: {
   difficulty?: string;
   page?: number;
 }) {
+  // @cross-tenant-ok: published-course catalog (cross-org public) + caller's own enrollments via profile.id
   const profile = await getAuthProfile();
   if (!profile) return { courses: [], total: 0 };
 
@@ -477,6 +478,7 @@ export async function enrollInCourse(courseId: string) {
 }
 
 export async function getMyEnrollments() {
+  // @cross-tenant-ok: enrollments filtered by session profile.id
   const profile = await getAuthProfile();
   if (!profile) return [];
 
@@ -493,6 +495,7 @@ export async function getMyEnrollments() {
 }
 
 export async function getLessonContent(courseId: string, lessonId: string) {
+  // @cross-tenant-ok: gated by the caller's own enrollment (course_id + profile.id); enrollment only possible on published courses
   const profile = await getAuthProfile();
   if (!profile) return null;
 
@@ -556,6 +559,7 @@ export async function getLessonContent(courseId: string, lessonId: string) {
 // ============================================================
 
 export async function submitQuiz(lessonId: string, answers: number[]) {
+  // @cross-tenant-ok: requires the caller's own enrollment; quiz_attempt scoped to own enrollment_id
   const profile = await getAuthProfile();
   if (!profile) return { error: "Not authenticated" };
 
@@ -629,6 +633,7 @@ export async function submitQuiz(lessonId: string, answers: number[]) {
 }
 
 export async function completeLesson(lessonId: string) {
+  // @cross-tenant-ok: requires the caller's own enrollment; completion scoped to own enrollment_id
   const profile = await getAuthProfile();
   if (!profile) return { error: "Not authenticated" };
 
@@ -729,6 +734,7 @@ export async function completeLesson(lessonId: string) {
 }
 
 export async function getMyProgress(courseId: string) {
+  // @cross-tenant-ok: enrollment + progress by course_id + session profile.id
   const profile = await getAuthProfile();
   if (!profile) return null;
 
@@ -765,6 +771,7 @@ export async function getMyProgress(courseId: string) {
 // ============================================================
 
 export async function getMyCertificates() {
+  // @cross-tenant-ok: certificates filtered by session profile.id
   const profile = await getAuthProfile();
   if (!profile) return [];
 
@@ -781,6 +788,7 @@ export async function getMyCertificates() {
 }
 
 export async function getCertificate(certId: string) {
+  // @cross-tenant-ok: certificate fetch filtered by .eq('profile_id', profile.id)
   const profile = await getAuthProfile();
   if (!profile) return null;
 
@@ -850,6 +858,19 @@ export async function getCourseLessonsWithProgress(
 ): Promise<LessonWithCompletion[]> {
   const profile = await getAuthProfile();
   if (!profile) return [];
+
+  // Cross-tenant isolation (SCRUM-343): db() bypasses RLS — only expose lessons
+  // (incl. content + quiz answer keys) for a published course or one owned by the
+  // caller's org, matching getCourseDetail's visibility rule.
+  const { data: course } = await db()
+    .from("courses")
+    .select("status, created_by_org_id")
+    .eq("id", courseId)
+    .single();
+  const c = course as { status: string; created_by_org_id: string } | null;
+  if (!c || (c.status !== "published" && c.created_by_org_id !== profile.org_id)) {
+    return [];
+  }
 
   const { data: lessons } = await db()
     .from("lessons")

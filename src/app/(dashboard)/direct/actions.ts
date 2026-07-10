@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { inngest } from "@/lib/inngest/client";
 import { db } from "@/lib/supabase/db";
+import { isOperatorEmail } from "@/lib/auth/operator";
 import {
   registrationSchema,
   profileUpdateSchema,
@@ -359,6 +360,7 @@ export async function searchProfessionals(filters: {
 }
 
 export async function getProfessionalProfile(id: string) {
+  // @cross-tenant-ok: public cross-org professionals directory profile (returns null if deregistered)
   const { data: professional } = await db()
     .from("professionals")
     .select("*")
@@ -441,6 +443,7 @@ export async function submitReview(professionalId: string, input: ReviewInput) {
 }
 
 export async function getProfessionalReviews(professionalId: string, page: number = 1) {
+  // @cross-tenant-ok: public directory reviews for a public listing
   const pageSize = 10;
   const offset = (page - 1) * pageSize;
 
@@ -558,11 +561,12 @@ export async function markEnquiryRead(enquiryId: string) {
 // ─── Admin ───
 
 export async function approveProfessional(id: string) {
-  const profile = await getAuthProfile();
-  if (!profile) return { error: "Not authenticated" };
-  if (profile.role !== "owner" && profile.role !== "admin") {
-    return { error: "Not authorised" };
-  }
+  // @cross-tenant-ok: moderation of the shared public directory, operator-allowlist gated (SCRUM-345)
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !isOperatorEmail(user.email)) return { error: "Not authorised" };
 
   const { error } = await db()
     .from("professionals")
@@ -574,11 +578,12 @@ export async function approveProfessional(id: string) {
 }
 
 export async function suspendProfessional(id: string) {
-  const profile = await getAuthProfile();
-  if (!profile) return { error: "Not authenticated" };
-  if (profile.role !== "owner" && profile.role !== "admin") {
-    return { error: "Not authorised" };
-  }
+  // @cross-tenant-ok: moderation of the shared public directory, operator-allowlist gated (SCRUM-345)
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !isOperatorEmail(user.email)) return { error: "Not authorised" };
 
   const { error } = await db()
     .from("professionals")
@@ -590,9 +595,12 @@ export async function suspendProfessional(id: string) {
 }
 
 export async function getPendingProfessionals() {
-  const profile = await getAuthProfile();
-  if (!profile) return [];
-  if (profile.role !== "owner" && profile.role !== "admin") return [];
+  // SCRUM-345: the directory moderation queue is a platform-operator surface.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !isOperatorEmail(user.email)) return [];
 
   const { data } = await db()
     .from("professionals")

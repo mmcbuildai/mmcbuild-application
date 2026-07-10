@@ -57,6 +57,7 @@ export async function OPTIONS(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // @cross-tenant-ok: public marketing lead-capture insert (no tenant data read; returns only the new lead's id)
   return withCors(await handleLead(request), request.headers.get("origin"));
 }
 
