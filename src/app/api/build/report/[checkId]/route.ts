@@ -20,11 +20,20 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const admin = db();
 
   const { data: check, error: checkError } = await admin
     .from("design_checks")
-    .select("id, status, summary, completed_at, project_id")
+    .select("id, status, summary, completed_at, project_id, org_id")
     .eq("id", checkId)
     .single();
 
@@ -32,7 +41,13 @@ export async function GET(
     return NextResponse.json({ error: "Check not found" }, { status: 404 });
   }
 
-  const rec = check as { id: string; status: string; summary: string | null; completed_at: string | null; project_id: string };
+  const rec = check as { id: string; status: string; summary: string | null; completed_at: string | null; project_id: string; org_id: string };
+
+  // Cross-tenant isolation (SCRUM-342): db() bypasses RLS — the check must
+  // belong to the caller's org, else this exports another org's build report.
+  if (rec.org_id !== profile.org_id) {
+    return NextResponse.json({ error: "Check not found" }, { status: 404 });
+  }
 
   if (rec.status !== "completed") {
     return NextResponse.json({ error: "Report not yet completed" }, { status: 400 });

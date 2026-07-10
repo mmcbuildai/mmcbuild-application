@@ -24,6 +24,15 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const admin = db();
 
   const { data: check, error: checkError } = await admin
@@ -43,6 +52,13 @@ export async function GET(
     org_id: string;
     spatial_layout: SpatialLayout | null;
   };
+
+  // Cross-tenant isolation (SCRUM-342): db() bypasses RLS — reject a check that
+  // isn't the caller's BEFORE the paywall, else a foreign checkId both exports
+  // another org's DXF and evaluates the paywall against the victim's tier.
+  if (rec.org_id !== profile.org_id) {
+    return NextResponse.json({ error: "Report not found" }, { status: 404 });
+  }
 
   // Paid-tier gate (AC). Trial / expired orgs can view the report but not export
   // the modified DWG.
