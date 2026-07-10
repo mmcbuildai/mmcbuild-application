@@ -60,6 +60,22 @@ export async function requestDesignOptimisation(
     return { error: "Profile not found" };
   }
 
+  // Cross-tenant isolation (SCRUM-340): db() below bypasses RLS, so prove the
+  // projectId belongs to the caller's org BEFORE any project-scoped query —
+  // otherwise a foreign projectId leaks the other org's in-flight run id via
+  // the duplicate-run guard. Same assert as updateSelectedSystems.
+  const { data: ownerProject } = await db()
+    .from("projects")
+    .select("org_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (
+    !ownerProject ||
+    (ownerProject as { org_id: string }).org_id !== profile.org_id
+  ) {
+    return { error: "Project not found" };
+  }
+
   // Duplicate-run guard — don't spawn a second optimisation while one is already
   // running for this project (mirrors the Comply/Quote guard).
   {
@@ -110,6 +126,26 @@ export async function requestDesignOptimisation(
 }
 
 export async function getDesignReport(checkId: string) {
+  // Cross-tenant isolation (SCRUM-340): db() bypasses RLS, so this report must
+  // be scoped to the caller's org — otherwise any checkId returns another org's
+  // design report. Authenticate, resolve the caller's org, and reject a check
+  // that isn't theirs with the same "not found" message (no existence leak).
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Not authenticated", check: null, suggestions: [] };
+  }
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) {
+    return { error: "Profile not found", check: null, suggestions: [] };
+  }
+
   const { data: check, error: checkError } = await db()
     .from("design_checks")
     .select("id, project_id, org_id, plan_id, status, summary, stage, spatial_layout, started_at, completed_at, created_at")
@@ -117,6 +153,10 @@ export async function getDesignReport(checkId: string) {
     .single();
 
   if (checkError || !check) {
+    return { error: "Design check not found", check: null, suggestions: [] };
+  }
+
+  if ((check as { org_id: string }).org_id !== profile.org_id) {
     return { error: "Design check not found", check: null, suggestions: [] };
   }
 
