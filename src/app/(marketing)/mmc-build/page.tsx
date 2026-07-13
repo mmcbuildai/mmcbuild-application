@@ -25,18 +25,18 @@ const KIT_OF_PARTS_IMAGE =
 export default function MMCBuildPage() {
   return (
     <div className="min-h-screen">
-      <section className="relative bg-gradient-to-br from-teal-900 via-teal-800 to-slate-900 text-white overflow-hidden py-24">
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-teal-500/20 blur-[100px] rounded-full pointer-events-none" />
+      <section className="relative bg-gradient-to-br from-brand-900 via-brand-800 to-slate-900 text-white overflow-hidden py-24">
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-brand-500/20 blur-[100px] rounded-full pointer-events-none" />
 
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 z-10">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             <div>
-              <div className="inline-flex items-center gap-2 bg-teal-500/20 border border-teal-500/30 rounded-full px-4 py-1.5 mb-6">
-                <Hammer className="h-4 w-4 text-teal-300" />
-                <span className="text-sm text-teal-300 font-medium">MMC Build</span>
+              <div className="inline-flex items-center gap-2 bg-brand-500/20 border border-brand-500/30 rounded-full px-4 py-1.5 mb-6">
+                <Hammer className="h-4 w-4 text-brand-300" />
+                <span className="text-sm text-brand-300 font-medium">MMC Build</span>
               </div>
               <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl mb-6">
-                Build <span className="text-teal-400">Smarter</span>, Not Harder
+                Build <span className="text-brand-400">Smarter</span>, Not Harder
               </h1>
               <p className="text-xl text-slate-300 mb-8">
                 Access cutting-edge construction technologies and receive intelligent alternative
@@ -46,7 +46,7 @@ export default function MMCBuildPage() {
                 <Button
                   asChild
                   size="lg"
-                  className="bg-white text-teal-900 hover:bg-slate-100 rounded-full px-8"
+                  className="bg-white text-brand-900 hover:bg-slate-100 rounded-full px-8"
                 >
                   <a href="#waitlist">
                     Join Waitlist <ArrowRight className="ml-2 h-5 w-5" />
@@ -97,13 +97,13 @@ export default function MMCBuildPage() {
             {technologies.map((tech) => (
               <div
                 key={tech.name}
-                className="bg-white rounded-2xl p-6 border border-slate-200 hover:border-teal-300 hover:shadow-lg transition-all"
+                className="bg-white rounded-2xl p-6 border border-slate-200 hover:border-brand-300 hover:shadow-lg transition-all"
               >
                 <div className="flex justify-between items-start mb-4">
-                  <span className="bg-teal-100 text-teal-700 text-xs font-medium px-3 py-1 rounded-full">
+                  <span className="bg-brand-100 text-brand-700 text-xs font-medium px-3 py-1 rounded-full">
                     {tech.category}
                   </span>
-                  <span className="text-teal-600 font-semibold text-sm">{tech.savings}</span>
+                  <span className="text-brand-600 font-semibold text-sm">{tech.savings}</span>
                 </div>
                 <h3 className="text-lg font-bold text-slate-900">{tech.name}</h3>
               </div>
@@ -129,7 +129,7 @@ export default function MMCBuildPage() {
                   "Sustainability reporting",
                 ].map((item) => (
                   <li key={item} className="flex items-center text-slate-200">
-                    <CheckCircle2 className="h-5 w-5 text-teal-400 mr-3" />
+                    <CheckCircle2 className="h-5 w-5 text-brand-400 mr-3" />
                     {item}
                   </li>
                 ))}

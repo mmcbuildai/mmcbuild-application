@@ -68,8 +68,8 @@ const FLAG_STYLES = {
 } as const;
 
 const DECISION_BORDER: Record<SuggestionDecision, string> = {
-  undecided: "border-l-teal-500",
-  pursuing: "border-l-emerald-500",
+  undecided: "border-l-brand-500",
+  pursuing: "border-l-brandgreen-500",
   considering: "border-l-amber-500",
   rejected: "border-l-rose-500",
 };
@@ -125,7 +125,7 @@ export function SuggestionCard({
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">
                 {getTechnologyLabel(suggestion.technology_category)}
               </span>
               <span
@@ -159,7 +159,7 @@ export function SuggestionCard({
               <div className="flex items-center gap-1">
                 <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-teal-500"
+                    className="h-full rounded-full bg-brand-500"
                     style={{ width: `${suggestion.confidence * 100}%` }}
                   />
                 </div>
@@ -217,14 +217,14 @@ export function SuggestionCard({
               <p className="text-xs font-semibold text-red-700 mb-1">Current Approach</p>
               <p className="text-sm text-red-900">{suggestion.current_approach}</p>
             </div>
-            <div className="rounded-md border bg-teal-50 p-3">
-              <p className="text-xs font-semibold text-teal-700 mb-1">Suggested Alternative</p>
-              <p className="text-sm text-teal-900">{suggestion.suggested_alternative}</p>
+            <div className="rounded-md border bg-brand-50 p-3">
+              <p className="text-xs font-semibold text-brand-700 mb-1">Suggested Alternative</p>
+              <p className="text-sm text-brand-900">{suggestion.suggested_alternative}</p>
             </div>
           </div>
 
           <div className="flex justify-center sm:hidden -my-2">
-            <ArrowRight className="h-5 w-5 text-teal-500 rotate-90" />
+            <ArrowRight className="h-5 w-5 text-brand-500 rotate-90" />
           </div>
 
           <div>
@@ -261,7 +261,7 @@ export function SuggestionCard({
                 onClick={() => pickDecision("pursuing")}
                 icon={CheckCircle2}
                 label="Pursuing"
-                activeClass="bg-emerald-600 text-white hover:bg-emerald-700"
+                activeClass="bg-brandgreen-600 text-white hover:bg-brandgreen-700"
               />
               <DecisionButton
                 active={decision === "considering"}
@@ -380,7 +380,7 @@ function SavingsStat({
       title={tooltip}
     >
       <p className="text-xs text-muted-foreground cursor-help">{label}</p>
-      <p className="text-lg font-bold text-teal-700">
+      <p className="text-lg font-bold text-brand-700">
         {pct > 0 ? `-${pct}%` : "—"}
       </p>
     </div>

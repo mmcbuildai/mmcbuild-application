@@ -18,7 +18,7 @@ export function ReportLegend() {
         ) : (
           <ChevronRight className="h-4 w-4" />
         )}
-        <Info className="h-4 w-4 text-teal-600" />
+        <Info className="h-4 w-4 text-brand-600" />
         <span>How to read this report</span>
       </button>
 
@@ -57,7 +57,7 @@ export function ReportLegend() {
 function Row({ term, definition }: { term: string; definition: string }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+      <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">
         {term}
       </p>
       <p className="text-sm text-muted-foreground leading-snug">{definition}</p>

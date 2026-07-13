@@ -36,7 +36,7 @@ const MODULE_ICONS: Record<ModuleId, typeof ShieldCheck> = {
 
 const MODULE_GRADIENTS: Record<ModuleId, string> = {
   comply: "from-blue-500 to-blue-600",
-  build: "from-teal-500 to-teal-600",
+  build: "from-brand-500 to-brand-600",
   quote: "from-violet-500 to-violet-600",
   direct: "from-amber-500 to-amber-600",
   train: "from-indigo-500 to-indigo-600",
@@ -64,16 +64,16 @@ export function DashboardModules({
 
       {/* Onboarding — first-login with no projects */}
       {!hasProjects && (
-        <div className="rounded-xl border-2 border-dashed border-teal-300 bg-gradient-to-br from-teal-50 to-blue-50 p-6">
+        <div className="rounded-xl border-2 border-dashed border-brand-300 bg-gradient-to-br from-brand-50 to-blue-50 p-6">
           <div className="flex items-start gap-4">
-            <div className="rounded-full bg-teal-100 p-3">
-              <Rocket className="h-6 w-6 text-teal-600" />
+            <div className="rounded-full bg-brand-100 p-3">
+              <Rocket className="h-6 w-6 text-brand-600" />
             </div>
             <div className="flex-1">
-              <h2 className="text-lg font-semibold text-teal-900">
+              <h2 className="text-lg font-semibold text-brand-900">
                 Welcome to MMC Build
               </h2>
-              <p className="text-sm text-teal-700 mt-1">
+              <p className="text-sm text-brand-700 mt-1">
                 Get started by creating your first project. The platform guides
                 you through a 5-step workflow:
               </p>
@@ -83,13 +83,13 @@ export function DashboardModules({
                 {WORKFLOW_STEPS.map((step, i) => (
                   <div key={step.num} className="flex items-center gap-2">
                     {i > 0 && (
-                      <ArrowRight className="h-3.5 w-3.5 text-teal-400" />
+                      <ArrowRight className="h-3.5 w-3.5 text-brand-400" />
                     )}
-                    <div className="flex items-center gap-1.5 rounded-full border border-teal-200 bg-white/80 px-3 py-1">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-600 text-[10px] font-bold text-white">
+                    <div className="flex items-center gap-1.5 rounded-full border border-brand-200 bg-white/80 px-3 py-1">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[10px] font-bold text-white">
                         {step.num}
                       </span>
-                      <span className="text-xs font-medium text-teal-800">
+                      <span className="text-xs font-medium text-brand-800">
                         {step.label}
                       </span>
                     </div>
@@ -99,7 +99,7 @@ export function DashboardModules({
 
               <Link
                 href="/projects"
-                className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
+                className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
               >
                 <Plus className="h-4 w-4" />
                 Start Here — Create Your First Project
@@ -173,10 +173,10 @@ export function DashboardModules({
           users know to start with a project; every module opens from inside
           one. The module grid below stays locked until a project exists. */}
       {hasProjects && (
-        <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-blue-50 p-6">
+        <div className="rounded-xl border bg-gradient-to-br from-brand-50 to-blue-50 p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
-              <div className="rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 p-3">
+              <div className="rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 p-3">
                 <FolderKanban className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -191,7 +191,7 @@ export function DashboardModules({
             </div>
             <Link
               href="/projects"
-              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
+              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
             >
               Start Here
               <ArrowRight className="h-4 w-4" />
@@ -258,7 +258,7 @@ export function DashboardModules({
               <Link
                 key={id}
                 href={mod.href}
-                className={`${base} bg-card hover:border-teal-400 hover:shadow-sm`}
+                className={`${base} bg-card hover:border-brand-400 hover:shadow-sm`}
               >
                 {cardBody}
               </Link>

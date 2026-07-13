@@ -48,7 +48,7 @@ const testSteps = [
     module: "3. MMC Build — Design Optimisation",
     icon: Hammer,
     href: "/build",
-    color: "text-teal-500",
+    color: "text-brand-500",
     steps: [
       "Empty state (TC-BUILD-003): before creating any project — or on a fresh account with none — opening Build redirects you to Projects with a 'create' prompt. Verify this first, since once a project exists you can't return to the empty state without deleting it.",
       "From your project, run the design optimisation",
@@ -97,7 +97,7 @@ const testSteps = [
     module: "7. Billing & Settings",
     icon: CreditCard,
     href: "/billing",
-    color: "text-emerald-500",
+    color: "text-brandgreen-500",
     steps: [
       "Visit the Billing page to see the plan cards and usage tracking",
       "Check Settings: organisation details, knowledge base, AI performance dashboard",
@@ -117,11 +117,11 @@ export function TestingGuide() {
   const completedCount = Object.values(completed).filter(Boolean).length;
 
   return (
-    <div className="rounded-2xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-6 mb-6">
+    <div className="rounded-2xl border-2 border-brandgreen-200 bg-gradient-to-br from-brandgreen-50 to-brand-50 p-6 mb-6">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100">
-            <FlaskConical className="h-5 w-5 text-emerald-600" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brandgreen-100">
+            <FlaskConical className="h-5 w-5 text-brandgreen-600" />
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900">
@@ -129,7 +129,7 @@ export function TestingGuide() {
             </h2>
             <p className="text-sm text-slate-600">
               Walk through each module to verify the full platform.{" "}
-              <span className="font-medium text-emerald-600">
+              <span className="font-medium text-brandgreen-600">
                 {completedCount}/{totalSteps} steps completed
               </span>
             </p>
@@ -138,7 +138,7 @@ export function TestingGuide() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="p-1.5 rounded-lg hover:bg-emerald-100 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-brandgreen-100 transition-colors"
           >
             {expanded ? (
               <ChevronUp className="h-4 w-4 text-slate-500" />
@@ -148,7 +148,7 @@ export function TestingGuide() {
           </button>
           <button
             onClick={() => setDismissed(true)}
-            className="p-1.5 rounded-lg hover:bg-emerald-100 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-brandgreen-100 transition-colors"
             title="Dismiss guide"
           >
             <X className="h-4 w-4 text-slate-400" />
@@ -157,9 +157,9 @@ export function TestingGuide() {
       </div>
 
       {/* Progress bar */}
-      <div className="h-2 bg-emerald-100 rounded-full mb-4 overflow-hidden">
+      <div className="h-2 bg-brandgreen-100 rounded-full mb-4 overflow-hidden">
         <div
-          className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+          className="h-full bg-brandgreen-500 rounded-full transition-all duration-500"
           style={{ width: `${totalSteps > 0 ? (completedCount / totalSteps) * 100 : 0}%` }}
         />
       </div>
@@ -193,7 +193,7 @@ export function TestingGuide() {
                         className="mt-0.5 shrink-0"
                       >
                         {isDone ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          <CheckCircle2 className="h-4 w-4 text-brandgreen-500" />
                         ) : (
                           <Circle className="h-4 w-4 text-slate-300" />
                         )}

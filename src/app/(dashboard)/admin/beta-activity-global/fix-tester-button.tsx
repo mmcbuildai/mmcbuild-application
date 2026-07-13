@@ -34,7 +34,7 @@ export function FixTesterButton({ userId }: { userId: string }) {
       </button>
       {msg && (
         <div
-          className={`mt-1 text-[11px] ${ok ? "text-emerald-600" : "text-red-600"}`}
+          className={`mt-1 text-[11px] ${ok ? "text-brandgreen-600" : "text-red-600"}`}
         >
           {msg}
         </div>

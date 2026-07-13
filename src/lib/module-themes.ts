@@ -21,10 +21,10 @@ export const moduleThemes = {
   build: {
     label: "MMC Build",
     icon: Wrench,
-    accent: "text-teal-400",
-    accentBg: "bg-teal-400",
-    accentHover: "hover:bg-teal-500",
-    heroGradient: "bg-gradient-to-br from-[#042F2E] via-teal-700 to-teal-500",
+    accent: "text-brand-400",
+    accentBg: "bg-brand-400",
+    accentHover: "hover:bg-brand-500",
+    heroGradient: "bg-gradient-to-br from-[#042F2E] via-brand-700 to-brand-500",
     badgeLabel: "MMC Build",
   },
   quote: {
@@ -60,11 +60,11 @@ export const moduleThemes = {
   billing: {
     label: "Billing",
     icon: CreditCard,
-    accent: "text-emerald-400",
-    accentBg: "bg-emerald-400",
-    accentHover: "hover:bg-emerald-500",
+    accent: "text-brandgreen-400",
+    accentBg: "bg-brandgreen-400",
+    accentHover: "hover:bg-brandgreen-500",
     heroGradient:
-      "bg-gradient-to-br from-[#022C22] via-emerald-800 to-emerald-600",
+      "bg-gradient-to-br from-[#022C22] via-brandgreen-800 to-brandgreen-600",
     badgeLabel: "Billing",
   },
   projects: {

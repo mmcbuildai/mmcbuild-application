@@ -34,7 +34,7 @@ export function Plan3DReveal({ layout, suggestions }: Plan3DRevealProps) {
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-zinc-50 rounded-lg"
       >
         <div className="flex items-center gap-3">
-          <Box className="h-5 w-5 text-teal-600" />
+          <Box className="h-5 w-5 text-brand-600" />
           <div>
             <p className="text-sm font-medium text-zinc-900">
               {expanded

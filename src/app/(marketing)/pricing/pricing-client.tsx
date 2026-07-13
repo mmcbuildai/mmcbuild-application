@@ -270,7 +270,7 @@ export function PricingClient() {
               >
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                    <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-teal-500 text-white text-sm font-medium px-4 py-1 rounded-full">
+                    <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-brand-500 text-white text-sm font-medium px-4 py-1 rounded-full">
                       <Sparkles className="h-3 w-3" /> Most Popular
                     </div>
                   </div>

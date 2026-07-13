@@ -71,7 +71,7 @@ export function OptimisationProgress({
       completionTitle="Your design optimisation report is ready"
       completionBody="Your design optimisation report is ready."
       onComplete={() => router.refresh()}
-      accentClass="text-teal-600"
+      accentClass="text-brand-600"
     />
   );
 }

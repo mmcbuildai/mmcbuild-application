@@ -90,7 +90,7 @@ export function BetaPageFeedbackButton() {
             </div>
 
             {done ? (
-              <p className="py-4 text-center text-sm font-medium text-emerald-600">
+              <p className="py-4 text-center text-sm font-medium text-brandgreen-600">
                 Thanks — logged for follow-up.
               </p>
             ) : (

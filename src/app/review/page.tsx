@@ -26,7 +26,7 @@ function StatusBadge({ status, label }: StatusBadgeProps) {
     overdue: "bg-red-500/20 text-red-400 border-red-500/30",
     pending: "bg-amber-500/20 text-amber-400 border-amber-500/30",
     "in-progress": "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    done: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    done: "bg-brandgreen-500/20 text-brandgreen-400 border-brandgreen-500/30",
   };
   const icons = {
     overdue: <AlertTriangle className="h-3.5 w-3.5" />,
@@ -158,7 +158,7 @@ export default function ReviewPage() {
       <nav className="sticky top-0 z-50 border-b border-white/10 bg-[#0B1120]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-cyan-600">
               <Shield className="h-5 w-5 text-white" />
             </div>
             <span className="text-lg font-bold text-white tracking-tight">
@@ -179,17 +179,17 @@ export default function ReviewPage() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-teal-500/10 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-brand-500/10 via-transparent to-transparent" />
         <div className="relative mx-auto max-w-6xl px-6 py-16 text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-4 py-2 mb-6 backdrop-blur-sm">
-            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="h-2 w-2 rounded-full bg-brandgreen-400 animate-pulse" />
             <span className="text-sm font-medium text-white/80">
               Sprint 4 — Client Review
             </span>
           </div>
           <h1 className="text-4xl font-extrabold italic text-white leading-tight lg:text-5xl">
             Sprint{" "}
-            <span className="text-teal-400">Review</span>{" "}
+            <span className="text-brand-400">Review</span>{" "}
             Dashboard
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-white/50">
@@ -321,7 +321,7 @@ export default function ReviewPage() {
             {[
               {
                 label: "Accept",
-                color: "bg-emerald-500/20 border-emerald-500/30 text-emerald-400",
+                color: "bg-brandgreen-500/20 border-brandgreen-500/30 text-brandgreen-400",
                 description: "Will be built this sprint",
               },
               {

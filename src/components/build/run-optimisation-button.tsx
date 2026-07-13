@@ -49,7 +49,7 @@ export function RunOptimisationButton({
     <div className="space-y-2">
       <Button
         size="sm"
-        className="w-full bg-teal-600 hover:bg-teal-700"
+        className="w-full bg-brand-600 hover:bg-brand-700"
         onClick={handleClick}
         disabled={isPending}
       >

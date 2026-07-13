@@ -29,7 +29,7 @@ export function ReportNextSteps({
           <Link
             key={s.href}
             href={s.href}
-            className="group rounded-lg border p-4 transition-colors hover:border-teal-300 hover:bg-teal-50/40"
+            className="group rounded-lg border p-4 transition-colors hover:border-brand-300 hover:bg-brand-50/40"
           >
             <div className="flex items-center justify-between">
               <span className="font-medium">{s.title}</span>

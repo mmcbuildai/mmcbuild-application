@@ -54,7 +54,7 @@ export function RunningJobsChip() {
       type="button"
       onClick={() => router.push(top.href)}
       title={`${label} — click to jump back`}
-      className="hidden items-center gap-1.5 rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-700 transition-colors hover:bg-teal-100 sm:inline-flex"
+      className="hidden items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 transition-colors hover:bg-brand-100 sm:inline-flex"
     >
       <Loader2 className="h-3.5 w-3.5 animate-spin" />
       <span className="max-w-[200px] truncate">{label}</span>

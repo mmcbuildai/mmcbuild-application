@@ -99,7 +99,7 @@ export function SystemSelectChips({
                 locked
                   ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400"
                   : isSelected
-                    ? "border-teal-600 bg-teal-600 text-white"
+                    ? "border-brand-600 bg-brand-600 text-white"
                     : "border-gray-300 bg-white text-zinc-700 hover:bg-zinc-50"
               }`}
             >
@@ -163,7 +163,7 @@ export function SystemSelectChips({
       {!showWarning && isDirty && (
         <Button
           size="sm"
-          className="mt-3 bg-teal-600 hover:bg-teal-700"
+          className="mt-3 bg-brand-600 hover:bg-brand-700"
           onClick={handleSave}
           disabled={isPending}
         >

@@ -48,10 +48,10 @@ const MODULE_COLORS: Record<
     text: "text-blue-700",
   },
   build: {
-    gradient: "from-teal-500 to-teal-600",
-    border: "border-teal-300",
-    bg: "bg-teal-50",
-    text: "text-teal-700",
+    gradient: "from-brand-500 to-brand-600",
+    border: "border-brand-300",
+    bg: "bg-brand-50",
+    text: "text-brand-700",
   },
   quote: {
     gradient: "from-violet-500 to-violet-600",
@@ -321,7 +321,7 @@ function ModuleCard({
         {!locked && (
           <Link
             href={mod.href}
-            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:underline"
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
           >
             <ExternalLink className="h-3 w-3" />
             Open {mod.name.replace("MMC ", "")} to do these
@@ -367,7 +367,7 @@ function ModuleCard({
                   placeholder="What worked well? What didn't? Any suggestions for improvement?"
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
-                  className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -472,7 +472,7 @@ export function BetaDashboard({
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-1">
-          <FlaskConical className="h-6 w-6 text-teal-600" />
+          <FlaskConical className="h-6 w-6 text-brand-600" />
           <h1 className="text-2xl font-bold">Beta Testing Dashboard</h1>
         </div>
         <p className="text-muted-foreground">
@@ -484,7 +484,7 @@ export function BetaDashboard({
       {/* Entry-path clarifier (#15) — testers were unsure whether to start from a
           project or from here, and whether work done elsewhere "counted". Make it
           explicit: start anywhere, progress auto-tracks regardless of entry path. */}
-      <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-4 text-sm">
+      <div className="rounded-lg border border-brand-200 bg-brand-50/60 p-4 text-sm">
         <p className="font-medium">How beta testing works</p>
         <p className="mt-1 text-muted-foreground">
           Work through the modules below, or open any module straight from the
@@ -543,8 +543,8 @@ export function BetaDashboard({
       </div>
 
       {/* Instructions */}
-      <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-5">
-        <h2 className="font-semibold text-teal-900 mb-2">How it works</h2>
+      <div className="rounded-xl border border-brand-200 bg-brand-50/50 p-5">
+        <h2 className="font-semibold text-brand-900 mb-2">How it works</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           {[
             {
@@ -564,12 +564,12 @@ export function BetaDashboard({
             },
           ].map((s) => (
             <div key={s.step} className="flex items-start gap-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
                 {s.step}
               </span>
               <div>
-                <p className="text-sm font-medium text-teal-900">{s.title}</p>
-                <p className="text-xs text-teal-700">{s.desc}</p>
+                <p className="text-sm font-medium text-brand-900">{s.title}</p>
+                <p className="text-xs text-brand-700">{s.desc}</p>
               </div>
             </div>
           ))}
@@ -582,10 +582,10 @@ export function BetaDashboard({
           (greyed) state so testers can see what's coming; the cards unlock the
           moment a project exists, mirroring the main dashboard. */}
       {!hasProjects && (
-        <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-blue-50 p-6">
+        <div className="rounded-xl border bg-gradient-to-br from-brand-50 to-blue-50 p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
-              <div className="rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 p-3">
+              <div className="rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 p-3">
                 <FolderKanban className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -600,7 +600,7 @@ export function BetaDashboard({
             </div>
             <Link
               href="/projects"
-              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
+              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
             >
               Start Here
               <ArrowRight className="h-4 w-4" />
@@ -616,10 +616,10 @@ export function BetaDashboard({
           whose org already has projects lands on /beta with no Start Here,
           while the same user on /dashboard sees one (Karen, 2026-07-03). */}
       {hasProjects && (
-        <div className="rounded-xl border bg-gradient-to-br from-teal-50 to-blue-50 p-6">
+        <div className="rounded-xl border bg-gradient-to-br from-brand-50 to-blue-50 p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
-              <div className="rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 p-3">
+              <div className="rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 p-3">
                 <FolderKanban className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -635,7 +635,7 @@ export function BetaDashboard({
             </div>
             <Link
               href="/projects"
-              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
+              className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
             >
               Start Here
               <ArrowRight className="h-4 w-4" />

@@ -75,11 +75,11 @@ export function DesignReport({
       <ReportLegend />
 
       {check.summary && (
-        <div className="rounded-lg border border-teal-200 bg-teal-50 p-4">
-          <h3 className="text-sm font-semibold text-teal-900 mb-2">
+        <div className="rounded-lg border border-brand-200 bg-brand-50 p-4">
+          <h3 className="text-sm font-semibold text-brand-900 mb-2">
             Executive Summary
           </h3>
-          <div className="text-sm text-teal-800 whitespace-pre-line">
+          <div className="text-sm text-brand-800 whitespace-pre-line">
             {check.summary}
           </div>
         </div>

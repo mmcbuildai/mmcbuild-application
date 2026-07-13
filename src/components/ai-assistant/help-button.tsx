@@ -128,7 +128,7 @@ export function HelpButton() {
               }
             >
               {m.role === "assistant" ? (
-                <div className="space-y-2 [&_a]:text-teal-700 [&_a]:underline [&_li]:ml-4 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:leading-relaxed [&_strong]:font-semibold">
+                <div className="space-y-2 [&_a]:text-brand-700 [&_a]:underline [&_li]:ml-4 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:leading-relaxed [&_strong]:font-semibold">
                   <ReactMarkdown>{m.content}</ReactMarkdown>
                 </div>
               ) : (

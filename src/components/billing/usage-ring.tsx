@@ -13,8 +13,8 @@ export function UsageRing({ used, limit, label = "runs used" }: UsageRingProps) 
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
   // Colour thresholds: emerald < 80%, amber 80-99%, red 100%
-  let strokeColor = "stroke-emerald-400";
-  let textColor = "text-emerald-400";
+  let strokeColor = "stroke-brandgreen-400";
+  let textColor = "text-brandgreen-400";
   if (percentage >= 100) {
     strokeColor = "stroke-red-400";
     textColor = "text-red-400";

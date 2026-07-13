@@ -23,7 +23,7 @@ export function ComingSoon({
   return (
     <Card className="border-dashed">
       <CardContent className="flex flex-col items-center justify-center text-center py-16 px-6">
-        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-teal-700">
+        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50 text-brand-700">
           <Icon className="h-8 w-8" />
         </div>
         <h2 className="text-2xl font-semibold tracking-tight">
@@ -36,7 +36,7 @@ export function ComingSoon({
           Join the early access waitlist and we&apos;ll let you know the moment it&apos;s ready.
         </p>
         <Link href={href} className="mt-6">
-          <Button className="bg-teal-600 hover:bg-teal-700">
+          <Button className="bg-brand-600 hover:bg-brand-700">
             Join the waitlist
           </Button>
         </Link>

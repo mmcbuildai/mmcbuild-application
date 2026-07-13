@@ -261,7 +261,7 @@ export function SystemPreviewPanel({
     <div className="rounded-lg border bg-white">
       <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <Layers className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
+          <Layers className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
           <div>
             <p className="text-base font-medium text-zinc-900">
               See your design built in the 4 MMC systems
@@ -280,7 +280,7 @@ export function SystemPreviewPanel({
             type="button"
             onClick={start}
             disabled={phase === "working"}
-            className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {phase === "working" ? (
               <>
@@ -310,7 +310,7 @@ export function SystemPreviewPanel({
               looks frozen. */}
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
             <div
-              className={`h-full rounded-full bg-teal-500 transition-all duration-1000 ${
+              className={`h-full rounded-full bg-brand-500 transition-all duration-1000 ${
                 elapsed > 150 ? "animate-pulse" : ""
               }`}
               style={{ width: `${Math.min(92, Math.max(6, elapsed * 0.7))}%` }}
@@ -395,7 +395,7 @@ export function SystemPreviewPanel({
                   onClick={() => setView(key)}
                   className={`flex min-h-[44px] items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
                     selected
-                      ? "border-teal-600 bg-teal-50 text-teal-700"
+                      ? "border-brand-600 bg-brand-50 text-brand-700"
                       : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
                   }`}
                 >

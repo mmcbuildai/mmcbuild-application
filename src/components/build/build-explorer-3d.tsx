@@ -78,7 +78,7 @@ export function BuildExplorer3D({ layout, suggestions }: BuildExplorer3DProps) {
         className="flex w-full items-center justify-between gap-3 rounded-lg px-4 py-3 text-left hover:bg-zinc-50"
       >
         <div className="flex items-center gap-3">
-          <Box className="h-5 w-5 shrink-0 text-teal-600" />
+          <Box className="h-5 w-5 shrink-0 text-brand-600" />
           <div>
             <p className="text-base font-medium text-zinc-900">
               {expanded
@@ -118,7 +118,7 @@ export function BuildExplorer3D({ layout, suggestions }: BuildExplorer3DProps) {
                   onClick={() => setView(key)}
                   className={`flex min-h-[44px] items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
                     selected
-                      ? "border-teal-600 bg-teal-50 text-teal-700"
+                      ? "border-brand-600 bg-brand-50 text-brand-700"
                       : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
                   }`}
                 >
