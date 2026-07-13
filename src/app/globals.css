@@ -51,8 +51,8 @@
 }
 
 /* Neutral structural tokens (shadcn/ui). The brand ACCENT colours live in
-   src/styles/brand.css (the brand-*/brandgreen-* utilities); these neutral
-   surfaces are intentionally left as the shadcn defaults. (SCRUM-210) */
+   src/styles/brand.css (the brand and brandgreen accent utilities); these
+   neutral surfaces are intentionally left as the shadcn defaults. (SCRUM-210) */
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
