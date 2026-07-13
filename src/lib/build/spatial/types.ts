@@ -124,6 +124,8 @@ export interface SuggestionOverlay {
   affected_room_ids: string[];
   /** Display properties */
   colour: string; // hex colour for the overlay
+  /** Overlay opacity 0–1 (SCRUM-169: varies by the user's decision). */
+  opacity?: number;
   label: string;
   description: string;
   /** From the existing suggestion data */

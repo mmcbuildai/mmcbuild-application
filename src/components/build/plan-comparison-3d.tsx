@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PlanViewer3D } from "./plan-viewer-3d";
 import type { SpatialLayout, SuggestionOverlay } from "@/lib/build/spatial";
+import { overlayStyleForDecision } from "@/lib/build/decision-overlay";
 
 // Technology category → overlay colour mapping
 const CATEGORY_COLOURS: Record<string, string> = {
@@ -27,24 +28,40 @@ interface PlanComparison3DProps {
     affected_wall_ids?: string[];
     affected_room_ids?: string[];
   }>;
+  /**
+   * SCRUM-169: the user's live decision per suggestion id
+   * (pursuing/considering/rejected/undecided). Rejected suggestions are dropped
+   * from the overlay; considering is faded. When omitted, all suggestions show
+   * at the default weight (back-compatible with the pre-decision viewer).
+   */
+  decisions?: Record<string, string>;
   className?: string;
 }
 
 export function PlanComparison3D({
   layout,
   suggestions,
+  decisions,
   className = "",
 }: PlanComparison3DProps) {
   const [viewMode, setViewMode] = useState<"split" | "original" | "optimised">("split");
 
-  // Build suggestion overlays
+  // Build suggestion overlays, styled by the user's decision (SCRUM-169):
+  // rejected suggestions are removed so the geometry shows as the original
+  // design; considering is faded; pursuing is prominent.
   const overlays: SuggestionOverlay[] = suggestions
     .filter((s) => s.affected_wall_ids && s.affected_wall_ids.length > 0)
-    .map((s) => ({
+    .map((s) => {
+      const style = overlayStyleForDecision(decisions?.[s.id]);
+      return { s, style };
+    })
+    .filter(({ style }) => style.visible)
+    .map(({ s, style }) => ({
       id: s.id,
       affected_wall_ids: s.affected_wall_ids || [],
       affected_room_ids: s.affected_room_ids || [],
       colour: CATEGORY_COLOURS[s.technology_category] || CATEGORY_COLOURS.default,
+      opacity: style.opacity,
       label: s.suggested_alternative,
       description: s.suggested_alternative,
       technology_category: s.technology_category,

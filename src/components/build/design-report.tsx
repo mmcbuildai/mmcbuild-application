@@ -40,6 +40,8 @@ interface DesignReportProps {
   projectId?: string;
   /** Growth-partner supplier products keyed by MMC category (SCRUM-171). */
   featuredByCategory?: Record<string, FeaturedProduct[]>;
+  /** SCRUM-169: bubble a suggestion's decision change up to the live 3D. */
+  onDecisionChange?: (suggestionId: string, decision: SuggestionDecision) => void;
 }
 
 export function DesignReport({
@@ -48,6 +50,7 @@ export function DesignReport({
   complyHref,
   projectId,
   featuredByCategory,
+  onDecisionChange,
 }: DesignReportProps) {
   const categories = [...new Set(suggestions.map((s) => s.technology_category))];
 
@@ -114,6 +117,11 @@ export function DesignReport({
                   complyHref={complyHref}
                   projectId={projectId}
                   featuredProducts={featuredByCategory?.[category]}
+                  onDecisionChange={
+                    onDecisionChange
+                      ? (d) => onDecisionChange(suggestion.id, d)
+                      : undefined
+                  }
                 />
               ))}
             </div>
