@@ -7,6 +7,7 @@ import type { SpatialLayout } from "@/lib/build/spatial/types";
 import type { SuggestionDecision } from "@/app/(dashboard)/build/actions";
 import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
 import type { FeaturedProduct } from "@/lib/direct/featured-suppliers";
+import type { GoalAlignment } from "@/lib/ai/types";
 
 // SCRUM-169: holds the live decision map for the report so the "With MMC
 // Suggestions" 3D view reflects the user's curated set — rejected suggestions
@@ -30,6 +31,7 @@ interface Suggestion {
   affected_wall_ids?: string[] | null;
   affected_room_ids?: string[] | null;
   complianceFlag?: SuggestionComplianceFlag | null;
+  goal_alignment?: GoalAlignment[] | null;
 }
 
 interface ReportDecisionsViewProps {

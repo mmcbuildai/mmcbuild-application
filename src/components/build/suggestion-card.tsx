@@ -14,6 +14,7 @@ import {
   XCircle,
   StickyNote,
   AlertTriangle,
+  Target,
 } from "lucide-react";
 import {
   getTechnologyLabel,
@@ -28,7 +29,6 @@ import {
 import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
 import { FeaturedSupplierProducts } from "./featured-supplier-products";
 import type { FeaturedProduct } from "@/lib/direct/featured-suppliers";
-import { Target } from "lucide-react";
 import type { GoalAlignment } from "@/lib/ai/types";
 
 interface SuggestionCardProps {
