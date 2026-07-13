@@ -39,6 +39,7 @@ function mockChain(result: { data: unknown; error?: unknown }): any {
     update: vi.fn(() => chain),
     eq: vi.fn(() => chain),
     single: vi.fn().mockResolvedValue(payload),
+    maybeSingle: vi.fn().mockResolvedValue(payload),
     then: (onFulfilled: (value: typeof payload) => unknown) =>
       Promise.resolve(payload).then(onFulfilled),
   };
@@ -56,7 +57,7 @@ describe("registerPlan — Inngest send failure (SCRUM-235)", () => {
   it("marks the plan errored and returns an error when the event send fails", async () => {
     const updateChain = mockChain({ data: null });
     mockAdminFrom
-      .mockReturnValueOnce(mockChain({ data: null })) // existing-plan check: none
+      .mockReturnValueOnce(mockChain({ data: null })) // current-version lookup: none (→ new version 1)
       .mockReturnValueOnce(mockChain({ data: { id: "plan-1" } })) // insert -> { id }
       .mockReturnValueOnce(updateChain); // fail-mark update
 
@@ -73,7 +74,7 @@ describe("registerPlan — Inngest send failure (SCRUM-235)", () => {
 
   it("returns success when the event send succeeds", async () => {
     mockAdminFrom
-      .mockReturnValueOnce(mockChain({ data: null })) // existing-plan check: none
+      .mockReturnValueOnce(mockChain({ data: null })) // current-version lookup: none (→ new version 1)
       .mockReturnValueOnce(mockChain({ data: { id: "plan-2" } })); // insert -> { id }
 
     mockInngestSend.mockResolvedValue({ ids: ["evt-1"] });

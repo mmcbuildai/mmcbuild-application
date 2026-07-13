@@ -15,6 +15,7 @@ import { SiteIntelCard } from "@/components/projects/site-intel-card";
 import { EditProjectDialog } from "@/components/projects/edit-project-dialog";
 import { DeleteProjectButton } from "@/components/projects/delete-project-button";
 import { CopyProjectButton } from "@/components/projects/copy-project-button";
+import { CouncilPackButton } from "@/components/projects/council-pack-button";
 import { ProjectTabs, type ProjectTab } from "@/components/projects/project-tabs";
 import { DocumentsTab } from "@/components/projects/documents-tab";
 import { ProjectContributors } from "@/components/projects/project-contributors";
@@ -154,6 +155,7 @@ export default async function ProjectOverviewPage({
             createdAt={project.created_at}
           />
           <div className="flex items-center gap-2">
+            <CouncilPackButton projectId={project.id} />
             <EditProjectDialog
               projectId={project.id}
               name={project.name}
