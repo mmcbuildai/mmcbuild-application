@@ -6,7 +6,7 @@ import { CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand/tokens";
 
-const CONFETTI_COLOURS = [BRAND.green, BRAND.blue, BRAND.navy];
+const CONFETTI_COLOURS = [BRAND.greenLight, BRAND.green, BRAND.greenDark];
 
 interface PaymentSuccessProps {
   planName: string;

@@ -1,65 +1,73 @@
 /*
  * ════════════════════════════════════════════════════════════════════════
  *  MMC BUILD — BRAND / STYLE FILE  (SCRUM-210)
- *  THE single source of truth for the site's colours.
+ *  THE single source of truth for the site's accent colours.
  *
- *  TO RE-THEME THE WHOLE SITE: change a hex in the "YOUR BRAND PALETTE" block
- *  below and save. Every button, link, heading, card, chart and badge across
- *  the app updates — you do not need to touch any other file.
+ *  This file currently holds the site's EXISTING theme, so the app looks
+ *  exactly as it does today. To change the look, edit the hex values below and
+ *  save — every button, link, badge, chart and highlight that uses these
+ *  colours updates across the whole site. You do not need to be a developer.
  *
- *  The light/dark shades (the "…-50 … …-900" ramps) are derived AUTOMATICALLY
- *  from the six colours via color-mix(), so you only ever edit the six.
+ *    • --color-brand-*       → the main brand accent (currently teal)
+ *    • --color-brandgreen-*  → success / positive highlights (currently green)
+ *
+ *  Each colour has a light→dark range (50 = lightest … 900 = darkest). The
+ *  "500/600" shades are the main ones you see on buttons and links; the lighter
+ *  ones are used for soft backgrounds, the darker ones for text.
+ *
+ *  A ready-made alternative palette (the navy/blue brand) is at the BOTTOM of
+ *  this file — to adopt it, copy those values over the ones below.
  *
  *  See docs/BRANDING.md for the full guide.
  * ════════════════════════════════════════════════════════════════════════
  */
 
 @theme {
-  /* ──────────────────────────────────────────────────────────────────────
-   *  YOUR BRAND PALETTE — edit these six values.
-   * ────────────────────────────────────────────────────────────────────── */
-  --color-brand-white: #ffffff; /* page background                       */
-  --color-brand-navy: #19365b; /* primary · headings · deep brand        */
-  --color-brand-blue: #1c75bc; /* interactive accent · buttons · links   */
-  --color-brand-grey: #bfc5c6; /* neutral · borders · muted surfaces     */
-  --color-brand-purple: #635a92; /* secondary accent                     */
-  --color-brand-green: #8edc49; /* success · positive highlight          */
+  /* ── BRAND ACCENT — the site's primary accent colour (currently teal). ── */
+  --color-brand-50: #f0fdfa;
+  --color-brand-100: #ccfbf1;
+  --color-brand-200: #99f6e4;
+  --color-brand-300: #5eead4;
+  --color-brand-400: #2dd4bf;
+  --color-brand-500: #14b8a6; /* main accent */
+  --color-brand-600: #0d9488; /* buttons / links */
+  --color-brand-700: #0f766e;
+  --color-brand-800: #115e59;
+  --color-brand-900: #134e4a;
+  --color-brand-950: #042f2e;
 
-  /* ──────────────────────────────────────────────────────────────────────
-   *  DERIVED — accent ramp (blue → navy). Auto-generated from the two above;
-   *  normally you never edit these by hand.
-   * ────────────────────────────────────────────────────────────────────── */
-  --color-brand-50: color-mix(in srgb, var(--color-brand-blue) 8%, white);
-  --color-brand-100: color-mix(in srgb, var(--color-brand-blue) 15%, white);
-  --color-brand-200: color-mix(in srgb, var(--color-brand-blue) 30%, white);
-  --color-brand-300: color-mix(in srgb, var(--color-brand-blue) 50%, white);
-  --color-brand-400: color-mix(in srgb, var(--color-brand-blue) 75%, white);
-  --color-brand-500: var(--color-brand-blue);
-  --color-brand-600: color-mix(in srgb, var(--color-brand-blue) 65%, var(--color-brand-navy));
-  --color-brand-700: var(--color-brand-navy);
-  --color-brand-800: color-mix(in srgb, var(--color-brand-navy) 80%, black);
-  --color-brand-900: color-mix(in srgb, var(--color-brand-navy) 62%, black);
-
-  /* DERIVED — success/green ramp (from --color-brand-green). */
-  --color-brandgreen-50: color-mix(in srgb, var(--color-brand-green) 12%, white);
-  --color-brandgreen-100: color-mix(in srgb, var(--color-brand-green) 22%, white);
-  --color-brandgreen-200: color-mix(in srgb, var(--color-brand-green) 40%, white);
-  --color-brandgreen-300: color-mix(in srgb, var(--color-brand-green) 65%, white);
-  --color-brandgreen-400: var(--color-brand-green);
-  --color-brandgreen-500: color-mix(in srgb, var(--color-brand-green) 85%, black);
-  --color-brandgreen-600: color-mix(in srgb, var(--color-brand-green) 68%, black);
-  --color-brandgreen-700: color-mix(in srgb, var(--color-brand-green) 52%, black);
-  --color-brandgreen-800: color-mix(in srgb, var(--color-brand-green) 42%, black);
-  --color-brandgreen-900: color-mix(in srgb, var(--color-brand-green) 34%, black);
-
-  /* DERIVED — neutral/grey ramp (from --color-brand-grey), for muted
-   * surfaces + borders. */
-  --color-brandgrey-50: color-mix(in srgb, var(--color-brand-grey) 18%, white);
-  --color-brandgrey-100: color-mix(in srgb, var(--color-brand-grey) 32%, white);
-  --color-brandgrey-200: color-mix(in srgb, var(--color-brand-grey) 55%, white);
-  --color-brandgrey-300: color-mix(in srgb, var(--color-brand-grey) 78%, white);
-  --color-brandgrey-400: var(--color-brand-grey);
-  --color-brandgrey-500: color-mix(in srgb, var(--color-brand-grey) 80%, black);
-  --color-brandgrey-600: color-mix(in srgb, var(--color-brand-grey) 60%, black);
-  --color-brandgrey-700: color-mix(in srgb, var(--color-brand-grey) 45%, black);
+  /* ── SUCCESS / GREEN — positive highlights (currently emerald green). ── */
+  --color-brandgreen-50: #ecfdf5;
+  --color-brandgreen-100: #d1fae5;
+  --color-brandgreen-200: #a7f3d0;
+  --color-brandgreen-300: #6ee7b7;
+  --color-brandgreen-400: #34d399;
+  --color-brandgreen-500: #10b981;
+  --color-brandgreen-600: #059669;
+  --color-brandgreen-700: #047857;
+  --color-brandgreen-800: #065f46;
+  --color-brandgreen-900: #064e3b;
+  --color-brandgreen-950: #022c22;
 }
+
+/*
+ * ────────────────────────────────────────────────────────────────────────
+ *  ALTERNATIVE PALETTE — MMC navy/blue brand (Karen, SCRUM-210).
+ *  To adopt it, copy these values over the matching ones in the @theme block
+ *  above (replace the whole --color-brand-* range; and set the greens if you
+ *  want the brighter #8edc49 green). Core colours: navy #19365b, blue #1c75bc,
+ *  green #8edc49.
+ *
+ *    --color-brand-50:  #eef5fb;
+ *    --color-brand-100: #d6e7f7;
+ *    --color-brand-200: #aecfef;
+ *    --color-brand-300: #7bb0e2;
+ *    --color-brand-400: #4a90d0;
+ *    --color-brand-500: #1c75bc;   (blue — main accent)
+ *    --color-brand-600: #1a5288;
+ *    --color-brand-700: #19365b;   (navy — deep brand)
+ *    --color-brand-800: #142a48;
+ *    --color-brand-900: #0f1e34;
+ *    --color-brand-950: #0a1524;
+ * ────────────────────────────────────────────────────────────────────────
+ */

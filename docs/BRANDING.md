@@ -1,66 +1,49 @@
 # Branding & theme — how to change the site's colours
 
-**One file controls the whole site's colour theme: [`src/styles/brand.css`](../src/styles/brand.css).**
+**One file controls the site's accent colours: [`src/styles/brand.css`](../src/styles/brand.css).**
 
-Change a colour there, save, and every button, link, heading, card, chart and
-badge across the entire app updates. You do not need to touch any other file,
-and you don't need to be a developer to do it.
+Right now that file holds the **existing theme**, so the site looks exactly as it
+does today. When you want to change the look, edit the hex values in that one
+file and save — every button, link, badge, chart and highlight that uses the
+brand colours updates across the whole site. You don't need to be a developer.
 
 ---
 
 ## The quick version (for a non-developer)
 
 1. Open **`src/styles/brand.css`**.
-2. Near the top you'll see a block called **"YOUR BRAND PALETTE"** with six lines:
+2. You'll see two colour ranges:
+   - **`--color-brand-*`** — the main brand accent (currently teal). `500`/`600`
+     are the shades you see on buttons and links; lower numbers are lighter
+     (soft backgrounds), higher numbers are darker (text).
+   - **`--color-brandgreen-*`** — success / positive highlights (currently green).
+3. To change a colour, replace its `#xxxxxx` hex value. You can get hex codes
+   from Canva, Figma, or any colour picker.
+4. Save. That's it — the site updates.
 
-   ```css
-   --color-brand-white:  #ffffff;   /* page background                     */
-   --color-brand-navy:   #19365b;   /* primary · headings · deep brand     */
-   --color-brand-blue:   #1c75bc;   /* interactive accent · buttons · links */
-   --color-brand-grey:   #bfc5c6;   /* neutral · borders · muted surfaces  */
-   --color-brand-purple: #635a92;   /* secondary accent                    */
-   --color-brand-green:  #8edc49;   /* success · positive highlight        */
-   ```
+### Want the navy/blue MMC brand instead?
 
-3. Replace any hex code (the `#xxxxxx` part) with your new colour. You can get a
-   hex code from Canva, Figma, or any colour picker.
-4. Save. That's it — the whole site re-themes.
-
-You only ever edit those **six** values. Everything else (all the lighter and
-darker shades used for hovers, backgrounds, borders, etc.) is generated
-**automatically** from those six using CSS `color-mix()`, so you never have to
-pick fifty shades by hand.
+A ready-made **navy/blue palette** is provided at the **bottom of
+`brand.css`**, in a commented block. To adopt it, copy those `--color-brand-*`
+values over the ones in the `@theme` block at the top. (Core navy `#19365b`,
+blue `#1c75bc`, green `#8edc49`.)
 
 ---
 
-## What each colour does
-
-| Variable | Used for |
-|---|---|
-| `--color-brand-white` | Page background |
-| `--color-brand-navy` | Primary colour — headings, primary buttons, deep brand |
-| `--color-brand-blue` | Interactive accent — links, focus rings, highlights |
-| `--color-brand-grey` | Neutral surfaces, borders, muted text |
-| `--color-brand-purple` | Secondary accent (e.g. some chart series) |
-| `--color-brand-green` | Success / positive highlight |
-
 ## For developers
 
-- `src/styles/brand.css` is imported by `src/app/globals.css`, which maps the
-  shadcn/ui **semantic tokens** (`--primary`, `--accent`, `--muted`, `--border`,
-  `--ring`, `--chart-*`, `--sidebar-*`, …) onto the brand palette. Edit the brand
-  file, **not** the semantic tokens.
-- The palette is exposed as Tailwind utilities: `bg-brand-navy`, `text-brand-blue`,
-  `bg-brand-500`, `text-brandgreen-600`, `border-brandgrey-200`, etc. The
-  `brand-50…900` ramp runs blue→navy; `brandgreen-*` is the success ramp;
-  `brandgrey-*` is the neutral ramp. **Use these instead of hard-coding hexes or
-  picking arbitrary Tailwind palette colours** (e.g. don't reintroduce `teal-*`).
-- A few JavaScript/canvas surfaces can't read CSS variables at runtime (jsPDF
-  report generators, `canvas-confetti`, `<meta theme-color>`, OG images). They
-  import the same six hexes from **`src/lib/brand/tokens.ts`** — keep that file in
-  sync with `brand.css` if you change a core colour.
-- Dark mode keeps neutral dark surfaces but uses the brand blue for interactive
-  elements; see the `.dark` block in `globals.css`.
+- `src/styles/brand.css` is imported by `src/app/globals.css` and defines the
+  Tailwind utilities `bg-brand-500`, `text-brand-600`, `bg-brandgreen-100`, etc.
+  **Use these for brand accents instead of hard-coding hexes or picking arbitrary
+  Tailwind palette colours** (don't reintroduce `teal-*`/`emerald-*`).
+- The neutral structural tokens (backgrounds, borders, muted text — the shadcn
+  `--background`/`--foreground`/`--primary`/`--muted`/… variables in
+  `globals.css`) are intentionally the shadcn defaults and are **not** part of
+  the brand accent file. Changing the brand file changes the accent identity,
+  not the neutral chrome.
+- A few JavaScript/canvas surfaces can't read CSS variables at runtime
+  (`canvas-confetti`, PDF generators, `<meta theme-color>`). They import the same
+  hexes from **`src/lib/brand/tokens.ts`** — keep it in sync with `brand.css`.
 
 ## Known exception
 
