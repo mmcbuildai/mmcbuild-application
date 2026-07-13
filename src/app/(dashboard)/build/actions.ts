@@ -7,6 +7,13 @@ import { db } from "@/lib/supabase/db";
 import { revalidatePath } from "next/cache";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 import { SAMPLE_DESIGNS } from "@/lib/beta/sample-designs";
+import {
+  FEATURED_TIER,
+  distinctCategories,
+  groupFeaturedByCategory,
+  type FeaturedProduct,
+} from "@/lib/direct/featured-suppliers";
+import { z } from "zod";
 
 /**
  * Sample designs are COPIED into each tester's project under a fresh storage
@@ -166,7 +173,107 @@ export async function getDesignReport(checkId: string) {
     .eq("check_id", checkId)
     .order("sort_order", { ascending: true });
 
-  return { check, suggestions: suggestions ?? [] };
+  // SCRUM-171: surface featured (Growth Partner) suppliers' products under
+  // suggestions whose MMC category they match — up to 3 per category. Only
+  // growth_partner + approved suppliers' active products qualify; free/verified
+  // suppliers stay Directory-only. db() bypasses RLS, so the tier/status/active
+  // filters are applied explicitly here.
+  const featuredByCategory = await loadFeaturedProductsByCategory(
+    (suggestions ?? []) as { technology_category: string }[],
+  );
+
+  return { check, suggestions: suggestions ?? [], featuredByCategory };
+}
+
+async function loadFeaturedProductsByCategory(
+  suggestions: { technology_category: string }[],
+): Promise<Record<string, FeaturedProduct[]>> {
+  const categories = distinctCategories(suggestions);
+  if (categories.length === 0) return {};
+
+  const { data: products } = await db()
+    .from("supplier_products")
+    .select(
+      "id, professional_id, technology_category, name, summary, sku, price_estimate, lead_time_days, professionals!inner(company_name, tier, status)",
+    )
+    .in("technology_category", categories)
+    .eq("is_active", true)
+    .eq("professionals.tier", FEATURED_TIER)
+    .eq("professionals.status", "approved")
+    .order("created_at", { ascending: true });
+
+  const flat: FeaturedProduct[] = (
+    (products ?? []) as unknown as {
+      id: string;
+      professional_id: string;
+      technology_category: string;
+      name: string;
+      summary: string | null;
+      sku: string | null;
+      price_estimate: number | null;
+      lead_time_days: number | null;
+      professionals: { company_name: string } | null;
+    }[]
+  ).map((p) => ({
+    product_id: p.id,
+    professional_id: p.professional_id,
+    company_name: p.professionals?.company_name ?? "Supplier",
+    technology_category: p.technology_category,
+    name: p.name,
+    summary: p.summary,
+    sku: p.sku,
+    price_estimate: p.price_estimate,
+    lead_time_days: p.lead_time_days,
+  }));
+
+  return groupFeaturedByCategory(flat, 3);
+}
+
+const referralSchema = z.object({
+  professionalId: z.string().uuid(),
+  projectId: z.string().uuid().nullable().optional(),
+  suggestionId: z.string().uuid().nullable().optional(),
+  productId: z.string().uuid().nullable().optional(),
+});
+
+/**
+ * SCRUM-171 lead tracking: log a directory referral when a user clicks through
+ * from a featured product on a Build suggestion to the supplier. Scoped to the
+ * caller's org; best-effort (a logging failure must not block the navigation).
+ */
+export async function logDirectoryReferral(input: {
+  professionalId: string;
+  projectId?: string | null;
+  suggestionId?: string | null;
+  productId?: string | null;
+}) {
+  const parsed = referralSchema.safeParse(input);
+  if (!parsed.success) return { error: "Invalid referral" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, org_id")
+    .eq("user_id", user.id)
+    .single();
+  if (!profile) return { error: "Profile not found" };
+
+  const { error } = await db().from("directory_referrals").insert({
+    project_id: parsed.data.projectId ?? null,
+    org_id: profile.org_id,
+    suggestion_id: parsed.data.suggestionId ?? null,
+    professional_id: parsed.data.professionalId,
+    product_id: parsed.data.productId ?? null,
+    created_by: profile.id,
+  });
+
+  if (error) return { error: "Failed to log referral" };
+  return { success: true };
 }
 
 export async function updateSelectedSystems(

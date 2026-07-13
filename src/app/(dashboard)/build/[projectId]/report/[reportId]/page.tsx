@@ -11,6 +11,7 @@ import {
   checkSuggestionCompliance,
 } from "@/lib/build/suggestion-compliance";
 import type { PropertyProfile } from "@caistech/property-services-sdk";
+import type { FeaturedProduct } from "@/lib/direct/featured-suppliers";
 
 export default async function ReportPage({
   params,
@@ -109,6 +110,11 @@ export default async function ReportPage({
             check={check}
             suggestions={suggestionsWithCompliance}
             complyHref={`/comply/${projectId}`}
+            projectId={projectId}
+            featuredByCategory={
+              (result as { featuredByCategory?: Record<string, FeaturedProduct[]> })
+                .featuredByCategory
+            }
           />
           <ReportNextSteps
             projectId={projectId}

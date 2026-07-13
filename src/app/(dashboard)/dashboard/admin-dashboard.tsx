@@ -13,6 +13,7 @@ import {
   ArrowRight,
   FolderOpen,
   FlaskConical,
+  Store,
 } from "lucide-react";
 
 const ADMIN_SECTIONS = [
@@ -58,6 +59,14 @@ const ADMIN_SECTIONS = [
         icon: Users,
         href: "/settings/directory-admin",
         color: "from-amber-500 to-amber-600",
+      },
+      {
+        title: "Suppliers & Products",
+        description:
+          "Set supplier tiers and manage product catalogues. Growth Partner products surface inside MMC Build suggestions.",
+        icon: Store,
+        href: "/admin/suppliers",
+        color: "from-yellow-500 to-amber-600",
       },
       {
         title: "Training Admin",

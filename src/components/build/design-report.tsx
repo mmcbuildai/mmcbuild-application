@@ -7,6 +7,7 @@ import { ReportLegend } from "./report-legend";
 import { DecisionSummary } from "./decision-summary";
 import type { SuggestionDecision } from "@/app/(dashboard)/build/actions";
 import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
+import type { FeaturedProduct } from "@/lib/direct/featured-suppliers";
 
 interface Suggestion {
   id: string;
@@ -35,9 +36,19 @@ interface DesignReportProps {
   suggestions: Suggestion[];
   /** Where the inline compliance warnings link for the full NCC pass. */
   complyHref?: string;
+  /** Project id (for featured-supplier referral logging, SCRUM-171). */
+  projectId?: string;
+  /** Growth-partner supplier products keyed by MMC category (SCRUM-171). */
+  featuredByCategory?: Record<string, FeaturedProduct[]>;
 }
 
-export function DesignReport({ check, suggestions, complyHref }: DesignReportProps) {
+export function DesignReport({
+  check,
+  suggestions,
+  complyHref,
+  projectId,
+  featuredByCategory,
+}: DesignReportProps) {
   const categories = [...new Set(suggestions.map((s) => s.technology_category))];
 
   return (
@@ -101,6 +112,8 @@ export function DesignReport({ check, suggestions, complyHref }: DesignReportPro
                   suggestion={suggestion}
                   complianceFlag={suggestion.complianceFlag}
                   complyHref={complyHref}
+                  projectId={projectId}
+                  featuredProducts={featuredByCategory?.[category]}
                 />
               ))}
             </div>

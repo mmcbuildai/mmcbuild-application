@@ -26,6 +26,8 @@ import {
   type SuggestionDecision,
 } from "@/app/(dashboard)/build/actions";
 import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
+import { FeaturedSupplierProducts } from "./featured-supplier-products";
+import type { FeaturedProduct } from "@/lib/direct/featured-suppliers";
 
 interface SuggestionCardProps {
   suggestion: {
@@ -46,6 +48,10 @@ interface SuggestionCardProps {
   complianceFlag?: SuggestionComplianceFlag | null;
   /** Where the "see Comply for details" link points. */
   complyHref?: string;
+  /** Project context for the featured-supplier referral log (SCRUM-171). */
+  projectId?: string;
+  /** Growth-partner suppliers' products matching this suggestion's category. */
+  featuredProducts?: FeaturedProduct[];
 }
 
 const FLAG_STYLES = {
@@ -72,6 +78,8 @@ export function SuggestionCard({
   suggestion,
   complianceFlag,
   complyHref,
+  projectId,
+  featuredProducts,
 }: SuggestionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [decision, setDecision] = useState<SuggestionDecision>(
@@ -310,6 +318,14 @@ export function SuggestionCard({
               <p className="text-xs text-rose-600">{saveError}</p>
             )}
           </div>
+
+          {projectId && featuredProducts && featuredProducts.length > 0 && (
+            <FeaturedSupplierProducts
+              products={featuredProducts}
+              projectId={projectId}
+              suggestionId={suggestion.id}
+            />
+          )}
         </CardContent>
       )}
     </Card>
