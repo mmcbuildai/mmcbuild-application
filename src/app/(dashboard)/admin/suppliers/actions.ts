@@ -45,6 +45,7 @@ export interface AdminSupplier {
 }
 
 export async function getSuppliersForAdmin(): Promise<AdminSupplier[]> {
+  // @cross-tenant-ok: operator-allowlist gated (SCRUM-345); the professionals directory is a GLOBAL shared marketplace, not org-scoped.
   await requireOperator();
 
   const { data: pros } = await db()
@@ -77,6 +78,7 @@ const setTierSchema = z.object({
 });
 
 export async function setSupplierTier(professionalId: string, tier: string) {
+  // @cross-tenant-ok: operator-allowlist gated (SCRUM-345); supplier tier is global directory data, not org-scoped.
   await requireOperator();
   const parsed = setTierSchema.safeParse({ professionalId, tier });
   if (!parsed.success) return { error: "Invalid tier" };
@@ -92,6 +94,7 @@ export async function setSupplierTier(professionalId: string, tier: string) {
 }
 
 export async function getSupplierProducts(professionalId: string) {
+  // @cross-tenant-ok: operator-allowlist gated (SCRUM-345); supplier products are global directory data, not org-scoped.
   await requireOperator();
   const { data } = await db()
     .from("supplier_products")
@@ -131,6 +134,7 @@ export async function addSupplierProduct(input: {
   price_estimate?: number | null;
   lead_time_days?: number | null;
 }) {
+  // @cross-tenant-ok: operator-allowlist gated (SCRUM-345); products are global directory data (product inherits the supplier's org).
   await requireOperator();
   const parsed = addProductSchema.safeParse(input);
   if (!parsed.success) {
@@ -162,6 +166,7 @@ export async function addSupplierProduct(input: {
 }
 
 export async function deleteSupplierProduct(productId: string) {
+  // @cross-tenant-ok: operator-allowlist gated (SCRUM-345); products are global directory data, not org-scoped.
   await requireOperator();
   const parsed = z.string().uuid().safeParse(productId);
   if (!parsed.success) return { error: "Invalid product" };
