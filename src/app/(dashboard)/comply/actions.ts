@@ -759,6 +759,26 @@ export async function resolveFinding(
   if ("error" in auth) return { error: auth.error };
   const { profile, admin } = auth;
 
+  // SCRUM-331 (a): "Updated drawings address the issue" may only be selected when
+  // an updated drawing has actually been attached to the finding — otherwise the
+  // exported report would claim the design was changed with nothing to show for
+  // it. The attachment is the contributor's remediation upload
+  // (finding_share_tokens.response_file_path). The "evidence" path is unaffected.
+  if (parsed.data.type === "updated_drawings") {
+    const { data: withDrawing } = await admin
+      .from("finding_share_tokens" as never)
+      .select("id")
+      .eq("finding_id", parsed.data.findingId)
+      .not("response_file_path", "is", null)
+      .limit(1);
+    if (!withDrawing || withDrawing.length === 0) {
+      return {
+        error:
+          "Attach the updated drawing before resolving this way. Ask the contributor to upload the revised drawing via their remediation link, or resolve with “Evidence / certificate provided” instead.",
+      };
+    }
+  }
+
   const note = parsed.data.note?.trim() ? parsed.data.note.trim() : null;
 
   const { error } = await admin

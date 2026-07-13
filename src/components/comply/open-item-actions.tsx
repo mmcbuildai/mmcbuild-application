@@ -199,6 +199,13 @@ export function OpenItemActions({ findingId, lifecycle }: OpenItemActionsProps) 
                 <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
                 Evidence / certificate provided
               </label>
+              <p className="text-xs text-muted-foreground">
+                “Updated drawings” requires the revised drawing to be attached to
+                this finding (uploaded by the contributor via their remediation
+                link) — it’s then included in the exported compliance report. If
+                you don’t have an updated drawing, choose “Evidence / certificate
+                provided”.
+              </p>
             </fieldset>
 
             <div className="space-y-2">
