@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { MapPin } from "lucide-react";
 import { forwardSearch, reverseSearch, parseCoordinates, featureToGeocodedAddress } from "@/lib/services/mapbox";
 import type { MapboxFeature, GeocodedAddress } from "@/lib/services/mapbox";
+import { resolveAddressKey } from "@/lib/address/keynav";
 
 interface AddressAutocompleteProps {
   onSelect: (address: GeocodedAddress) => void;
@@ -21,6 +22,7 @@ export function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<MapboxFeature[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [highlight, setHighlight] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -32,6 +34,7 @@ export function AddressAutocomplete({
         ? await reverseSearch(coords.lat, coords.lng)
         : await forwardSearch(q);
       setSuggestions(results);
+      setHighlight(0);
       setOpen(results.length > 0);
     } finally {
       setLoading(false);
@@ -60,6 +63,36 @@ export function AddressAutocomplete({
     onSelect(geocoded);
   }
 
+  // This input sits inside a <form>; a bare Enter would submit it — creating
+  // the project/record before the user has picked an address from the list
+  // (SCRUM-335). Route Enter to "choose the highlighted suggestion" and never
+  // let it reach the form submit; arrow keys move the highlight; Escape closes.
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    const action = resolveAddressKey(e.key, {
+      open,
+      count: suggestions.length,
+      highlight,
+    });
+    switch (action.type) {
+      case "move":
+        e.preventDefault();
+        setHighlight(action.highlight);
+        break;
+      case "select":
+        e.preventDefault();
+        handleSelect(suggestions[action.index]);
+        break;
+      case "preventSubmit":
+        e.preventDefault();
+        break;
+      case "close":
+        setOpen(false);
+        break;
+      case "passthrough":
+        break;
+    }
+  }
+
   // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -79,17 +112,24 @@ export function AddressAutocomplete({
       <Input
         value={query}
         onChange={(e) => handleChange(e.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         autoComplete="off"
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
       />
 
       {open && suggestions.length > 0 && (
         <div className="absolute top-full z-50 mt-1 w-full rounded-md border bg-popover shadow-md">
-          {suggestions.map((feature) => (
+          {suggestions.map((feature, i) => (
             <button
               key={feature.id}
               type="button"
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+                i === highlight ? "bg-accent" : "hover:bg-accent"
+              }`}
+              onMouseEnter={() => setHighlight(i)}
               onClick={() => handleSelect(feature)}
             >
               <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
