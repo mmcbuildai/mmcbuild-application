@@ -17,10 +17,10 @@ BEGIN
   END IF;
 END$$;
 
+-- Tier: only growth_partner products surface in Build suggestions; free +
+-- verified stay Directory-only.
 ALTER TABLE professionals
   ADD COLUMN IF NOT EXISTS tier supplier_tier NOT NULL DEFAULT 'free';
-
-COMMENT ON COLUMN professionals.tier IS 'Directory subscription tier; only growth_partner products surface in Build suggestions.';
 
 CREATE INDEX IF NOT EXISTS idx_professionals_tier ON professionals(tier);
 
