@@ -3,7 +3,7 @@ import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 import { ProfessionalCard } from "@/components/direct/professional-card";
 import { DirectorySearch } from "@/components/direct/directory-search";
 import { DirectoryPagination } from "@/components/direct/directory-pagination";
-import { searchProfessionals } from "./actions";
+import { searchProfessionals, getMyProfessional } from "./actions";
 import { Truck, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,13 +42,25 @@ export default async function DirectPage({
   }
 
   const params = await searchParams;
-  const result = await searchProfessionals({
-    query: params.q,
-    trade_type: params.trade,
-    region: params.region,
-    specialisation: params.spec,
-    page: params.page ? parseInt(params.page) : 1,
-  });
+  const [result, myListing] = await Promise.all([
+    searchProfessionals({
+      query: params.q,
+      trade_type: params.trade,
+      region: params.region,
+      specialisation: params.spec,
+      page: params.page ? parseInt(params.page) : 1,
+    }),
+    // Does the caller's org already have a listing? Drives the CTA below so it
+    // matches what /direct/register actually does — when a listing exists that
+    // page redirects to the dashboard, so a "Register Your Business" button
+    // there would silently bounce the user (SCRUM-238). Show "Manage Your
+    // Business" → dashboard instead when they already have one.
+    getMyProfessional(),
+  ]);
+  const hasListing = !!myListing;
+  const businessCta = hasListing
+    ? { href: "/direct/dashboard", label: "Manage Your Business" }
+    : { href: "/direct/register", label: "Register Your Business" };
 
   return (
     <div className="space-y-6">
@@ -63,9 +75,9 @@ export default async function DirectPage({
               {result.total} professional{result.total !== 1 ? "s" : ""} found
             </p>
           </div>
-          <Link href="/direct/register">
+          <Link href={businessCta.href}>
             <Button className="bg-amber-600 hover:bg-amber-700">
-              Register Your Business
+              {businessCta.label}
             </Button>
           </Link>
         </div>
