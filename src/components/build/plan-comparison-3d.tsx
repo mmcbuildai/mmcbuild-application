@@ -63,7 +63,7 @@ export function PlanComparison3D({
             onClick={() => setViewMode(mode)}
             className={`rounded-md px-3 py-2 text-sm capitalize min-h-[44px] md:min-h-0 md:py-1 ${
               viewMode === mode
-                ? "bg-teal-600 text-white"
+                ? "bg-brand-600 text-white"
                 : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
             }`}
           >
@@ -119,7 +119,7 @@ export function PlanComparison3D({
               />
               <span className="text-xs text-zinc-700">{o.label}</span>
               {o.estimated_cost_savings && (
-                <span className="text-xs text-emerald-600">
+                <span className="text-xs text-brandgreen-600">
                   -${(o.estimated_cost_savings / 1000).toFixed(0)}k
                 </span>
               )}

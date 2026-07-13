@@ -76,7 +76,7 @@ export function ReportVersionList({
             <Card
               key={v.id}
               className={`transition-shadow hover:shadow-sm ${
-                isCurrent ? "border-teal-300 bg-teal-50/50" : ""
+                isCurrent ? "border-brand-300 bg-brand-50/50" : ""
               }`}
             >
               <CardContent className="flex items-center justify-between gap-3 px-4 py-3">
@@ -106,7 +106,7 @@ export function ReportVersionList({
                       {isCurrent && (
                         <Badge
                           variant="secondary"
-                          className="bg-teal-100 text-xs text-teal-800"
+                          className="bg-brand-100 text-xs text-brand-800"
                         >
                           Viewing
                         </Badge>
@@ -123,7 +123,7 @@ export function ReportVersionList({
                       href={v.pdf_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:underline"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
                       title="Download this version's PDF"
                     >
                       <Download className="h-3.5 w-3.5" />

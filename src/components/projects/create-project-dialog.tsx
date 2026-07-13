@@ -192,7 +192,7 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
                       type="button"
                       disabled={!!sampleLoading || loading}
                       onClick={() => handleUseSample(s.id)}
-                      className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3 text-left transition-colors hover:border-teal-300 hover:bg-teal-50/40 disabled:opacity-50"
+                      className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/40 disabled:opacity-50"
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-medium">{s.name}</div>

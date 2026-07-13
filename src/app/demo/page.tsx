@@ -127,8 +127,8 @@ function MockSystemSelection() {
   return (
     <div className="space-y-2">
       {systems.map((s) => (
-        <div key={s.name} className={`flex items-center gap-3 rounded-lg border p-3 ${s.selected ? "border-teal-500 bg-teal-50" : "border-slate-200"}`}>
-          <div className={`h-5 w-5 rounded border-2 flex items-center justify-center ${s.selected ? "border-teal-500 bg-teal-500" : "border-slate-300"}`}>
+        <div key={s.name} className={`flex items-center gap-3 rounded-lg border p-3 ${s.selected ? "border-brand-500 bg-brand-50" : "border-slate-200"}`}>
+          <div className={`h-5 w-5 rounded border-2 flex items-center justify-center ${s.selected ? "border-brand-500 bg-brand-500" : "border-slate-300"}`}>
             {s.selected && <CheckCircle2 className="h-3 w-3 text-white" />}
           </div>
           <span className="text-sm font-medium">{s.name}</span>
@@ -148,7 +148,7 @@ function MockDesignSuggestions() {
       ].map((s) => (
         <div key={s.title} className="rounded-lg border bg-white p-3">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full">{s.tag}</span>
+            <span className="text-xs font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">{s.tag}</span>
           </div>
           <p className="text-sm font-medium">{s.title}</p>
           <p className="text-xs text-muted-foreground mt-1">{s.saving}</p>
@@ -369,8 +369,8 @@ const MODULES: Record<ModuleKey, {
     name: "MMC Build",
     tagline: "Design optimisation for modern construction",
     icon: Hammer,
-    gradient: "from-teal-500 to-teal-600",
-    accentBg: "bg-teal-50",
+    gradient: "from-brand-500 to-brand-600",
+    accentBg: "bg-brand-50",
     steps: [
       {
         icon: Layers,
@@ -571,7 +571,7 @@ export default function DemoPage() {
       <nav className="sticky top-0 z-50 border-b border-white/10 bg-[#0B1120]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-cyan-600">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-cyan-600">
               <span className="font-bold text-white text-sm">M</span>
             </div>
             <span className="text-lg font-bold text-white tracking-tight">
@@ -580,7 +580,7 @@ export default function DemoPage() {
           </div>
           <a
             href="/signup"
-            className="inline-flex items-center gap-2 rounded-full bg-teal-600 px-5 py-2 text-sm font-medium text-white hover:bg-teal-500 transition-all"
+            className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-all"
           >
             Start Free Trial
             <ArrowRight className="h-3.5 w-3.5" />
@@ -590,10 +590,10 @@ export default function DemoPage() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-teal-500/10 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-brand-500/10 via-transparent to-transparent" />
         <div className="relative mx-auto max-w-6xl px-6 py-16 text-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-4 py-2 mb-6 backdrop-blur-sm">
-            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="h-2 w-2 rounded-full bg-brandgreen-400 animate-pulse" />
             <span className="text-sm font-medium text-white/80">
               Platform Demo
             </span>
@@ -601,7 +601,7 @@ export default function DemoPage() {
           <h1 className="text-4xl font-extrabold text-white leading-tight lg:text-5xl">
             AI-Powered Construction
             <br />
-            <span className="text-teal-400">Intelligence</span>
+            <span className="text-brand-400">Intelligence</span>
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-white/50">
             Five integrated modules that take your residential construction
@@ -771,7 +771,7 @@ export default function DemoPage() {
           </p>
           <a
             href="/signup"
-            className="mt-6 inline-flex items-center gap-2 rounded-full bg-teal-600 px-8 py-3 text-sm font-medium text-white hover:bg-teal-500 transition-all"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-brand-600 px-8 py-3 text-sm font-medium text-white hover:bg-brand-500 transition-all"
           >
             Start Free Trial
             <ArrowRight className="h-4 w-4" />

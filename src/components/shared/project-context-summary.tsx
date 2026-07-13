@@ -36,7 +36,7 @@ function Chip({
 }) {
   const toneClass =
     tone === "positive"
-      ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200"
+      ? "border-brandgreen-300 bg-brandgreen-50 text-brandgreen-900 dark:border-brandgreen-900/50 dark:bg-brandgreen-950/30 dark:text-brandgreen-200"
       : tone === "warning"
         ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
         : "border-border bg-muted/40 text-foreground";

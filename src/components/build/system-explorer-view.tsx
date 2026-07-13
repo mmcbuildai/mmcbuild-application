@@ -256,7 +256,7 @@ export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
 
               <div className="space-y-2 border-t px-4 py-3 text-xs">
                 <div>
-                  <p className="font-medium text-emerald-700">Pros</p>
+                  <p className="font-medium text-brandgreen-700">Pros</p>
                   <ul className="mt-1 space-y-0.5 list-disc pl-4 text-zinc-700">
                     {metrics.pros.map((p) => (
                       <li key={p}>{p}</li>

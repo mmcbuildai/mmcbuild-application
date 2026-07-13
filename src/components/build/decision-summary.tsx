@@ -134,7 +134,7 @@ function DecisionPill({
 }) {
   const toneClass =
     tone === "emerald"
-      ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+      ? "border-brandgreen-300 bg-brandgreen-50 text-brandgreen-900"
       : tone === "amber"
         ? "border-amber-300 bg-amber-50 text-amber-900"
         : tone === "rose"
@@ -164,7 +164,7 @@ function ImpactStat({
   return (
     <div className="rounded-md border bg-muted/30 p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-2xl font-bold text-teal-700">
+      <p className="text-2xl font-bold text-brand-700">
         {value > 0 ? `-${value}%` : "—"}
       </p>
       <p className="text-[11px] text-muted-foreground">{context}</p>

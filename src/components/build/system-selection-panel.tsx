@@ -85,7 +85,7 @@ export function SystemSelectionPanel({
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Settings2 className="h-5 w-5 text-teal-600" />
+          <Settings2 className="h-5 w-5 text-brand-600" />
           <CardTitle className="text-base">Construction Systems</CardTitle>
         </div>
         <CardDescription>
@@ -112,14 +112,14 @@ export function SystemSelectionPanel({
                   locked
                     ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-60"
                     : isSelected
-                      ? "border-teal-300 bg-teal-50"
+                      ? "border-brand-300 bg-brand-50"
                       : "border-gray-200 hover:border-gray-300"
                 }`}
               >
                 <div
                   className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
                     isSelected
-                      ? "border-teal-600 bg-teal-600 text-white"
+                      ? "border-brand-600 bg-brand-600 text-white"
                       : "border-gray-300"
                   }`}
                 >
@@ -147,7 +147,7 @@ export function SystemSelectionPanel({
         {selected.size > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {CONSTRUCTION_SYSTEMS.filter((s) => selected.has(s.key)).map((s) => (
-              <Badge key={s.key} variant="secondary" className="bg-teal-100 text-teal-800">
+              <Badge key={s.key} variant="secondary" className="bg-brand-100 text-brand-800">
                 {s.label}
               </Badge>
             ))}
@@ -178,7 +178,7 @@ export function SystemSelectionPanel({
         {!showWarning && isDirty && (
           <Button
             size="sm"
-            className="bg-teal-600 hover:bg-teal-700"
+            className="bg-brand-600 hover:bg-brand-700"
             onClick={handleSave}
             disabled={isPending}
           >

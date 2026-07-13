@@ -54,8 +54,8 @@ const solutions = [
     title: "MMC Build",
     desc: "Access latest building technologies and alternate suggestions",
     href: "/mmc-build",
-    color: "text-teal-600",
-    bgColor: "bg-teal-50",
+    color: "text-brand-600",
+    bgColor: "bg-brand-50",
   },
   {
     icon: Users,
@@ -94,10 +94,10 @@ const solutions = [
 const partners = [
   { name: "Lendlease", gradient: "from-blue-600 to-cyan-600", icon: "🏗️" },
   { name: "Mirvac", gradient: "from-purple-600 to-pink-600", icon: "🏢" },
-  { name: "Stockland", gradient: "from-green-600 to-emerald-600", icon: "🌳" },
+  { name: "Stockland", gradient: "from-green-600 to-brandgreen-600", icon: "🌳" },
   { name: "Multiplex", gradient: "from-orange-600 to-red-600", icon: "⚡" },
   { name: "Metricon", gradient: "from-indigo-600 to-blue-600", icon: "🏠" },
-  { name: "Hutchinson", gradient: "from-teal-600 to-cyan-600", icon: "🔨" },
+  { name: "Hutchinson", gradient: "from-brand-600 to-cyan-600", icon: "🔨" },
   { name: "Simonds", gradient: "from-amber-600 to-yellow-600", icon: "✨" },
   { name: "G.J. Gardner", gradient: "from-rose-600 to-pink-600", icon: "🎯" },
 ];
@@ -149,7 +149,7 @@ export default async function HomePage() {
       {/* Hero */}
       <section className="relative bg-[#0f172a] text-white overflow-hidden">
         <div className="absolute top-0 left-1/2 w-[1000px] h-[500px] -translate-x-1/2 bg-blue-600/20 blur-[100px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-[800px] h-[600px] bg-teal-600/10 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-[800px] h-[600px] bg-brand-600/10 blur-[120px] rounded-full pointer-events-none" />
 
         <div className="relative z-10 mx-auto flex max-w-7xl flex-col items-center px-4 py-16 text-center sm:px-6 sm:py-24 lg:px-8 lg:py-32">
           <div className="mb-6 inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300 backdrop-blur-sm sm:mb-8">
@@ -158,7 +158,7 @@ export default async function HomePage() {
           </div>
           <h1 className="mb-6 max-w-5xl text-3xl font-extrabold leading-tight tracking-tight text-white sm:mb-8 sm:text-5xl lg:text-7xl">
             Modern Methods of Construction Ecosystem{" "}
-            <span className="block bg-gradient-to-r from-blue-400 to-teal-400 bg-clip-text text-transparent">
+            <span className="block bg-gradient-to-r from-blue-400 to-brand-400 bg-clip-text text-transparent">
               Powered by AI
             </span>
           </h1>
@@ -273,13 +273,13 @@ export default async function HomePage() {
       <section className="py-24 bg-gradient-to-b from-slate-50 via-white to-slate-50 relative overflow-hidden">
         <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-500/10 blur-[120px] rounded-full pointer-events-none animate-pulse" />
         <div
-          className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-teal-500/10 blur-[100px] rounded-full pointer-events-none animate-pulse"
+          className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-brand-500/10 blur-[100px] rounded-full pointer-events-none animate-pulse"
           style={{ animationDelay: "1s" }}
         />
 
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-teal-50 border border-blue-200/50 rounded-full px-5 py-2 mb-6 shadow-sm">
+            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-brand-50 border border-blue-200/50 rounded-full px-5 py-2 mb-6 shadow-sm">
               <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" />
               <span className="text-sm font-semibold text-blue-700">Trusted Partners</span>
             </div>
@@ -315,7 +315,7 @@ export default async function HomePage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-8 pt-8 border-t border-slate-200">
             {[
-              { metric: "100+", label: "Active Professionals", gradient: "from-blue-500 to-teal-500" },
+              { metric: "100+", label: "Active Professionals", gradient: "from-blue-500 to-brand-500" },
               { metric: "50+", label: "Projects Delivered", gradient: "from-purple-500 to-pink-500" },
               { metric: "$2M+", label: "Cost Savings", gradient: "from-amber-500 to-orange-500" },
             ].map((stat, idx) => (
@@ -361,7 +361,7 @@ export default async function HomePage() {
                 </div>
                 <p className="text-slate-200 mb-6 leading-relaxed">{t.quote}</p>
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center text-white font-bold text-sm">
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-brand-500 flex items-center justify-center text-white font-bold text-sm">
                     {t.author[0]}
                   </div>
                   <div>

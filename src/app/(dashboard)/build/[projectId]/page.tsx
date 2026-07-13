@@ -147,7 +147,7 @@ export default async function ProjectBuildPage({
                 <p>No processed plan found.</p>
                 <Link
                   href={`/comply/${projectId}/upload`}
-                  className="text-teal-600 hover:underline"
+                  className="text-brand-600 hover:underline"
                 >
                   Upload a plan
                 </Link>
@@ -159,7 +159,7 @@ export default async function ProjectBuildPage({
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Play className="h-5 w-5 text-teal-600" />
+              <Play className="h-5 w-5 text-brand-600" />
               <CardTitle className="text-base">
                 Run Design Optimisation
               </CardTitle>

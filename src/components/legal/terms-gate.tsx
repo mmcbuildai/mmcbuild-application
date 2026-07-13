@@ -51,8 +51,8 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
       <div className="flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl">
         <div className="flex items-start gap-3 border-b p-6">
-          <div className="rounded-full bg-teal-100 p-2">
-            <ShieldCheck className="h-5 w-5 text-teal-600" />
+          <div className="rounded-full bg-brand-100 p-2">
+            <ShieldCheck className="h-5 w-5 text-brand-600" />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">

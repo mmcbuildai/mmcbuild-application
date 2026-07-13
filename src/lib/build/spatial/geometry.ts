@@ -24,7 +24,7 @@ const COLOURS = {
   door: 0x8b6914,
   window: 0x87ceeb,
   ceiling: 0xfafafa,
-  suggestion_highlight: 0x14b8a6, // teal-500
+  suggestion_highlight: 0x14b8a6, // brand-500
   roof_default: 0x3a3a3a, // Colorbond Monument-ish
 };
 

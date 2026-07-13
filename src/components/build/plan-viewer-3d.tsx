@@ -237,7 +237,7 @@ export function PlanViewer3D({
               onClick={() => setShowSuggestions(!showSuggestions)}
               className={`rounded px-3 py-1.5 text-xs min-h-[44px] md:min-h-0 md:px-2 md:py-0.5 ${
                 showSuggestions
-                  ? "bg-teal-100 text-teal-800"
+                  ? "bg-brand-100 text-brand-800"
                   : "bg-zinc-100 text-zinc-400"
               }`}
             >

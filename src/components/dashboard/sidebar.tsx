@@ -37,9 +37,9 @@ const moduleNav: {
   icon: typeof FileCheck;
   color: string;
 }[] = [
-  { name: "MMC Build", href: "/build", moduleId: "build", icon: Building2, color: "bg-teal-600" },
-  { name: "MMC Quote", href: "/quote", moduleId: "quote", icon: FileText, color: "bg-teal-500" },
-  { name: "MMC Comply", href: "/comply", moduleId: "comply", icon: FileCheck, color: "bg-teal-700" },
+  { name: "MMC Build", href: "/build", moduleId: "build", icon: Building2, color: "bg-brand-600" },
+  { name: "MMC Quote", href: "/quote", moduleId: "quote", icon: FileText, color: "bg-brand-500" },
+  { name: "MMC Comply", href: "/comply", moduleId: "comply", icon: FileCheck, color: "bg-brand-700" },
   { name: "MMC Direct", href: "/direct", moduleId: "direct", icon: Truck, color: "bg-cyan-700" },
   { name: "MMC Train", href: "/train", moduleId: "train", icon: GraduationCap, color: "bg-sky-700" },
 ];
@@ -171,7 +171,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
               <div
                 className={cn(
                   "h-full rounded-full transition-all",
-                  runsRemaining <= 2 ? "bg-amber-500" : "bg-teal-500"
+                  runsRemaining <= 2 ? "bg-amber-500" : "bg-brand-500"
                 )}
                 style={{ width: `${runPercentage}%` }}
               />
@@ -179,7 +179,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
             {runsRemaining === 0 && (
               <Link
                 href="/billing"
-                className="mt-2 flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300"
+                className="mt-2 flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300"
               >
                 Upgrade to Pro for unlimited
                 <ArrowUpRight className="h-3 w-3" />

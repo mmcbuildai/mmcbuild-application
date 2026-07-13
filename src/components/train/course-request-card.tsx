@@ -50,7 +50,7 @@ export function CourseRequestCard() {
           </p>
 
           {done ? (
-            <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+            <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brandgreen-600">
               <Sparkles className="h-4 w-4" />
               Thanks — we&rsquo;ve logged your request and will follow up.
             </p>

@@ -142,7 +142,7 @@ export default function MMCSuppliersPage() {
                 ))}
               </div>
             </div>
-            <div className="bg-gradient-to-br from-blue-50 to-teal-50 rounded-3xl p-8 border border-blue-100">
+            <div className="bg-gradient-to-br from-blue-50 to-brand-50 rounded-3xl p-8 border border-blue-100">
               <div className="grid grid-cols-2 gap-6">
                 {stats.map((stat) => (
                   <div key={stat.label} className="bg-white rounded-xl p-6 text-center">

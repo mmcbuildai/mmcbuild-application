@@ -230,7 +230,7 @@ function Metric({
     blue: "bg-blue-50 text-blue-600",
     indigo: "bg-indigo-50 text-indigo-600",
     green: "bg-green-50 text-green-600",
-    teal: "bg-teal-50 text-teal-600",
+    teal: "bg-brand-50 text-brand-600",
     purple: "bg-purple-50 text-purple-600",
   }[tone];
   return (

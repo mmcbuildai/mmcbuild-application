@@ -56,7 +56,7 @@ const posts = [
     readTime: "7 min read",
     image:
       "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=800&auto=format&fit=crop&q=60",
-    accent: "bg-teal-600",
+    accent: "bg-brand-600",
   },
   {
     id: 4,
@@ -70,7 +70,7 @@ const posts = [
     readTime: "8 min read",
     image:
       "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&auto=format&fit=crop&q=60",
-    accent: "bg-teal-600",
+    accent: "bg-brand-600",
   },
 ];
 

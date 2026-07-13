@@ -31,14 +31,14 @@ export function PlanCard({
       className={cn(
         "relative rounded-2xl border p-6 flex flex-col",
         isPopular
-          ? "border-emerald-400 bg-emerald-50/50 shadow-lg"
+          ? "border-brandgreen-400 bg-brandgreen-50/50 shadow-lg"
           : "border-slate-200 bg-white",
-        isCurrent && "ring-2 ring-emerald-400"
+        isCurrent && "ring-2 ring-brandgreen-400"
       )}
     >
       {isPopular && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-400 text-white text-xs font-medium">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-brandgreen-400 text-white text-xs font-medium">
             <Star className="w-3 h-3" /> Most Popular
           </span>
         </div>
@@ -64,7 +64,7 @@ export function PlanCard({
       <ul className="space-y-2 flex-1 mb-6">
         {features.map((feature) => (
           <li key={feature} className="flex items-start gap-2 text-sm text-slate-600">
-            <Check className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+            <Check className="w-4 h-4 text-brandgreen-500 mt-0.5 shrink-0" />
             {feature}
           </li>
         ))}
@@ -88,7 +88,7 @@ export function PlanCard({
         <button
           onClick={onSelect}
           disabled={disabled}
-          className="w-full py-2.5 px-4 rounded-full bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50"
+          className="w-full py-2.5 px-4 rounded-full bg-brandgreen-500 text-white text-sm font-medium hover:bg-brandgreen-600 transition-colors disabled:opacity-50"
         >
           {disabled ? "Loading..." : "Select Plan"}
         </button>

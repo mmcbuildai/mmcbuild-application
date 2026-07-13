@@ -45,7 +45,7 @@ export default function Chatbot() {
       <button
         onClick={() => setIsOpen(true)}
         aria-label="Open chat"
-        className={`fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-gradient-to-r from-blue-600 to-teal-500 text-white shadow-lg shadow-blue-600/30 flex items-center justify-center hover:scale-110 transition-all duration-300 ${
+        className={`fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-gradient-to-r from-blue-600 to-brand-500 text-white shadow-lg shadow-blue-600/30 flex items-center justify-center hover:scale-110 transition-all duration-300 ${
           isOpen ? "hidden" : ""
         }`}
       >
@@ -57,7 +57,7 @@ export default function Chatbot() {
           className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
           style={{ height: "500px", maxHeight: "calc(100vh - 100px)" }}
         >
-          <div className="bg-gradient-to-r from-blue-600 to-teal-500 p-4 flex items-center justify-between">
+          <div className="bg-gradient-to-r from-blue-600 to-brand-500 p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
                 <Bot className="h-5 w-5 text-white" />

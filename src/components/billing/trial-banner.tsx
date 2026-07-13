@@ -16,7 +16,7 @@ export function TrialBanner({ daysRemaining, usageCount, usageLimit }: TrialBann
       className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${
         isUrgent
           ? "bg-amber-50 border border-amber-200 text-amber-800"
-          : "bg-emerald-50 border border-emerald-200 text-emerald-800"
+          : "bg-brandgreen-50 border border-brandgreen-200 text-brandgreen-800"
       }`}
     >
       <Clock className="w-4 h-4 shrink-0" />

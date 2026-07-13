@@ -241,7 +241,7 @@ function StatCard({
     <div className="rounded-lg border p-4">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
-        className={`mt-1 text-2xl font-bold ${accent ? "text-emerald-600" : ""}`}
+        className={`mt-1 text-2xl font-bold ${accent ? "text-brandgreen-600" : ""}`}
       >
         {value}
       </div>
@@ -269,7 +269,7 @@ function SourceBadge({ source }: { source: SignupSource }) {
 function ConfirmedBadge({ at }: { at: string | null }) {
   if (at) {
     return (
-      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+      <span className="inline-flex items-center rounded-full bg-brandgreen-100 px-2 py-0.5 text-xs font-medium text-brandgreen-800">
         Yes
       </span>
     );
@@ -284,7 +284,7 @@ function ConfirmedBadge({ at }: { at: string | null }) {
 function ModuleBadge({ cell }: { cell: BetaModuleCell }) {
   if (cell.status === "completed") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+      <span className="inline-flex items-center gap-1 rounded-full bg-brandgreen-100 px-2 py-0.5 text-xs font-medium text-brandgreen-800">
         Done{cell.rating != null ? ` · ${cell.rating}★` : ""}
       </span>
     );

@@ -54,21 +54,21 @@ export function BetaTaskChecklist({
   }
 
   return (
-    <div className="rounded-xl border-2 border-teal-200 bg-teal-50/60">
+    <div className="rounded-xl border-2 border-brand-200 bg-brand-50/60">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         className="flex w-full items-center gap-3 px-4 py-3 text-left"
       >
-        <span className="inline-flex rounded-lg bg-teal-600 p-2">
+        <span className="inline-flex rounded-lg bg-brand-600 p-2">
           <FlaskConical className="h-4 w-4 text-white" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-teal-900">
+          <span className="block text-sm font-semibold text-brand-900">
             Beta testing: {mod.name}
           </span>
-          <span className="block text-xs text-teal-700">
+          <span className="block text-xs text-brand-700">
             {complete
               ? "All tasks done — finish with a rating on the Beta page."
               : "Tick off these tasks as you go. They sync with your Beta page."}
@@ -78,15 +78,15 @@ export function BetaTaskChecklist({
           className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
             complete
               ? "bg-green-100 text-green-700"
-              : "bg-teal-100 text-teal-800"
+              : "bg-brand-100 text-brand-800"
           }`}
         >
           {done.length}/{tasks.length} done
         </span>
         {open ? (
-          <ChevronUp className="h-4 w-4 shrink-0 text-teal-700" />
+          <ChevronUp className="h-4 w-4 shrink-0 text-brand-700" />
         ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 text-teal-700" />
+          <ChevronDown className="h-4 w-4 shrink-0 text-brand-700" />
         )}
       </button>
 
@@ -102,18 +102,18 @@ export function BetaTaskChecklist({
                     disabled={isPending}
                     onClick={() => toggle(i)}
                     aria-pressed={checked}
-                    className="flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-teal-100/50 disabled:cursor-not-allowed sm:min-h-0"
+                    className="flex min-h-[44px] w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-brand-100/50 disabled:cursor-not-allowed sm:min-h-0"
                   >
                     {checked ? (
                       <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
                     ) : (
-                      <Circle className="h-5 w-5 shrink-0 text-teal-300" />
+                      <Circle className="h-5 w-5 shrink-0 text-brand-300" />
                     )}
                     <span
                       className={
                         checked
-                          ? "text-teal-400 line-through"
-                          : "text-teal-900"
+                          ? "text-brand-400 line-through"
+                          : "text-brand-900"
                       }
                     >
                       {task}
@@ -125,7 +125,7 @@ export function BetaTaskChecklist({
           </ul>
           <Link
             href="/beta"
-            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:underline"
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
           >
             {complete ? "Finish on the Beta page" : "View all beta tasks"}
             <ArrowRight className="h-3 w-3" />

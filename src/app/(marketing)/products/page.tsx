@@ -58,8 +58,8 @@ const products: Product[] = [
       "Visualise recommended solutions in 3D (Revit-ready)",
     ],
     href: "/mmc-build",
-    color: "text-teal-600",
-    gradient: "from-teal-600 to-teal-700",
+    color: "text-brand-600",
+    gradient: "from-brand-600 to-brand-700",
   },
   {
     icon: Users,
