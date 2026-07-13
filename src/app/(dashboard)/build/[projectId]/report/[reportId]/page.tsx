@@ -52,6 +52,9 @@ export default async function ReportPage({
     affected_room_ids: string[] | null;
     decision: "undecided" | "pursuing" | "considering" | "rejected" | null;
     decision_note: string | null;
+    goal_alignment:
+      | { goal: string; score: number; rationale: string }[]
+      | null;
   }[];
 
   // Inline compliance check (SCRUM-174): deterministically flag suggestions that

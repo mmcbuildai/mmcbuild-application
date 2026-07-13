@@ -183,6 +183,14 @@ export function getTechnologyLabel(category: string): string {
   return cat?.label ?? category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** SCRUM-170: how well a suggestion serves one of the owner's stated goals. */
+export interface GoalAlignment {
+  goal: string;
+  /** 0.0–1.0 — how well this suggestion serves that goal. */
+  score: number;
+  rationale: string;
+}
+
 export interface DesignSuggestion {
   technology_category: string;
   current_approach: string;
@@ -197,6 +205,8 @@ export interface DesignSuggestion {
   affected_wall_ids?: string[];
   /** Room IDs from spatial_layout.rooms[].id the suggestion applies to. */
   affected_room_ids?: string[];
+  /** SCRUM-170: per-goal fit, one entry per stated project goal (empty/absent when no goals). */
+  goal_alignment?: GoalAlignment[];
 }
 
 export interface DesignOptimisationResult {

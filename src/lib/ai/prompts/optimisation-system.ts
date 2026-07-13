@@ -71,7 +71,8 @@ Return a JSON object with this exact schema:
       "implementation_complexity": "low | medium | high",
       "confidence": 0.0-1.0,
       "affected_wall_ids": ["w1", "w2", ...],
-      "affected_room_ids": ["r1", "r2", ...]
+      "affected_room_ids": ["r1", "r2", ...],
+      "goal_alignment": [ { "goal": "<a stated project goal, verbatim>", "score": 0.0-1.0, "rationale": "one concrete sentence" } ]
     }
   ]
 }
@@ -81,9 +82,10 @@ Guidelines:
 - Do not suggest alternatives where the plan already uses MMC/prefab methods
 - Include at least 3 suggestions if the plan content is sufficient
 - Maximum 12 suggestions
-- Order suggestions by estimated impact (highest savings first)
+- Order suggestions by estimated impact (highest savings first) — but if a "PROJECT OWNER'S GOALS" section is present in the system prompt, weight the ordering toward those goals as instructed there
 - Be specific about products and systems, not generic
-- For affected_wall_ids and affected_room_ids: only use IDs that appear in the SPATIAL LAYOUT block above. If no spatial layout was provided, return empty arrays for both.`;
+- For affected_wall_ids and affected_room_ids: only use IDs that appear in the SPATIAL LAYOUT block above. If no spatial layout was provided, return empty arrays for both.
+- For goal_alignment: include one entry per goal listed in the system prompt's "PROJECT OWNER'S GOALS" section. If no goals were stated, return an empty array.`;
 };
 
 export const OPTIMISATION_SUMMARY_PROMPT = (suggestions: string) => `You are writing an executive summary for a design optimisation report on an Australian residential building project.
