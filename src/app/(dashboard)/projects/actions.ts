@@ -15,6 +15,7 @@ import {
   type DesignAttributes,
 } from "@/lib/comply/questionnaire-prefill";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
+import { decidePlanVersion } from "@/lib/plans/versioning";
 
 async function getProfile() {
   const supabase = await createClient();
@@ -645,21 +646,25 @@ export async function registerPlan(
 
   const admin = createAdminClient();
 
-  const { data: existingPlan } = await admin
+  // SCRUM-333: a re-upload of the same drawing slot (project_id, file_name) now
+  // creates a NEW version that supersedes the current one instead of being
+  // rejected — so "compile latest versions" always has the newest drawing and
+  // prior versions are retained (until the retention sweep). Only the CURRENT
+  // version is considered; an in-flight current upload still blocks so a
+  // double-submit can't fork two versions.
+  const { data: currentPlan } = await admin
     .from("plans")
-    .select("id, status")
+    .select("id, status, version")
     .eq("project_id", projectId)
     .eq("file_name", fileName)
-    .single();
+    .eq("is_current", true)
+    .maybeSingle();
 
-  if (existingPlan) {
-    if (existingPlan.status === "uploading" || existingPlan.status === "processing") {
-      return { error: "This file is already being uploaded or processed. Please wait for it to finish." };
-    }
-    return { 
-      error: `A file named "${fileName}" already exists in this project. Please rename the file and try again, or delete the existing file first.`,
-      existingPlanId: existingPlan.id,
-    };
+  const decision = decidePlanVersion(
+    currentPlan as { id: string; status: string; version: number | null } | null,
+  );
+  if (decision.action === "reject-in-flight") {
+    return { error: "This file is already being uploaded or processed. Please wait for it to finish." };
   }
 
   const { data: plan, error: insertError } = await admin
@@ -673,6 +678,8 @@ export async function registerPlan(
       status: "uploading",
       file_kind: fileKind,
       created_by: profile.id,
+      version: decision.version,
+      is_current: true,
     } as never)
     .select("id")
     .single();
@@ -682,6 +689,18 @@ export async function registerPlan(
   }
 
   const planId = (plan as { id: string }).id;
+
+  // Mark the prior version superseded now that the new current row exists.
+  if (decision.supersedeId) {
+    await admin
+      .from("plans")
+      .update({
+        is_current: false,
+        superseded_by: planId,
+        superseded_at: new Date().toISOString(),
+      } as never)
+      .eq("id", decision.supersedeId);
+  }
 
   try {
     await inngest.send({
@@ -932,7 +951,7 @@ export async function getProjectPlans(projectId: string) {
     .eq("org_id", profile.org_id)
     .order("created_at", { ascending: false });
 
-  return (data ?? []) as unknown as Array<{
+  type PlanRow = {
     id: string;
     file_name: string;
     file_size_bytes: number;
@@ -941,6 +960,9 @@ export async function getProjectPlans(projectId: string) {
     created_at: string;
     file_kind?: string | null;
     error_message?: string | null;
+    version?: number | null;
+    is_current?: boolean | null;
+    superseded_at?: string | null;
     extracted_layers?: {
       layers?: Array<{ name: string; entityCount: number }>;
       derived?: {
@@ -950,7 +972,66 @@ export async function getProjectPlans(projectId: string) {
       };
       totalEntities?: number;
     } | null;
-  }>;
+  };
+
+  const rows = (data ?? []) as unknown as PlanRow[];
+
+  // SCRUM-333: the list shows the CURRENT version of each drawing slot; prior
+  // (superseded) versions are nested under it so they can still be downloaded
+  // without cluttering the list. `is_current` defaults to true for every legacy
+  // row, so pre-versioning plans behave exactly as before.
+  const priorsBySlot = new Map<string, PlanRow[]>();
+  for (const r of rows) {
+    if (r.is_current === false) {
+      const list = priorsBySlot.get(r.file_name) ?? [];
+      list.push(r);
+      priorsBySlot.set(r.file_name, list);
+    }
+  }
+
+  return rows
+    .filter((r) => r.is_current !== false)
+    .map((r) => ({
+      ...r,
+      version: r.version ?? 1,
+      priorVersions: (priorsBySlot.get(r.file_name) ?? [])
+        .sort((a, b) => (b.version ?? 1) - (a.version ?? 1))
+        .map((p) => ({
+          id: p.id,
+          version: p.version ?? 1,
+          superseded_at: p.superseded_at ?? null,
+        })),
+    }));
+}
+
+/**
+ * SCRUM-333: a short-lived signed URL to download a plan file (current or a
+ * prior version). Org-scoped — admin bypasses RLS, so the plan must belong to
+ * the caller's org.
+ */
+export async function getPlanDownloadUrl(planId: string) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+
+  const { data: plan } = await admin
+    .from("plans")
+    .select("org_id, file_path, file_name")
+    .eq("id", planId)
+    .single();
+
+  const row = plan as { org_id: string; file_path: string; file_name: string } | null;
+  if (!row || row.org_id !== profile.org_id) {
+    return { error: "Plan not found" };
+  }
+
+  const { data, error } = await admin.storage
+    .from("plan-uploads")
+    .createSignedUrl(row.file_path, 120);
+
+  if (error || !data) {
+    return { error: "Couldn't create a download link. Please try again." };
+  }
+  return { url: data.signedUrl, fileName: row.file_name };
 }
 
 export async function deletePlan(planId: string) {

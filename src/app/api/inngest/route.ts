@@ -28,10 +28,11 @@ import { syncHubspotListing } from "@/lib/inngest/functions/sync-hubspot-listing
 import { runTest3DExtractionFn } from "@/lib/inngest/functions/run-test-3d-extraction";
 import { notifyNewProfessional } from "@/lib/inngest/functions/notify-new-professional";
 import { reapStuckJobs } from "@/lib/inngest/functions/reap-stuck-jobs";
+import { purgeSupersededPlans } from "@/lib/inngest/functions/purge-superseded-plans";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [testFunction, processPlan, extractDesignAttributes, runComplianceCheck, processKbDocument, classifyRdCommit, processCertification, sendRemediationEmail, notifyRemediationResponse, runDesignOptimisation, runCostEstimation, ingestCostRates, sendEnquiryNotification, sendReviewNotification, generateTrainingContent, issueTrainingCertificate, syncStripeSubscription, syncHubspotListing, runTest3DExtractionFn, notifyNewProfessional, reapStuckJobs],
+  functions: [testFunction, processPlan, extractDesignAttributes, runComplianceCheck, processKbDocument, classifyRdCommit, processCertification, sendRemediationEmail, notifyRemediationResponse, runDesignOptimisation, runCostEstimation, ingestCostRates, sendEnquiryNotification, sendReviewNotification, generateTrainingContent, issueTrainingCertificate, syncStripeSubscription, syncHubspotListing, runTest3DExtractionFn, notifyNewProfessional, reapStuckJobs, purgeSupersededPlans],
   // Force Inngest to call back to the production URL instead of the
   // deployment-specific URL which is behind Vercel Deployment Protection.
   serveHost: process.env.NEXT_PUBLIC_APP_URL || undefined,

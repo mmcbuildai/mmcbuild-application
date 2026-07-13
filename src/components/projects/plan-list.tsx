@@ -4,10 +4,20 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Trash2, Loader2, RotateCw, AlertTriangle } from "lucide-react";
-import { deletePlan, retryPlanProcessing } from "@/app/(dashboard)/projects/actions";
+import { FileText, Trash2, Loader2, RotateCw, AlertTriangle, Download } from "lucide-react";
+import {
+  deletePlan,
+  retryPlanProcessing,
+  getPlanDownloadUrl,
+} from "@/app/(dashboard)/projects/actions";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useStatusPolling } from "@/hooks/use-status-polling";
+
+interface PriorVersion {
+  id: string;
+  version: number;
+  superseded_at: string | null;
+}
 
 interface Plan {
   id: string;
@@ -17,6 +27,8 @@ interface Plan {
   page_count: number | null;
   file_kind?: string | null;
   error_message?: string | null;
+  version?: number;
+  priorVersions?: PriorVersion[];
   extracted_layers?: {
     layers?: Array<{ name: string; entityCount: number }>;
     derived?: {
@@ -26,6 +38,15 @@ interface Plan {
     };
     totalEntities?: number;
   } | null;
+}
+
+async function openPlanDownload(planId: string) {
+  const res = await getPlanDownloadUrl(planId);
+  if (res.error || !res.url) {
+    alert(res.error ?? "Couldn't create a download link.");
+    return;
+  }
+  window.open(res.url, "_blank", "noopener");
 }
 
 export function PlanList({ plans }: { plans: Plan[] }) {
@@ -101,6 +122,7 @@ export function PlanList({ plans }: { plans: Plan[] }) {
                       {(plan.file_size_bytes / 1024 / 1024).toFixed(1)} MB
                       {plan.page_count && ` · ${plan.page_count} pages`}
                       {plan.file_kind === "dwg" && " · DWG"}
+                      {plan.version && plan.version > 1 && ` · v${plan.version}`}
                     </p>
                   </div>
                 </div>
@@ -136,6 +158,15 @@ export function PlanList({ plans }: { plans: Plan[] }) {
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={() => openPlanDownload(plan.id)}
+                    title="Download this drawing"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     onClick={() => handleDelete(plan.id)}
                     disabled={deletePending}
@@ -165,6 +196,35 @@ export function PlanList({ plans }: { plans: Plan[] }) {
               )}
               {hasLayerData && layerSummary && (
                 <LayerSummaryBlock summary={layerSummary} />
+              )}
+              {plan.priorVersions && plan.priorVersions.length > 0 && (
+                <div className="rounded-md bg-muted/40 p-2 text-xs">
+                  <p className="mb-1 font-medium text-muted-foreground">
+                    Previous versions
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {plan.priorVersions.map((pv) => (
+                      <div
+                        key={pv.id}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="text-muted-foreground">
+                          v{pv.version}
+                          {pv.superseded_at &&
+                            ` · replaced ${new Date(pv.superseded_at).toLocaleDateString("en-AU")}`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openPlanDownload(pv.id)}
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          <Download className="h-3 w-3" />
+                          Download
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           );
