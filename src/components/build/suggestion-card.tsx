@@ -52,6 +52,9 @@ interface SuggestionCardProps {
   projectId?: string;
   /** Growth-partner suppliers' products matching this suggestion's category. */
   featuredProducts?: FeaturedProduct[];
+  /** SCRUM-169: notify the report page when the decision changes, so the live
+   *  3D overlay can react (rejected → the suggestion drops out of the render). */
+  onDecisionChange?: (decision: SuggestionDecision) => void;
 }
 
 const FLAG_STYLES = {
@@ -80,6 +83,7 @@ export function SuggestionCard({
   complyHref,
   projectId,
   featuredProducts,
+  onDecisionChange,
 }: SuggestionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [decision, setDecision] = useState<SuggestionDecision>(
@@ -109,6 +113,7 @@ export function SuggestionCard({
   function pickDecision(next: SuggestionDecision) {
     if (next === decision) return;
     setDecision(next);
+    onDecisionChange?.(next); // SCRUM-169: update the live 3D overlay
     persistDecision(next);
   }
 

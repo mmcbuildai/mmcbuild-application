@@ -890,13 +890,16 @@ function buildGround(bounds: SpatialLayout["bounds"]): THREE.Mesh {
 export function buildSuggestionHighlight(
   wallIds: string[],
   layout: SpatialLayout,
-  colour: number = COLOURS.suggestion_highlight
+  colour: number = COLOURS.suggestion_highlight,
+  // SCRUM-169: opacity varies by the user's decision (pursuing = prominent,
+  // considering = faint). Defaults to the original 0.35.
+  opacity: number = 0.35
 ): THREE.Group {
   const group = new THREE.Group();
   const material = new THREE.MeshStandardMaterial({
     color: colour,
     transparent: true,
-    opacity: 0.35,
+    opacity,
     roughness: 0.5,
     side: THREE.DoubleSide,
   });

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getDesignReport } from "@/app/(dashboard)/build/actions";
-import { DesignReport } from "@/components/build/design-report";
+import { ReportDecisionsView } from "@/components/build/report-decisions-view";
 import { OptimisationProgress } from "@/components/build/optimisation-progress";
 import { ReportNextSteps } from "@/components/shared/report-next-steps";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
@@ -106,7 +106,7 @@ export default async function ReportPage({
               that used to sit here was removed — it duplicated the 3D the user
               already runs on the Build page ("See your design built in the 4
               MMC systems") before optimisation. */}
-          <DesignReport
+          <ReportDecisionsView
             check={check}
             suggestions={suggestionsWithCompliance}
             complyHref={`/comply/${projectId}`}

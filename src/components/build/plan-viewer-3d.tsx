@@ -66,7 +66,8 @@ function SuggestionHighlights({
         const group = buildSuggestionHighlight(
           overlay.affected_wall_ids,
           layout,
-          colour
+          colour,
+          overlay.opacity ?? 0.35
         );
         return <primitive key={overlay.id} object={group} />;
       })}
