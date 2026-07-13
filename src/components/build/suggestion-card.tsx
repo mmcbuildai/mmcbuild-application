@@ -28,6 +28,8 @@ import {
 import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
 import { FeaturedSupplierProducts } from "./featured-supplier-products";
 import type { FeaturedProduct } from "@/lib/direct/featured-suppliers";
+import { Target } from "lucide-react";
+import type { GoalAlignment } from "@/lib/ai/types";
 
 interface SuggestionCardProps {
   suggestion: {
@@ -43,6 +45,8 @@ interface SuggestionCardProps {
     confidence: number;
     decision?: SuggestionDecision | null;
     decision_note?: string | null;
+    /** SCRUM-170: per-goal fit (empty/absent when the project has no goals). */
+    goal_alignment?: GoalAlignment[] | null;
   };
   /** Inline NCC compliance flag for this suggestion on this site (SCRUM-174). */
   complianceFlag?: SuggestionComplianceFlag | null;
@@ -236,6 +240,40 @@ export function SuggestionCard({
             <p className="text-xs font-medium mb-1">Benefits</p>
             <p className="text-sm text-muted-foreground">{suggestion.benefits}</p>
           </div>
+
+          {suggestion.goal_alignment && suggestion.goal_alignment.length > 0 && (
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <Target className="h-3.5 w-3.5" />
+                Fit to your project goals
+              </p>
+              <div className="space-y-2">
+                {suggestion.goal_alignment.map((g, i) => (
+                  <div key={`${g.goal}-${i}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium">{g.goal}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-brand-500"
+                            style={{ width: `${Math.round((g.score ?? 0) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="font-mono text-xs">
+                          {Math.round((g.score ?? 0) * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                    {g.rationale && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {g.rationale}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-3">
             <SavingsStat

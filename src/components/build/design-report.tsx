@@ -8,6 +8,7 @@ import { DecisionSummary } from "./decision-summary";
 import type { SuggestionDecision } from "@/app/(dashboard)/build/actions";
 import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
 import type { FeaturedProduct } from "@/lib/direct/featured-suppliers";
+import type { GoalAlignment } from "@/lib/ai/types";
 
 interface Suggestion {
   id: string;
@@ -24,6 +25,7 @@ interface Suggestion {
   decision?: SuggestionDecision | null;
   decision_note?: string | null;
   complianceFlag?: SuggestionComplianceFlag | null;
+  goal_alignment?: GoalAlignment[] | null;
 }
 
 interface DesignReportProps {

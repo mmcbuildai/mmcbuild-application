@@ -17,6 +17,7 @@ import { filterSuggestionsBySystems } from "@/lib/build/system-category-map";
 import { buildDesignConstraints } from "@/lib/build/property-constraints";
 import type { PropertyProfile } from "@caistech/property-services-sdk";
 import { createReportVersion } from "@/lib/report-versions";
+import { parseProjectGoals, goalsPromptContext } from "@/lib/build/project-goals";
 
 /**
  * Mark the in-flight design check as errored with the real failure reason.
@@ -222,6 +223,23 @@ export const runDesignOptimisation = inngest.createFunction(
         ?.property_profile ?? null) as PropertyProfile | null;
     });
 
+    // 3e. Load the owner's stated project goals (SCRUM-170) so the optimiser
+    // weights confidence + ordering toward what they're trying to achieve.
+    // Degrades to [] (no goals) for legacy projects — the optimiser then runs
+    // exactly as before.
+    const projectGoals = await step.run("load-project-goals", async () => {
+      const { data } = await db()
+        .from("questionnaire_responses")
+        .select("responses")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const responses = (data as { responses?: Record<string, unknown> } | null)
+        ?.responses;
+      return parseProjectGoals(responses?.project_goals);
+    });
+
     await step.run("stage-suggest", async () => {
       await db()
         .from("design_checks")
@@ -257,8 +275,12 @@ export const runDesignOptimisation = inngest.createFunction(
         planContent ??
         "No text specification could be extracted from this plan (e.g. a CAD/DWG drawing with no text layer). Analyse the design using the spatial layout below and the selected MMC construction systems.";
 
+      // SCRUM-170: goals steer confidence + ordering and drive goal_alignment.
+      const goalsContext = goalsPromptContext(projectGoals);
+
       const result = await callModel("design_primary", {
-        system: OPTIMISATION_SYSTEM_PROMPT + systemsContext + siteConstraints,
+        system:
+          OPTIMISATION_SYSTEM_PROMPT + systemsContext + siteConstraints + goalsContext,
         messages: [{ role: "user", content: OPTIMISATION_USER_PROMPT(effectiveContent, spatialLayoutJson) }],
         // 4096 truncated a multi-suggestion response mid-array → the JSON came
         // back unparseable ("```json { \"suggestions\": [ … " then cut off),
@@ -307,6 +329,11 @@ export const runDesignOptimisation = inngest.createFunction(
           sort_order: i,
           affected_wall_ids: wallIds.length ? wallIds : null,
           affected_room_ids: roomIds.length ? roomIds : null,
+          // SCRUM-170: per-goal fit (null when the project has no stated goals).
+          goal_alignment:
+            s.goal_alignment && s.goal_alignment.length > 0
+              ? s.goal_alignment
+              : null,
         } as never);
       }
     });
