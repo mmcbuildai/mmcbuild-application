@@ -3,6 +3,7 @@ import { getTechnologyLabel } from "@/lib/ai/types";
 import { ReportExportButton } from "@/components/shared/report-export-button";
 import { DaeDownloadButton } from "./dae-download-button";
 import { DxfDownloadButton } from "./dxf-download-button";
+import { IfcDownloadButton } from "./ifc-download-button";
 import { ReportLegend } from "./report-legend";
 import { DecisionSummary } from "./decision-summary";
 import type { SuggestionDecision } from "@/app/(dashboard)/build/actions";
@@ -67,6 +68,11 @@ export function DesignReport({
         <DaeDownloadButton
           checkId={check.id}
           fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.dae`}
+          available={Boolean(check.spatial_layout)}
+        />
+        <IfcDownloadButton
+          checkId={check.id}
+          fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.ifc`}
           available={Boolean(check.spatial_layout)}
         />
         <ReportExportButton
