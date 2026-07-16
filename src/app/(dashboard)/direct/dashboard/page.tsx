@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardStats } from "@/components/direct/dashboard-stats";
 import { ProfileEditForm } from "@/components/direct/profile-edit-form";
 import { PortfolioManager } from "@/components/direct/portfolio-manager";
+import { CompanyDocumentsManager } from "@/components/direct/company-documents-manager";
+import type { CompanyDocument } from "@/lib/direct/types";
 import { EnquiryList } from "@/components/direct/enquiry-list";
 import { ReviewList } from "@/components/direct/review-list";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -28,17 +30,24 @@ export default async function TradeDashboardPage() {
   // Load data in parallel
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as unknown as any;
-  const [enquiries, reviewsResult, portfolioResult] = await Promise.all([
-    getReceivedEnquiries(professional.id),
-    getProfessionalReviews(professional.id),
-    admin
-      .from("portfolio_items")
-      .select("*")
-      .eq("professional_id", professional.id)
-      .order("sort_order", { ascending: true }),
-  ]);
+  const [enquiries, reviewsResult, portfolioResult, documentsResult] =
+    await Promise.all([
+      getReceivedEnquiries(professional.id),
+      getProfessionalReviews(professional.id),
+      admin
+        .from("portfolio_items")
+        .select("*")
+        .eq("professional_id", professional.id)
+        .order("sort_order", { ascending: true }),
+      admin
+        .from("company_documents")
+        .select("*")
+        .eq("professional_id", professional.id)
+        .order("created_at", { ascending: false }),
+    ]);
 
   const portfolio = portfolioResult?.data ?? [];
+  const documents = (documentsResult?.data ?? []) as CompanyDocument[];
 
   const statusBanners: Record<string, { bg: string; text: string; message: string }> = {
     pending: { bg: "bg-amber-50 border-amber-200", text: "text-amber-700", message: "Your listing is pending approval. Our team will review it shortly." },
@@ -66,6 +75,7 @@ export default async function TradeDashboardPage() {
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="enquiries">Enquiries ({enquiries.length})</TabsTrigger>
           <TabsTrigger value="reviews">Reviews ({professional.review_count})</TabsTrigger>
         </TabsList>
@@ -79,6 +89,14 @@ export default async function TradeDashboardPage() {
             professionalId={professional.id}
             orgId={profile.org_id}
             items={portfolio as { id: string; professional_id: string; image_url: string | null; title: string; description: string | null; sort_order: number; created_at: string }[]}
+          />
+        </TabsContent>
+
+        <TabsContent value="documents" className="mt-4">
+          <CompanyDocumentsManager
+            professionalId={professional.id}
+            orgId={profile.org_id}
+            documents={documents}
           />
         </TabsContent>
 

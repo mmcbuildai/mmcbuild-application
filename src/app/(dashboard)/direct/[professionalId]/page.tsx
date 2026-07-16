@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft, FileText } from "lucide-react";
+import type { CompanyDocument } from "@/lib/direct/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -80,6 +80,7 @@ export default async function ProfessionalProfilePage({
         <TabsList>
           <TabsTrigger value="about">About</TabsTrigger>
           <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="reviews">Reviews ({professional.review_count})</TabsTrigger>
         </TabsList>
 
@@ -124,6 +125,32 @@ export default async function ProfessionalProfilePage({
 
         <TabsContent value="portfolio" className="mt-4">
           <PortfolioGallery items={professional.portfolio || []} />
+        </TabsContent>
+
+        <TabsContent value="documents" className="mt-4">
+          {((professional.documents as CompanyDocument[] | undefined) ?? []).length > 0 ? (
+            <div className="space-y-2">
+              {(professional.documents as CompanyDocument[]).map((doc) => (
+                <Card key={doc.id}>
+                  <CardContent className="flex items-center gap-3 p-3">
+                    <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <a
+                      href={doc.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 flex-1 truncate text-sm font-medium text-primary hover:underline"
+                    >
+                      {doc.title}
+                    </a>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No documents provided.
+            </p>
+          )}
         </TabsContent>
 
         <TabsContent value="reviews" className="space-y-4 mt-4">
