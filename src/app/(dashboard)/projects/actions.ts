@@ -35,6 +35,172 @@ async function getProfile() {
   return profile as { id: string; org_id: string; role: string };
 }
 
+// ─── Project team members (SCRUM-51) ───
+// Assign subscribed org users to a specific project via the existing
+// project_members join table (project_id + profile_id). All reads/writes go
+// through the admin client (RLS-bypass) but assert the project belongs to the
+// caller's org, so cross-tenant access is impossible.
+
+export interface ProjectMemberRow {
+  profile_id: string;
+  name: string;
+  email: string | null;
+  role: string;
+}
+
+async function assertProjectInOrg(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string,
+  orgId: string,
+): Promise<boolean> {
+  const { data: project } = await admin
+    .from("projects")
+    .select("org_id")
+    .eq("id", projectId)
+    .single();
+  return !!project && (project as { org_id: string }).org_id === orgId;
+}
+
+export async function getProjectMembers(
+  projectId: string,
+): Promise<ProjectMemberRow[]> {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+  if (!(await assertProjectInOrg(admin, projectId, profile.org_id))) return [];
+
+  const { data: memberRows } = await admin
+    .from("project_members")
+    .select("profile_id, role")
+    .eq("project_id", projectId);
+  const rows = (memberRows ?? []) as { profile_id: string; role: string }[];
+  if (rows.length === 0) return [];
+
+  const { data: profRows } = await admin
+    .from("profiles")
+    .select("id, full_name, email")
+    .in(
+      "id",
+      rows.map((r) => r.profile_id),
+    );
+  const byId = new Map(
+    (
+      (profRows ?? []) as {
+        id: string;
+        full_name: string | null;
+        email: string | null;
+      }[]
+    ).map((p) => [p.id, p]),
+  );
+
+  return rows.map((r) => {
+    const p = byId.get(r.profile_id);
+    return {
+      profile_id: r.profile_id,
+      role: r.role,
+      name: p?.full_name ?? p?.email ?? "Unknown user",
+      email: p?.email ?? null,
+    };
+  });
+}
+
+export async function getAssignableProjectMembers(
+  projectId: string,
+): Promise<{ profile_id: string; name: string; email: string | null }[]> {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+  if (!(await assertProjectInOrg(admin, projectId, profile.org_id))) return [];
+
+  // The org's subscribed users are the source of truth in organisation_members
+  // (a user may belong to several orgs), not profiles.org_id (active org only).
+  const { data: memRows } = await admin
+    .from("organisation_members" as never)
+    .select("user_id")
+    .eq("org_id", profile.org_id);
+  const userIds = ((memRows ?? []) as unknown as { user_id: string }[]).map(
+    (m) => m.user_id,
+  );
+  if (userIds.length === 0) return [];
+
+  const { data: profRows } = await admin
+    .from("profiles")
+    .select("id, full_name, email")
+    .in("user_id", userIds);
+  const profiles = (profRows ?? []) as {
+    id: string;
+    full_name: string | null;
+    email: string | null;
+  }[];
+
+  const { data: assigned } = await admin
+    .from("project_members")
+    .select("profile_id")
+    .eq("project_id", projectId);
+  const assignedIds = new Set(
+    ((assigned ?? []) as { profile_id: string }[]).map((a) => a.profile_id),
+  );
+
+  return profiles
+    .filter((p) => !assignedIds.has(p.id))
+    .map((p) => ({
+      profile_id: p.id,
+      name: p.full_name ?? p.email ?? "Unknown user",
+      email: p.email ?? null,
+    }));
+}
+
+export async function addProjectMember(projectId: string, profileId: string) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+  if (!(await assertProjectInOrg(admin, projectId, profile.org_id))) {
+    return { error: "Not authorised" };
+  }
+
+  // The assignee must be a member of the caller's org.
+  const { data: assignee } = await admin
+    .from("profiles")
+    .select("user_id")
+    .eq("id", profileId)
+    .single();
+  if (!assignee) return { error: "User not found" };
+  const { data: membership } = await admin
+    .from("organisation_members" as never)
+    .select("user_id")
+    .eq("org_id", profile.org_id)
+    .eq("user_id", (assignee as { user_id: string }).user_id)
+    .maybeSingle();
+  if (!membership) return { error: "That user is not in your organisation" };
+
+  const { error } = await admin.from("project_members").upsert(
+    { project_id: projectId, profile_id: profileId } as never,
+    { onConflict: "project_id,profile_id" },
+  );
+  if (error) return { error: `Failed to add member: ${error.message}` };
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
+export async function removeProjectMember(
+  projectId: string,
+  profileId: string,
+) {
+  const profile = await getProfile();
+  const admin = createAdminClient();
+  if (!(await assertProjectInOrg(admin, projectId, profile.org_id))) {
+    return { error: "Not authorised" };
+  }
+
+  const { error } = await admin
+    .from("project_members")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("profile_id", profileId);
+  if (error) return { error: `Failed to remove member: ${error.message}` };
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: true };
+}
+
 export async function createProject(formData: FormData) {
   const profile = await getProfile();
   const admin = createAdminClient();

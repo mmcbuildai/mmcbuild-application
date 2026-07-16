@@ -13,6 +13,8 @@ import { CreateProjectDialog } from "@/components/projects/create-project-dialog
 import { CopyProjectButton } from "@/components/projects/copy-project-button";
 import { TestingGuide } from "@/components/dashboard/testing-guide";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { ProjectProgress } from "@/components/projects/project-progress";
+import { getProjectsStageProgress } from "@/lib/projects/progress";
 
 const showTestingGuide = process.env.NEXT_PUBLIC_TESTING_MODE === "true";
 
@@ -51,6 +53,12 @@ export default async function ProjectsPage({
   if (ownProfileId) projectsQuery = projectsQuery.eq("created_by", ownProfileId);
   const { data: projects } = await projectsQuery;
 
+  // Per-project module progress (SCRUM-46) — one batched lookup for the list.
+  const progressByProject = await getProjectsStageProgress(
+    supabase,
+    (projects ?? []).map((p) => p.id),
+  );
+
   return (
     <div className="space-y-6">
       {showTestingGuide && <TestingGuide />}
@@ -80,7 +88,14 @@ export default async function ProjectsPage({
                       {project.address ?? "No address"}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-3">
+                    {project.status !== "draft" &&
+                      progressByProject.get(project.id) && (
+                        <ProjectProgress
+                          progress={progressByProject.get(project.id)!}
+                          compact
+                        />
+                      )}
                     <p className="text-xs text-muted-foreground">
                       Created {new Date(project.created_at).toLocaleDateString("en-AU")}
                     </p>
