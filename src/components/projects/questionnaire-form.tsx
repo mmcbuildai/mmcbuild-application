@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { saveQuestionnaire, activateProject } from "@/app/(dashboard)/projects/actions";
+import { stepForQuestionnaireField } from "@/lib/comply/finding-questionnaire-map";
 import { toast } from "sonner";
 
 interface SiteIntelPrefill {
@@ -34,6 +35,11 @@ interface QuestionnaireFormProps {
    * Non-draft (editing an active project) just saves the responses.
    */
   isDraft?: boolean;
+  /**
+   * Deep-link target field (SCRUM-188): when a compliance finding links here,
+   * open the questionnaire on the step that holds this field.
+   */
+  initialField?: string;
 }
 
 const BUILDING_TYPOLOGIES = [
@@ -412,9 +418,12 @@ export function QuestionnaireForm({
   siteIntel,
   designPrefill,
   isDraft = false,
+  initialField,
 }: QuestionnaireFormProps) {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() =>
+    initialField ? stepForQuestionnaireField(initialField) : 0,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

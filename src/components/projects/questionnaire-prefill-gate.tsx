@@ -24,6 +24,8 @@ interface QuestionnairePrefillGateProps {
   initialPrefill: Record<string, string>;
   /** Server-computed extraction state at first render. */
   initialStatus: DesignPrefillStatus;
+  /** Deep-link target questionnaire field (SCRUM-188) — opens its step. */
+  initialField?: string;
 }
 
 const POLL_INTERVAL_MS = 5000;
@@ -71,6 +73,7 @@ export function QuestionnairePrefillGate({
   isDraft,
   initialPrefill,
   initialStatus,
+  initialField,
 }: QuestionnairePrefillGateProps) {
   // Wait only for a fresh questionnaire whose extraction is genuinely in flight.
   const shouldWait =
@@ -214,6 +217,7 @@ export function QuestionnairePrefillGate({
       existingResponses={existingResponses}
       siteIntel={siteIntel}
       designPrefill={prefill}
+      initialField={initialField}
     />
   );
 }

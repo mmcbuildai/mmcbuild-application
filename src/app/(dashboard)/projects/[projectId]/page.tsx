@@ -291,6 +291,7 @@ export default async function ProjectOverviewPage({
               }
               initialPrefill={prefillState?.prefill ?? {}}
               initialStatus={prefillState?.status ?? "unavailable"}
+              initialField={typeof sp.field === "string" ? sp.field : undefined}
             />
           </div>
           {/* The questionnaire form owns the single "Save & Activate" action on

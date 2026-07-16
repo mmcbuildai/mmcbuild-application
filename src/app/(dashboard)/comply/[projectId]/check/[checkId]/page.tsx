@@ -163,7 +163,7 @@ export default async function CheckPage({
             projectId={projectId}
           />
         ) : (
-          <ComplianceReport check={check} findings={findings} />
+          <ComplianceReport check={check} findings={findings} projectId={projectId} />
         )
       ) : (
         <CheckProgress
