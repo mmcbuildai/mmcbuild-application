@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { EnrollButton } from "@/components/train/enroll-button";
 import { ProgressBar } from "@/components/train/progress-bar";
 import { getCourseDetail } from "../actions";
@@ -21,6 +20,13 @@ export default async function CourseDetailPage({
   const { course, lessons, enrollment, completedLessonIds } = data;
   const categoryLabel = COURSE_CATEGORY_LABELS[course.category] ?? course.category;
   const difficultyLabel = DIFFICULTY_LABELS[course.difficulty] ?? course.difficulty;
+
+  // Resume at the first incomplete lesson (or the first lesson) so "Start
+  // Course" / "Continue Learning" opens actual lesson content (SCRUM-338).
+  const resumeLessonId =
+    lessons.find((l) => !completedLessonIds.includes(l.id))?.id ??
+    lessons[0]?.id ??
+    null;
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-4xl mx-auto">
@@ -67,7 +73,11 @@ export default async function CourseDetailPage({
           <ProgressBar value={enrollment.progress_pct} className="mb-4 max-w-md" />
         )}
 
-        <EnrollButton courseId={course.id} isEnrolled={!!enrollment} />
+        <EnrollButton
+          courseId={course.id}
+          isEnrolled={!!enrollment}
+          resumeLessonId={resumeLessonId}
+        />
       </div>
 
       <div className="space-y-1">

@@ -229,7 +229,7 @@ export function HoldingCostCalculator({
             onChange={(v) => updateVar("weekly_opportunity_cost", v)}
           />
           <CostInput
-            label="Council & Permit Fees"
+            label="Rates & Water"
             value={vars.weekly_council_fees}
             onChange={(v) => updateVar("weekly_council_fees", v)}
           />

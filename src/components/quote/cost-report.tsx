@@ -129,12 +129,12 @@ export function CostReport({ estimate, lineItems, holdingCostVariables }: CostRe
           accent
         />
         <TotalCard
-          label="Potential Savings"
+          label="Potential Savings ($)"
           value={`$${totalSavings.toLocaleString()}`}
           positive
         />
         <TotalCard
-          label="Savings"
+          label="Potential Savings (%)"
           value={savingsPct > 0 ? `${savingsPct}%` : "—"}
           positive
         />

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { LessonList } from "@/components/train/lesson-list";
 import { LessonViewer } from "@/components/train/lesson-viewer";
 import { LessonInteraction } from "@/components/train/lesson-interaction";
+import { LessonNav } from "@/components/train/lesson-nav";
 import { getLessonContent, getCourseLessonsWithProgress } from "../../actions";
-import { ArrowLeft, ArrowRight, ChevronLeft } from "lucide-react";
+import { ArrowLeft, ChevronLeft } from "lucide-react";
 
 export default async function LessonPage({
   params,
@@ -76,33 +76,13 @@ export default async function LessonPage({
           existingAttempt={quizAttempt}
         />
 
-        {/* Navigation */}
-        <div className="flex justify-between items-center mt-8 pt-4 border-t">
-          {prevLesson ? (
-            <Link href={`/train/${courseId}/${prevLesson.id}`}>
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-                Previous
-              </Button>
-            </Link>
-          ) : (
-            <div />
-          )}
-          {nextLesson ? (
-            <Link href={`/train/${courseId}/${nextLesson.id}`}>
-              <Button variant="outline" size="sm">
-                Next
-                <ArrowRight className="ml-1 h-3.5 w-3.5" />
-              </Button>
-            </Link>
-          ) : (
-            <Link href={`/train/${courseId}`}>
-              <Button variant="outline" size="sm">
-                Back to Course
-              </Button>
-            </Link>
-          )}
-        </div>
+        {/* Navigation — autosaves completion on Next, exits on Finish (SCRUM-338) */}
+        <LessonNav
+          courseId={courseId}
+          currentLessonId={lessonId}
+          prevLessonId={prevLesson?.id ?? null}
+          nextLessonId={nextLesson?.id ?? null}
+        />
       </main>
     </div>
   );
