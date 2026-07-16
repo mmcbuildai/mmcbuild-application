@@ -19,6 +19,9 @@ import { CouncilPackButton } from "@/components/projects/council-pack-button";
 import { ProjectTabs, type ProjectTab } from "@/components/projects/project-tabs";
 import { DocumentsTab } from "@/components/projects/documents-tab";
 import { ProjectContributors } from "@/components/projects/project-contributors";
+import { ProjectMembers } from "@/components/projects/project-members";
+import { ProjectProgress } from "@/components/projects/project-progress";
+import { getProjectsStageProgress } from "@/lib/projects/progress";
 import { QuestionnairePrefillGate } from "@/components/projects/questionnaire-prefill-gate";
 import { WizardNav } from "@/components/projects/wizard-nav";
 import {
@@ -28,6 +31,8 @@ import {
   getProjectCertifications,
   getProjectContributors,
   getDesignPrefillState,
+  getProjectMembers,
+  getAssignableProjectMembers,
 } from "../actions";
 import {
   ArrowLeft,
@@ -98,13 +103,24 @@ export default async function ProjectOverviewPage({
   // Conditionally fetch data based on active tab
   const siteIntel = tab === "overview" ? await getProjectSiteIntel(projectId) : null;
 
+  // Module progress (SCRUM-46) — only meaningful once the project is activated.
+  const overviewProgress =
+    tab === "overview" && !isDraft
+      ? (await getProjectsStageProgress(supabase, [projectId])).get(projectId) ??
+        null
+      : null;
+
   const [plans, certifications] = tab === "documents"
     ? await Promise.all([getProjectPlans(projectId), getProjectCertifications(projectId)])
     : [null, null];
 
-  const contributors = tab === "team"
-    ? await getProjectContributors(projectId)
-    : null;
+  const [contributors, projectMembers, assignableMembers] = tab === "team"
+    ? await Promise.all([
+        getProjectContributors(projectId),
+        getProjectMembers(projectId),
+        getAssignableProjectMembers(projectId),
+      ])
+    : [null, null, null];
 
   const [questionnaire, qSiteIntel, prefillState] = tab === "questionnaire"
     ? await Promise.all([
@@ -182,6 +198,19 @@ export default async function ProjectOverviewPage({
       {/* Overview tab */}
       {tab === "overview" && (
         <>
+          {overviewProgress && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Project progress</CardTitle>
+                <CardDescription>
+                  How far this project has moved through the MMC modules.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ProjectProgress progress={overviewProgress} />
+              </CardContent>
+            </Card>
+          )}
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-1">
               {siteIntel ? (
@@ -265,6 +294,11 @@ export default async function ProjectOverviewPage({
       {/* Team tab */}
       {tab === "team" && contributors && (
         <>
+          <ProjectMembers
+            projectId={projectId}
+            members={projectMembers ?? []}
+            assignable={assignableMembers ?? []}
+          />
           <ProjectContributors projectId={projectId} contributors={contributors} />
           <WizardNav projectId={projectId} currentTab="team" isDraft={isDraft} />
         </>
