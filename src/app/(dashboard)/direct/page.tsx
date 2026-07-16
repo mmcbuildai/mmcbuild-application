@@ -1,4 +1,5 @@
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { ModuleIntro } from "@/components/shared/module-intro";
 import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 import { ProfessionalCard } from "@/components/direct/professional-card";
 import { DirectorySearch } from "@/components/direct/directory-search";
@@ -64,13 +65,17 @@ export default async function DirectPage({
 
   return (
     <div className="space-y-6">
+      <ModuleIntro
+        module="direct"
+        description="MMC Direct is the directory of verified trades, certifiers, and suppliers across Australia. Search for a professional for your project, or list your own business so builders can find you."
+      />
       <BetaTaskPanel moduleId="direct" />
       <ExplainerVideo module="direct" videoUrl="/videos/direct-explainer.mp4" />
 
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold">MMC Direct</h2>
+            <h2 className="text-lg font-semibold">Find a professional</h2>
             <p className="text-sm text-muted-foreground">
               {result.total} professional{result.total !== 1 ? "s" : ""} found
             </p>

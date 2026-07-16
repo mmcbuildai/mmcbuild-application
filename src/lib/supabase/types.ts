@@ -2104,6 +2104,7 @@ export type Database = {
           approved_at: string | null
           avg_rating: number
           company_name: string
+          contact_name: string | null
           cover_image_url: string | null
           created_at: string
           description: string | null
@@ -2129,6 +2130,7 @@ export type Database = {
           approved_at?: string | null
           avg_rating?: number
           company_name: string
+          contact_name?: string | null
           cover_image_url?: string | null
           created_at?: string
           description?: string | null
@@ -2154,6 +2156,7 @@ export type Database = {
           approved_at?: string | null
           avg_rating?: number
           company_name?: string
+          contact_name?: string | null
           cover_image_url?: string | null
           created_at?: string
           description?: string | null

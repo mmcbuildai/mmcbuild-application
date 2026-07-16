@@ -39,6 +39,7 @@ export function ProfileEditForm({ professional: pro, orgId }: ProfileEditFormPro
   const [tradeType, setTradeType] = useState(pro.trade_type);
   const [headline, setHeadline] = useState(pro.headline || "");
   const [description, setDescription] = useState(pro.description || "");
+  const [contactName, setContactName] = useState(pro.contact_name || "");
   const [phone, setPhone] = useState(pro.phone || "");
   const [email, setEmail] = useState(pro.email || "");
   const [website, setWebsite] = useState(pro.website || "");
@@ -78,6 +79,7 @@ export function ProfileEditForm({ professional: pro, orgId }: ProfileEditFormPro
         trade_type: tradeType,
         headline: headline || undefined,
         description: description || undefined,
+        contact_name: contactName || undefined,
         phone,
         email,
         website: website || undefined,
@@ -149,6 +151,16 @@ export function ProfileEditForm({ professional: pro, orgId }: ProfileEditFormPro
         <div className="space-y-2">
           <Label>Description</Label>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} maxLength={2000} />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Contact Name</Label>
+          <Input
+            value={contactName}
+            onChange={(e) => setContactName(e.target.value)}
+            placeholder="e.g. Jane Smith"
+            maxLength={120}
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

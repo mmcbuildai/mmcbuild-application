@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { signIn, signInWithMagicLink } from "../actions";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -24,6 +25,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
   const message = searchParams.get("message");
+  const redirectTo = searchParams.get("redirect");
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(
@@ -67,6 +69,19 @@ function LoginForm() {
             {message}
           </div>
         )}
+
+        <GoogleSignInButton redirectTo={redirectTo ?? undefined} />
+
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">
+              or continue with email
+            </span>
+          </div>
+        </div>
 
         <Tabs defaultValue="password">
           <TabsList className="grid w-full grid-cols-2">

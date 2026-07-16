@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Calculator, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { ModuleIntro } from "@/components/shared/module-intro";
 import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 
 export default async function QuotePage() {
@@ -33,6 +34,10 @@ export default async function QuotePage() {
 
   return (
     <div className="space-y-6">
+      <ModuleIntro
+        module="quote"
+        description="MMC Quote produces a cost estimate for your project, comparing traditional and modular (MMC) construction. Open a project to generate a detailed cost breakdown and see where modular methods save money."
+      />
       <BetaTaskPanel moduleId="quote" />
       <ExplainerVideo module="quote" videoUrl="/videos/quote-explainer.mp4" />
 

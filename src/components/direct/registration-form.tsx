@@ -26,6 +26,7 @@ export function RegistrationForm({ orgId }: RegistrationFormProps) {
   const [tradeType, setTradeType] = useState("");
   const [headline, setHeadline] = useState("");
   const [description, setDescription] = useState("");
+  const [contactName, setContactName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
@@ -58,6 +59,7 @@ export function RegistrationForm({ orgId }: RegistrationFormProps) {
       trade_type: tradeType,
       headline: headline || undefined,
       description: description || undefined,
+      contact_name: contactName || undefined,
       phone,
       email,
       website: website || undefined,
@@ -156,6 +158,16 @@ export function RegistrationForm({ orgId }: RegistrationFormProps) {
           <CardTitle>Contact Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="contactName">Contact Name</Label>
+            <Input
+              id="contactName"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="e.g. Jane Smith"
+              maxLength={120}
+            />
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="phone">Phone *</Label>

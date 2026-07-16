@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { Star, MapPin, Globe, Phone, Shield, Award } from "lucide-react";
+import { Star, MapPin, Globe, Phone, Shield, Award, User } from "lucide-react";
 import { TRADE_TYPE_LABELS, STATE_LABELS } from "@/lib/direct/constants";
 import type { Professional, TradeType, AustralianState } from "@/lib/direct/types";
 
@@ -62,6 +62,12 @@ export function ProfileHeader({ professional: pro, contactButton }: ProfileHeade
           )}
 
           <div className="flex flex-wrap gap-4 mt-3 text-sm text-muted-foreground">
+            {pro.contact_name && (
+              <span className="flex items-center gap-1">
+                <User className="w-4 h-4" />
+                {pro.contact_name}
+              </span>
+            )}
             {pro.regions.length > 0 && (
               <span className="flex items-center gap-1">
                 <MapPin className="w-4 h-4" />

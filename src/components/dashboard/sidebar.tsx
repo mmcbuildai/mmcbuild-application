@@ -10,12 +10,10 @@ import {
   FileText,
   Truck,
   GraduationCap,
-  CreditCard,
   Settings,
   Tag,
   LayoutDashboard,
   FolderOpen,
-  BookOpen,
   ArrowUpRight,
   FlaskConical,
   HelpCircle,
@@ -50,9 +48,9 @@ const topNav = [
   { name: "Beta Testing", href: "/beta", icon: FlaskConical },
 ];
 
+// Knowledge and Billing now live inside the Settings page (SCRUM-43) rather than
+// the sidebar — keep the sidebar to the primary surfaces plus Settings/Support.
 const bottomNav = [
-  { name: "Knowledge", href: "/settings/knowledge", icon: BookOpen },
-  { name: "Billing", href: "/billing", icon: CreditCard, color: "bg-indigo-600" },
   { name: "Settings", href: "/settings", icon: Settings },
   { name: "Support", href: "/support", icon: HelpCircle },
 ];
@@ -74,13 +72,6 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
   const bypassGate = canBypassLaunchGate(role);
   const visibleModuleNav = moduleNav.filter(
     (item) => bypassGate || isModuleLaunched(item.moduleId),
-  );
-
-  // Knowledge bases are admin-only — hide the link from non-admins so they don't
-  // land on the access-blocked page.
-  const isAdmin = role === "owner" || role === "admin";
-  const visibleBottomNav = bottomNav.filter(
-    (item) => isAdmin || item.href !== "/settings/knowledge",
   );
 
   return (
@@ -191,7 +182,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
         <OrgSwitcher />
 
         <div className="border-t border-white/10 px-3 py-2 space-y-0.5">
-          {visibleBottomNav.map((item) => {
+          {bottomNav.map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (
               <Link
@@ -204,13 +195,7 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
                     : "text-slate-400 hover:bg-white/5 hover:text-white"
                 )}
               >
-                {"color" in item && item.color ? (
-                  <div className={cn("flex h-5 w-5 items-center justify-center rounded", item.color)}>
-                    <item.icon className="h-3 w-3 text-white" />
-                  </div>
-                ) : (
-                  <item.icon className="h-4 w-4 shrink-0" />
-                )}
+                <item.icon className="h-4 w-4 shrink-0" />
                 {item.name}
               </Link>
             );
