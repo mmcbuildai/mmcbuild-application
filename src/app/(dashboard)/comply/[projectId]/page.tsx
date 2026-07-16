@@ -28,6 +28,8 @@ import {
   deleteComplianceCheck,
 } from "../actions";
 import { RunCheckButton } from "@/components/comply/run-check-button";
+import { PlanInputsChecklist } from "@/components/comply/plan-inputs-checklist";
+import type { DesignAttributes } from "@/lib/comply/questionnaire-prefill";
 import { ReadinessIndicators } from "@/components/projects/readiness-indicators";
 import { ReportVersionList } from "@/components/shared/report-version-list";
 import { ProjectContextSummary } from "@/components/shared/project-context-summary";
@@ -105,6 +107,24 @@ export default async function ProjectComplyPage({
   const readyPlan = plans.find(
     (p: { status: string }) => p.status === "ready"
   );
+
+  // What did we actually read from the plans? (SCRUM-187) — surface the inputs
+  // Build/Quote depend on so the user isn't surprised by thin output. Derived
+  // from the on-upload design attributes; no new analysis.
+  let planAttributes: DesignAttributes | null = null;
+  let planExtracted = false;
+  if (readyPlan) {
+    const { data: planRow } = await supabase
+      .from("plans")
+      .select("design_attributes")
+      .eq("id", (readyPlan as { id: string }).id)
+      .single();
+    const da = (planRow as { design_attributes: DesignAttributes | null } | null)
+      ?.design_attributes ?? null;
+    planAttributes = da;
+    planExtracted = da != null && Object.keys(da).length > 0;
+  }
+
   const hasQuestionnaire = questionnaire?.completed;
   const canRunCheck = !!readyPlan && !!hasQuestionnaire;
   // A check already running for this project — show its progress here instead of
@@ -130,6 +150,23 @@ export default async function ProjectComplyPage({
       </div>
 
       <ProjectContextSummary projectId={projectId} />
+
+      {readyPlan && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">What we read from your plans</CardTitle>
+            <CardDescription>
+              Inputs detected in your upload that Build and Quote rely on.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PlanInputsChecklist
+              attributes={planAttributes}
+              extracted={planExtracted}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Readiness + Run Check */}
       <div className="grid gap-6 md:grid-cols-2">
