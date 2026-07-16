@@ -55,6 +55,16 @@ export interface PortfolioItem {
   created_at: string;
 }
 
+export interface CompanyDocument {
+  id: string;
+  professional_id: string;
+  org_id: string;
+  title: string;
+  file_url: string;
+  file_name: string | null;
+  created_at: string;
+}
+
 export interface Review {
   id: string;
   professional_id: string;

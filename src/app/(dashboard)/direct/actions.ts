@@ -10,11 +10,13 @@ import {
   reviewSchema,
   enquirySchema,
   portfolioItemSchema,
+  companyDocumentSchema,
   type RegistrationInput,
   type ProfileUpdateInput,
   type ReviewInput,
   type EnquiryInput,
   type PortfolioItemInput,
+  type CompanyDocumentInput,
 } from "@/lib/direct/validators";
 
 async function getAuthProfile() {
@@ -369,7 +371,10 @@ export async function getProfessionalProfile(id: string) {
 
   if (!professional || professional.status === "deregistered") return null;
 
-  const [specResult, portfolioResult, reviewResult] = await Promise.all([
+  // company_documents is not in the generated types yet.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cdocs = db() as unknown as any;
+  const [specResult, portfolioResult, reviewResult, docsResult] = await Promise.all([
     db()
       .from("professional_specialisations")
       .select("*")
@@ -385,6 +390,11 @@ export async function getProfessionalProfile(id: string) {
       .eq("professional_id", id)
       .order("created_at", { ascending: false })
       .limit(10),
+    cdocs
+      .from("company_documents")
+      .select("*")
+      .eq("professional_id", id)
+      .order("created_at", { ascending: false }),
   ]);
 
   return {
@@ -392,7 +402,68 @@ export async function getProfessionalProfile(id: string) {
     specialisations: specResult.data ?? [],
     portfolio: portfolioResult.data ?? [],
     reviews: reviewResult.data ?? [],
+    documents: docsResult.data ?? [],
   };
+}
+
+// ─── Company documents (SCRUM-57) ───
+
+export async function addCompanyDocument(
+  professionalId: string,
+  input: CompanyDocumentInput,
+) {
+  const profile = await getAuthProfile();
+  if (!profile) return { error: "Not authenticated" };
+
+  const parsed = companyDocumentSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const { data: pro } = await db()
+    .from("professionals")
+    .select("org_id")
+    .eq("id", professionalId)
+    .single();
+  if (!pro || pro.org_id !== profile.org_id) return { error: "Not authorised" };
+
+  // company_documents is not in the generated types yet.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cdocs = db() as unknown as any;
+  const { data, error } = await cdocs
+    .from("company_documents")
+    .insert({
+      ...parsed.data,
+      professional_id: professionalId,
+      org_id: profile.org_id,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: `Failed: ${error.message}` };
+  return { id: (data as { id: string }).id };
+}
+
+export async function deleteCompanyDocument(documentId: string) {
+  const profile = await getAuthProfile();
+  if (!profile) return { error: "Not authenticated" };
+
+  // company_documents is not in the generated types yet.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cdocs = db() as unknown as any;
+  const { data: doc } = await cdocs
+    .from("company_documents")
+    .select("org_id")
+    .eq("id", documentId)
+    .single();
+  if (!doc) return { error: "Document not found" };
+  if ((doc as { org_id: string }).org_id !== profile.org_id) {
+    return { error: "Not authorised" };
+  }
+
+  const { error } = await cdocs
+    .from("company_documents")
+    .delete()
+    .eq("id", documentId);
+  if (error) return { error: `Failed: ${error.message}` };
+  return { success: true };
 }
 
 // ─── Reviews ───

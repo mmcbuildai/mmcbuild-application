@@ -60,3 +60,10 @@ export const portfolioItemSchema = z.object({
   sort_order: z.number().int().min(0).optional(),
 });
 export type PortfolioItemInput = z.infer<typeof portfolioItemSchema>;
+
+export const companyDocumentSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+  file_url: z.string().min(1, "A file is required"),
+  file_name: z.string().max(255).optional(),
+});
+export type CompanyDocumentInput = z.infer<typeof companyDocumentSchema>;
