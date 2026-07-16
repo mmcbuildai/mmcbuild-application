@@ -1,10 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SeverityBadge } from "./severity-badge";
-import { ChevronDown, ChevronUp, ShieldCheck, AlertTriangle } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  ShieldCheck,
+  AlertTriangle,
+  ArrowRight,
+} from "lucide-react";
 import { FindingFeedback } from "./finding-feedback";
+import { questionnaireFieldForCategory } from "@/lib/comply/finding-questionnaire-map";
 
 interface FindingCardProps {
   finding: {
@@ -24,10 +32,20 @@ interface FindingCardProps {
     secondary_model?: string | null;
     was_reconciled?: boolean | null;
   };
+  /** When set, non-compliant findings deep-link to the questionnaire (SCRUM-188). */
+  projectId?: string;
 }
 
-export function FindingCard({ finding }: FindingCardProps) {
+export function FindingCard({ finding, projectId }: FindingCardProps) {
   const [expanded, setExpanded] = useState(false);
+
+  // Many fails are actually a wrong questionnaire answer, not a plan defect —
+  // surface a deep-link to the answer this finding depends on (SCRUM-188). Only
+  // for actionable (non-compliant) findings, not passes.
+  const questionnaireRef =
+    projectId && finding.severity !== "compliant"
+      ? questionnaireFieldForCategory(finding.category)
+      : null;
 
   return (
     <Card className="border-l-4" style={{
@@ -106,6 +124,24 @@ export function FindingCard({ finding }: FindingCardProps) {
               <p className="text-sm text-muted-foreground">
                 {finding.page_references.join(", ")}
               </p>
+            </div>
+          )}
+
+          {questionnaireRef && projectId && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+              <p className="mb-1.5 text-xs text-blue-900">
+                This may depend on your project answer for{" "}
+                <span className="font-medium">{questionnaireRef.label}</span>. If
+                that answer is wrong, correcting it and re-running may resolve
+                this finding.
+              </p>
+              <Link
+                href={`/projects/${projectId}?tab=questionnaire&field=${questionnaireRef.field}`}
+                className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline"
+              >
+                Review your {questionnaireRef.label} answer
+                <ArrowRight className="h-3 w-3" />
+              </Link>
             </div>
           )}
 

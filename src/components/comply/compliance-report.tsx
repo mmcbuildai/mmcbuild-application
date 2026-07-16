@@ -31,9 +31,15 @@ interface ComplianceReportProps {
     completed_at: string | null;
   };
   findings: Finding[];
+  /** Enables the questionnaire deep-link on findings (SCRUM-188). */
+  projectId?: string;
 }
 
-export function ComplianceReport({ check, findings }: ComplianceReportProps) {
+export function ComplianceReport({
+  check,
+  findings,
+  projectId,
+}: ComplianceReportProps) {
   // Group findings by category
   const categories = [...new Set(findings.map((f) => f.category))];
 
@@ -73,7 +79,11 @@ export function ComplianceReport({ check, findings }: ComplianceReportProps) {
             </h3>
             <div className="space-y-3">
               {catFindings.map((finding) => (
-                <FindingCard key={finding.id} finding={{ ...finding, check_id: check.id }} />
+                <FindingCard
+                  key={finding.id}
+                  finding={{ ...finding, check_id: check.id }}
+                  projectId={projectId}
+                />
               ))}
             </div>
           </div>
