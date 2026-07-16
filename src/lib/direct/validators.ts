@@ -6,6 +6,7 @@ export const registrationSchema = z.object({
   trade_type: z.string().min(1, "Trade type is required"),
   headline: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
+  contact_name: z.string().max(120).optional(),
   // Phone + email are MANDATORY on a directory listing — buyers must be able to
   // reach the business (Dennis, 2026-06-25).
   phone: z.string().trim().min(5, "Phone number is required"),
@@ -25,6 +26,7 @@ export const profileUpdateSchema = z.object({
   trade_type: z.string().optional(),
   headline: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
+  contact_name: z.string().max(120).optional(),
   // Mandatory contact details — kept required on edit so a listing can never be
   // saved without a reachable phone + email (matches registrationSchema).
   phone: z.string().trim().min(5, "Phone number is required"),

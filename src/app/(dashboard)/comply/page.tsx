@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { ShieldCheck, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { ModuleIntro } from "@/components/shared/module-intro";
 import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 
 export default async function ComplyPage() {
@@ -28,6 +29,10 @@ export default async function ComplyPage() {
 
   return (
     <div className="space-y-6">
+      <ModuleIntro
+        module="comply"
+        description="MMC Comply checks your building plans against the National Construction Code and Australian Standards. Open a project to run an automated compliance check and get a domain-by-domain findings report you can act on."
+      />
       <BetaTaskPanel moduleId="comply" />
       <ExplainerVideo module="comply" videoUrl="/videos/comply-explainer.mp4" />
 

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Wrench, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { ModuleIntro } from "@/components/shared/module-intro";
 import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
 
 export default async function BuildPage() {
@@ -28,6 +29,10 @@ export default async function BuildPage() {
 
   return (
     <div className="space-y-6">
+      <ModuleIntro
+        module="build"
+        description="MMC Build turns your uploaded plans into an interactive 3D model and design-optimisation view. Open a project to explore its modular build sequence and see where prefabricated methods can save time and cost."
+      />
       <BetaTaskPanel moduleId="build" />
       <ExplainerVideo module="build" videoUrl="/videos/build-explainer.mp4" />
 

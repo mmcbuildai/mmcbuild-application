@@ -19,6 +19,7 @@ export interface Professional {
   trade_type: TradeType;
   headline: string | null;
   description: string | null;
+  contact_name: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;

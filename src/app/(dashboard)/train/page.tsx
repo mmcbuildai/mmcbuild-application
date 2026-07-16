@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
+import { ModuleIntro } from "@/components/shared/module-intro";
 import { Button } from "@/components/ui/button";
 import { CourseSearch } from "@/components/train/course-search";
 import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
@@ -54,6 +55,10 @@ export default async function TrainPage({
   return (
     <div>
       <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto space-y-6">
+        <ModuleIntro
+          module="train"
+          description="MMC Train is your library of modular-construction courses and certifications. Start a course to build your skills and track your progress toward completion."
+        />
         <BetaTaskPanel moduleId="train" />
         <ExplainerVideo module="train" videoUrl="/videos/train-explainer.mp4" />
 

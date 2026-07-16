@@ -86,6 +86,38 @@ export async function signIn(formData: FormData) {
   redirect("/dashboard");
 }
 
+export async function signInWithGoogle(formData: FormData) {
+  const supabase = await createClient();
+
+  const redirectTo = (formData.get("redirect") as string) || "";
+  const callbackUrl = redirectTo
+    ? `${appUrl}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`
+    : `${appUrl}/auth/callback`;
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: callbackUrl,
+    },
+  });
+
+  if (error) {
+    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  }
+
+  // signInWithOAuth returns the provider consent URL to send the user to; the
+  // /auth/callback route already exchanges the returned code for a session and
+  // provisions the org/profile (shared with the email flows), so no callback
+  // change is needed for Google.
+  if (data?.url) {
+    redirect(data.url);
+  }
+
+  redirect(
+    `/login?error=${encodeURIComponent("Could not start Google sign-in. Please try again.")}`
+  );
+}
+
 export async function signInWithMagicLink(formData: FormData) {
   const supabase = await createClient();
 

@@ -1,4 +1,4 @@
-import { Settings, BookOpen, Clock, ArrowRight, Users, UserCog, Contact } from "lucide-react";
+import { Settings, BookOpen, Clock, ArrowRight, Users, UserCog, Contact, CreditCard } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -53,6 +53,14 @@ const settingsCards = [
       "Review and approve trade directory listings for MMC Direct.",
     icon: Users,
     href: "/settings/directory-admin",
+    disabled: false,
+  },
+  {
+    title: "Billing",
+    description:
+      "Manage your subscription, plan, usage, and payment details.",
+    icon: CreditCard,
+    href: "/billing",
     disabled: false,
   },
 ];
