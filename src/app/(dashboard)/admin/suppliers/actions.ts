@@ -180,3 +180,86 @@ export async function deleteSupplierProduct(productId: string) {
   revalidatePath("/admin/suppliers");
   return { success: true };
 }
+
+// ─── Compliance-document verification (SCRUM-175) ───
+
+export interface ComplianceReviewDoc {
+  id: string;
+  professional_id: string;
+  supplier_name: string;
+  doc_type: string;
+  title: string;
+  file_url: string;
+  file_name: string | null;
+  issued_at: string | null;
+  expires_at: string | null;
+  verified: boolean;
+  verified_at: string | null;
+  created_at: string;
+}
+
+/** The operator's compliance review queue — every doc, unverified first. */
+export async function getComplianceReviewQueue(): Promise<ComplianceReviewDoc[]> {
+  // @cross-tenant-ok: operator-allowlist gated (SCRUM-345); the supplier directory + its compliance docs are a GLOBAL shared marketplace, not org-scoped.
+  await requireOperator();
+
+  const { data } = await db()
+    .from("supplier_compliance_documents")
+    .select(
+      "id, professional_id, doc_type, title, file_url, file_name, issued_at, expires_at, verified, verified_at, created_at, professionals!inner(company_name)",
+    )
+    .order("verified", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  return (
+    (data ?? []) as unknown as (Omit<ComplianceReviewDoc, "supplier_name"> & {
+      professionals: { company_name: string } | null;
+    })[]
+  ).map((d) => ({
+    id: d.id,
+    professional_id: d.professional_id,
+    supplier_name: d.professionals?.company_name ?? "Supplier",
+    doc_type: d.doc_type,
+    title: d.title,
+    file_url: d.file_url,
+    file_name: d.file_name,
+    issued_at: d.issued_at,
+    expires_at: d.expires_at,
+    verified: d.verified,
+    verified_at: d.verified_at,
+    created_at: d.created_at,
+  }));
+}
+
+const verifyDocSchema = z.object({
+  documentId: z.string().uuid(),
+  verified: z.boolean(),
+});
+
+/** Mark a compliance doc verified / unverified (operator only). */
+export async function setComplianceDocumentVerified(
+  documentId: string,
+  verified: boolean,
+) {
+  // @cross-tenant-ok: operator-allowlist gated (SCRUM-345); compliance docs are global directory data verified by the operator, not org-scoped.
+  const profile = await requireOperator();
+  const parsed = verifyDocSchema.safeParse({ documentId, verified });
+  if (!parsed.success) return { error: "Invalid request" };
+
+  const { error } = await db()
+    .from("supplier_compliance_documents")
+    .update({
+      verified: parsed.data.verified,
+      verified_by: parsed.data.verified ? profile.id : null,
+      verified_at: parsed.data.verified ? new Date().toISOString() : null,
+    })
+    .eq("id", parsed.data.documentId);
+
+  if (error) {
+    return {
+      error: `Failed to update: ${(error as { message: string }).message}`,
+    };
+  }
+  revalidatePath("/admin/suppliers");
+  return { success: true };
+}

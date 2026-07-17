@@ -226,6 +226,29 @@ async function loadFeaturedProductsByCategory(
     lead_time_days: p.lead_time_days,
   }));
 
+  // SCRUM-175: flag suppliers that carry ≥1 verified, unexpired compliance doc,
+  // so Build can surface "Compliance verified" on their featured products.
+  const professionalIds = [...new Set(flat.map((p) => p.professional_id))];
+  if (professionalIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cdocs = db() as unknown as any;
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: compRows } = await cdocs
+      .from("supplier_compliance_documents")
+      .select("professional_id")
+      .in("professional_id", professionalIds)
+      .eq("verified", true)
+      .or(`expires_at.is.null,expires_at.gte.${today}`);
+    const verifiedSet = new Set(
+      ((compRows ?? []) as { professional_id: string }[]).map(
+        (r) => r.professional_id,
+      ),
+    );
+    for (const p of flat) {
+      p.compliance_verified = verifiedSet.has(p.professional_id);
+    }
+  }
+
   return groupFeaturedByCategory(flat, 3);
 }
 

@@ -42,6 +42,8 @@ export interface FeaturedProduct {
   sku: string | null;
   price_estimate: number | null;
   lead_time_days: number | null;
+  /** SCRUM-175: the supplier has ≥1 verified, unexpired compliance document. */
+  compliance_verified?: boolean;
 }
 
 /**

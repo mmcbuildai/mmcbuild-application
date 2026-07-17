@@ -65,6 +65,25 @@ export interface CompanyDocument {
   created_at: string;
 }
 
+// SCRUM-175 — a supplier compliance document (CodeMark cert, NCC report, …).
+export interface SupplierComplianceDocument {
+  id: string;
+  professional_id: string;
+  org_id: string;
+  product_id: string | null;
+  doc_type: string;
+  title: string;
+  file_url: string;
+  file_name: string | null;
+  issued_at: string | null;
+  expires_at: string | null;
+  verified: boolean;
+  verified_by: string | null;
+  verified_at: string | null;
+  reminder_sent_at: string | null;
+  created_at: string;
+}
+
 export interface Review {
   id: string;
   professional_id: string;
