@@ -161,6 +161,22 @@ How results are labelled, gated, or warned. [A]
 
 ---
 
-## 3. <next feature>
+## 3. MMC Train — per-lesson video upload (SCRUM-59)
 
-*Not yet documented. Copy the §0 template block to add MMC Comply (compliance pipeline + RAG retrieval), MMC Build (3D extraction + design optimisation), MMC Train, or Billing. Per the keep-it-current convention, the PR that next touches one of these should land its LLD block.*
+**Status:** `NEW — 2026-07-17`. **Module:** MMC Train.
+
+**`[V]` Value:** the ticket ("New training creation steps including video uploading facilities") — course/lesson **authoring already existed** (`train/admin/*`, `course-form`, `lesson-form`); the gap was **a video per lesson**. Authors can now upload a lesson video; enrolled users watch it above the written content.
+
+- **Data model** (`supabase/migrations/00085_lesson_video.sql`): `lessons.video_url` + `lessons.video_file_name` columns; a new **public `training-videos` storage bucket** (500 MB `file_size_limit`, `video/mp4|webm|quicktime|x-m4v` allowed_mime_types) with authenticated-insert/update + public-select policies (mirrors `directory-uploads`, 00021).
+- **Upload:** `VideoUpload` (`src/components/train/video-upload.tsx`) — client-side upload to `training-videos` under `${courseId}/…`, with type + size validation *before* upload via the pure `src/lib/train/video.ts` guards (`validateVideoFile`/`isAcceptedVideoType`/`isWithinVideoSizeLimit`, shared with the bucket limits). Wired into `LessonForm`.
+- **Persistence:** `lessonSchema` + `createLesson`/`updateLesson` carry `video_url`/`video_file_name` (admin-gated, course-ownership checked — unchanged).
+- **Playback:** `LessonViewer` renders a `<video controls>` above the markdown when `video_url` is set; the lesson page passes `lesson.video_url` (loader uses `select("*")`, so it flows automatically).
+- **Tests:** `tests/unit/lib/train/video.test.ts` (TC-TRAIN-59-001..006).
+
+**Note:** this is *manual* video upload. The separate HeyGen AI-avatar video idea (ticket comment, 2026-06-02) is out of scope — it needs a paid HeyGen account and is a distinct capability.
+
+---
+
+## 4. <next feature>
+
+*Not yet documented. Copy the §0 template block to add MMC Comply (compliance pipeline + RAG retrieval), MMC Build (3D extraction + design optimisation), or Billing. Per the keep-it-current convention, the PR that next touches one of these should land its LLD block.*

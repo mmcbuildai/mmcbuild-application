@@ -67,7 +67,11 @@ export default async function LessonPage({
           Back to course
         </Link>
 
-        <LessonViewer title={lesson.title} content={lesson.content} />
+        <LessonViewer
+          title={lesson.title}
+          content={lesson.content}
+          videoUrl={lesson.video_url}
+        />
 
         <LessonInteraction
           lessonId={lesson.id}

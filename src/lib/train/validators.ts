@@ -22,6 +22,9 @@ export const lessonSchema = z.object({
     })
   ),
   estimated_reading_minutes: z.number().int().min(1).max(120),
+  // SCRUM-59 — optional lesson video.
+  video_url: z.string().max(1000).optional().nullable(),
+  video_file_name: z.string().max(255).optional().nullable(),
 });
 
 export const quizAnswerSchema = z.object({

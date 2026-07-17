@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createLesson, updateLesson } from "@/app/(dashboard)/train/actions";
+import { VideoUpload } from "@/components/train/video-upload";
 import type { Lesson, QuizQuestion } from "@/lib/train/types";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -31,6 +32,11 @@ export function LessonForm({ courseId, lesson, sortOrder, onSaved }: LessonFormP
   const [title, setTitle] = useState(lesson?.title ?? "");
   const [content, setContent] = useState(lesson?.content ?? "");
   const [readingTime, setReadingTime] = useState(lesson?.estimated_reading_minutes ?? 5);
+  const [video, setVideo] = useState<{ url: string; name: string } | null>(
+    lesson?.video_url
+      ? { url: lesson.video_url, name: lesson.video_file_name ?? "Lesson video" }
+      : null
+  );
   const [questions, setQuestions] = useState<QuizQuestion[]>(
     lesson?.quiz_questions?.length ? lesson.quiz_questions : []
   );
@@ -68,6 +74,8 @@ export function LessonForm({ courseId, lesson, sortOrder, onSaved }: LessonFormP
       sort_order: sortOrder,
       quiz_questions: questions.filter((q) => q.question.trim()),
       estimated_reading_minutes: readingTime,
+      video_url: video?.url ?? null,
+      video_file_name: video?.name ?? null,
     };
 
     try {
@@ -112,6 +120,11 @@ export function LessonForm({ courseId, lesson, sortOrder, onSaved }: LessonFormP
           placeholder="Write your lesson content in markdown..."
           className="font-mono text-sm"
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Lesson Video (optional)</Label>
+        <VideoUpload courseId={courseId} value={video} onUploaded={setVideo} />
       </div>
 
       <div className="space-y-1.5">
