@@ -56,6 +56,7 @@ const COLORS = {
   concrete: "#bcae98",
   concreteRidge: "#9a8e78",
   roof: "#3f4651",
+  partition: "#e2ddd2",
   slab: "#cfc8bc",
   deck: "#b07a43",
 };
@@ -145,6 +146,120 @@ function externalWallSegs(layout: SpatialLayout, wallHeight: number): WallSeg[] 
   }
 
   return out;
+}
+
+/**
+ * Interior partition wall segments for every storey (type !== "external").
+ * Karen's MVP bar (SCRUM-163) is that the render shows walls INSIDE as well as
+ * out; the marquee sequence previously drew external walls only. Partitions are
+ * plain (per-system finishes are post-MVP), stacked per storey with the same
+ * elevation maths as the external walls. No synthesised fallback — if a storey
+ * has no interior walls, none are drawn.
+ */
+function interiorWallSegs(layout: SpatialLayout, wallHeight: number): WallSeg[] {
+  const top = getTopStoreyIndex(layout);
+  const out: WallSeg[] = [];
+  let idc = 0;
+
+  for (let storey = 0; storey <= top; storey++) {
+    const baseY = getStoreyBaseElevation(layout, storey);
+    for (const w of layout.walls) {
+      if (w.type === "external") continue;
+      if ((w.storey ?? 0) !== storey) continue;
+      const len = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y);
+      if (len <= 0.3) continue;
+      out.push({
+        id: idc++,
+        cx: (w.start.x + w.end.x) / 2,
+        cz: (w.start.y + w.end.y) / 2,
+        len,
+        angle: Math.atan2(w.end.y - w.start.y, w.end.x - w.start.x),
+        height: w.height_m && w.height_m > 0 ? w.height_m : wallHeight,
+        thickness: w.thickness || 0.1,
+        baseY,
+        storey,
+      });
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Roof form per MMC system (SCRUM-163 — "roof in each of the MMC styles").
+ * Traditional/panelised carry a pitched roof (panelised at a lower cassette
+ * pitch); volumetric + 3D-printed read as flat/parapet-topped (module boxes and
+ * printed shells don't have a cut pitched roof). A genuinely-flat extraction is
+ * honoured for traditional; the common flat mis-read is already corrected
+ * upstream in the extractor's flat-roof sanity guard.
+ */
+function systemRoofForm(
+  system: MMCSystem,
+  layout: SpatialLayout,
+): { form: "gable" | "flat"; pitchDeg: number } {
+  const extracted = layout.roof?.form;
+  const pitch =
+    layout.roof?.pitch_deg && layout.roof.pitch_deg > 5
+      ? layout.roof.pitch_deg
+      : 22.5;
+
+  switch (system) {
+    case "volumetric":
+    case "printed":
+      return { form: "flat", pitchDeg: 0 };
+    case "panelised":
+      return { form: "gable", pitchDeg: Math.min(pitch, 15) };
+    case "traditional":
+    default:
+      return { form: extracted === "flat" ? "flat" : "gable", pitchDeg: pitch };
+  }
+}
+
+/**
+ * Gable roof as a ridge-prism, centred at the origin with its eaves at y=0 and
+ * the ridge running along the longer plan axis. Built in this component's own
+ * layout space (same anchor the previous flat slab used), so it drops in without
+ * importing the canonical viewer's coordinate frame. DoubleSide material renders
+ * both faces, so winding order is not load-bearing.
+ */
+function buildGableRoofGeometry(
+  spanW: number,
+  spanD: number,
+  pitchDeg: number,
+): THREE.BufferGeometry {
+  const ridgeAlongX = spanW >= spanD;
+  const w = spanW / 2;
+  const d = spanD / 2;
+  const halfSpan = ridgeAlongX ? d : w;
+  const apex = Math.min(halfSpan * Math.tan((pitchDeg * Math.PI) / 180), 3.5);
+
+  // Author with the ridge along X; swap x/z per-vertex when it runs along Z.
+  const P = (x: number, y: number, z: number): [number, number, number] =>
+    ridgeAlongX ? [x, y, z] : [z, y, x];
+
+  const eaveNW = P(-w, 0, -d);
+  const eaveNE = P(w, 0, -d);
+  const eaveSW = P(-w, 0, d);
+  const eaveSE = P(w, 0, d);
+  const ridgeW = P(-w, apex, 0);
+  const ridgeE = P(w, apex, 0);
+
+  const tris: [number, number, number][][] = [
+    [eaveNW, eaveNE, ridgeE],
+    [eaveNW, ridgeE, ridgeW], // north slope
+    [eaveSW, ridgeW, ridgeE],
+    [eaveSW, ridgeE, eaveSE], // south slope
+    [eaveNW, ridgeW, eaveSW], // west gable end
+    [eaveNE, eaveSE, ridgeE], // east gable end
+  ];
+
+  const pos: number[] = [];
+  for (const t of tris) for (const v of t) pos.push(v[0], v[1], v[2]);
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geom.computeVertexNormals();
+  return geom;
 }
 
 // ----------------------------------------------------------------------------
@@ -441,6 +556,21 @@ function Scene({
     () => externalWallSegs(layout, wallHeight),
     [layout, wallHeight],
   );
+  // Interior partitions (SCRUM-163 — "all walls inside and out").
+  const intSegs = useMemo(
+    () => interiorWallSegs(layout, wallHeight),
+    [layout, wallHeight],
+  );
+  // Roof form per MMC system + its geometry (SCRUM-163 — "roof in each MMC
+  // style"). Flat systems keep the thin slab; pitched systems get a gable prism.
+  const roofSpec = useMemo(() => systemRoofForm(system, layout), [system, layout]);
+  const roofGeom = useMemo(
+    () =>
+      roofSpec.form === "gable"
+        ? buildGableRoofGeometry(width + 0.3, depth + 0.3, roofSpec.pitchDeg)
+        : null,
+    [roofSpec, width, depth],
+  );
   // Base elevation of every storey (0 = ground at 0) — used to stack upper-floor
   // plates and volumetric modules above the ground floor.
   const storeyBaseYs = useMemo(
@@ -459,6 +589,8 @@ function Scene({
   const roofShown = stageReached(steps, progress, "roof");
   const roofT = easeOutCubic(stageLocalT(steps, progress, "roof"));
   const finishT = easeOutCubic(stageLocalT(steps, progress, "finish"));
+  // Interior partitions rise with whichever wall stage this system runs.
+  const interiorT = Math.max(wallsT, printT, panelsT, modulesT, frameT);
 
   const groundColor = useMemo(
     () => new THREE.Color("#e8e4dc").lerp(new THREE.Color("#cfe3c4"), finishT),
@@ -666,9 +798,23 @@ function Scene({
             </>
           )}
 
+          {/* Interior partitions (all systems) — SCRUM-163: show the walls
+              inside, not just the external envelope. Plain partitions that rise
+              with this system's wall stage; per-system finishes are post-MVP. */}
+          {wallsStarted &&
+            intSegs.map((seg) => (
+              <GrowWall
+                key={`int-${seg.id}`}
+                seg={seg}
+                t={interiorT}
+                color={COLORS.partition}
+              />
+            ))}
+
           {/* Roof (all systems) — lowers into place onto the TOP storey's walls
               (roofBase), so it sits on the building rather than floating a single
-              storey up on a multi-storey plan. */}
+              storey up on a multi-storey plan. Pitched (gable) for traditional +
+              panelised; a thin flat slab for volumetric + 3D-printed. (SCRUM-163) */}
           {roofShown && (
             <mesh
               position={[
@@ -676,15 +822,19 @@ function Scene({
                 roofBase + 0.2 + (1 - roofT) * wallHeight * 0.9,
                 depth / 2,
               ]}
+              geometry={roofGeom ?? undefined}
               castShadow
             >
-              <boxGeometry args={[width + 0.3, 0.14, depth + 0.3]} />
+              {!roofGeom && (
+                <boxGeometry args={[width + 0.3, 0.14, depth + 0.3]} />
+              )}
               <meshStandardMaterial
                 color={COLORS.roof}
                 roughness={0.7}
                 metalness={0}
                 transparent
                 opacity={roofT}
+                side={THREE.DoubleSide}
               />
             </mesh>
           )}
