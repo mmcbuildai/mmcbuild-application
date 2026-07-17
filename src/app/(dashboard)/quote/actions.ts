@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { inngest } from "@/lib/inngest/client";
+import { planHasContent } from "@/lib/comply/retriever";
 
 export async function requestCostEstimation(
   projectId: string,
@@ -42,6 +43,19 @@ export async function requestCostEstimation(
     (ownerProject as { org_id: string }).org_id !== profile.org_id
   ) {
     return { error: "Project not found" };
+  }
+
+  // Content guard (SCRUM-348) — cost estimation reads the plan's extracted text
+  // (document_embeddings). A plan can be "ready" for Build (geometry) yet have
+  // no text (scanned / vector-only PDF), which would fail the Inngest job with
+  // "No plan content found" after we've already created a queued estimate row.
+  // Reject early with an actionable message. Correctness backstop for the
+  // page-level gate, per the two-layer rule.
+  if (!(await planHasContent(planId))) {
+    return {
+      error:
+        "This plan has no readable text content, which cost estimation needs. It looks like a scanned or image-only drawing — re-upload a text-based PDF to run an estimate.",
+    };
   }
 
   // Duplicate-run guard — don't spawn (or charge for) a second estimate while
