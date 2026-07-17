@@ -67,3 +67,25 @@ export const companyDocumentSchema = z.object({
   file_name: z.string().max(255).optional(),
 });
 export type CompanyDocumentInput = z.infer<typeof companyDocumentSchema>;
+
+// SCRUM-175 — a supplier compliance document. `doc_type` is validated against the
+// COMPLIANCE_DOC_TYPES vocabulary in the server action (kept as a string here so
+// this validator has no cross-import). Dates are ISO `YYYY-MM-DD` (or empty).
+export const complianceDocumentSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+  doc_type: z.string().min(1, "Select a document type").max(40),
+  file_url: z.string().min(1, "A file is required"),
+  file_name: z.string().max(255).optional().nullable(),
+  product_id: z.string().uuid().optional().nullable(),
+  issued_at: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .optional()
+    .nullable(),
+  expires_at: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+    .optional()
+    .nullable(),
+});
+export type ComplianceDocumentInput = z.infer<typeof complianceDocumentSchema>;

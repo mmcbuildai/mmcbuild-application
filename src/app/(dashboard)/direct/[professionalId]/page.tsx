@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, FileText } from "lucide-react";
-import type { CompanyDocument } from "@/lib/direct/types";
+import { ArrowLeft, FileText, ShieldCheck } from "lucide-react";
+import type {
+  CompanyDocument,
+  SupplierComplianceDocument,
+} from "@/lib/direct/types";
+import { complianceDocTypeLabel } from "@/lib/direct/compliance-docs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -127,7 +131,49 @@ export default async function ProfessionalProfilePage({
           <PortfolioGallery items={professional.portfolio || []} />
         </TabsContent>
 
-        <TabsContent value="documents" className="mt-4">
+        <TabsContent value="documents" className="mt-4 space-y-6">
+          {(() => {
+            const complianceDocs =
+              (professional.complianceDocuments as
+                | SupplierComplianceDocument[]
+                | undefined) ?? [];
+            if (complianceDocs.length === 0) return null;
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-green-600" />
+                  <h3 className="text-sm font-semibold">
+                    Verified compliance documents
+                  </h3>
+                </div>
+                {complianceDocs.map((doc) => (
+                  <Card key={doc.id}>
+                    <CardContent className="flex items-center gap-3 p-3">
+                      <ShieldCheck className="h-5 w-5 shrink-0 text-green-600" />
+                      <div className="min-w-0 flex-1">
+                        <a
+                          href={doc.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block truncate text-sm font-medium text-primary hover:underline"
+                        >
+                          {doc.title}
+                        </a>
+                        <p className="text-xs text-muted-foreground">
+                          {complianceDocTypeLabel(doc.doc_type)}
+                          {doc.expires_at ? ` · valid to ${doc.expires_at}` : ""}
+                        </p>
+                      </div>
+                      <Badge className="shrink-0 bg-green-600 hover:bg-green-600">
+                        Verified
+                      </Badge>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            );
+          })()}
+
           {((professional.documents as CompanyDocument[] | undefined) ?? []).length > 0 ? (
             <div className="space-y-2">
               {(professional.documents as CompanyDocument[]).map((doc) => (

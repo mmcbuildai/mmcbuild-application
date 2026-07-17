@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Store, ArrowUpRight, Clock } from "lucide-react";
+import { Store, ArrowUpRight, Clock, ShieldCheck } from "lucide-react";
 import { logDirectoryReferral } from "@/app/(dashboard)/build/actions";
 import type { FeaturedProduct } from "@/lib/direct/featured-suppliers";
 
@@ -56,7 +56,15 @@ export function FeaturedSupplierProducts({
               <span className="truncate text-sm font-medium">{p.name}</span>
               <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             </span>
-            <span className="text-xs text-muted-foreground">{p.company_name}</span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {p.company_name}
+              {p.compliance_verified && (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                  <ShieldCheck className="h-3 w-3" />
+                  Compliance verified
+                </span>
+              )}
+            </span>
             {p.summary && (
               <span className="line-clamp-2 text-xs text-muted-foreground">
                 {p.summary}

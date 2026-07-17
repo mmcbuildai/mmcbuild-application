@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getMyProfessional, getReceivedEnquiries, getProfessionalReviews } from "../actions";
+import { getMyProfessional, getReceivedEnquiries, getProfessionalReviews, getMyComplianceDocuments } from "../actions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardStats } from "@/components/direct/dashboard-stats";
 import { ProfileEditForm } from "@/components/direct/profile-edit-form";
 import { PortfolioManager } from "@/components/direct/portfolio-manager";
 import { CompanyDocumentsManager } from "@/components/direct/company-documents-manager";
+import { ComplianceDocumentsManager } from "@/components/direct/compliance-documents-manager";
 import type { CompanyDocument } from "@/lib/direct/types";
 import { EnquiryList } from "@/components/direct/enquiry-list";
 import { ReviewList } from "@/components/direct/review-list";
@@ -30,7 +31,7 @@ export default async function TradeDashboardPage() {
   // Load data in parallel
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as unknown as any;
-  const [enquiries, reviewsResult, portfolioResult, documentsResult] =
+  const [enquiries, reviewsResult, portfolioResult, documentsResult, complianceDocs, productsResult] =
     await Promise.all([
       getReceivedEnquiries(professional.id),
       getProfessionalReviews(professional.id),
@@ -44,10 +45,18 @@ export default async function TradeDashboardPage() {
         .select("*")
         .eq("professional_id", professional.id)
         .order("created_at", { ascending: false }),
+      getMyComplianceDocuments(professional.id),
+      admin
+        .from("supplier_products")
+        .select("id, name")
+        .eq("professional_id", professional.id)
+        .eq("is_active", true)
+        .order("name", { ascending: true }),
     ]);
 
   const portfolio = portfolioResult?.data ?? [];
   const documents = (documentsResult?.data ?? []) as CompanyDocument[];
+  const supplierProducts = (productsResult?.data ?? []) as { id: string; name: string }[];
 
   const statusBanners: Record<string, { bg: string; text: string; message: string }> = {
     pending: { bg: "bg-amber-50 border-amber-200", text: "text-amber-700", message: "Your listing is pending approval. Our team will review it shortly." },
@@ -76,6 +85,7 @@ export default async function TradeDashboardPage() {
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="compliance">Compliance</TabsTrigger>
           <TabsTrigger value="enquiries">Enquiries ({enquiries.length})</TabsTrigger>
           <TabsTrigger value="reviews">Reviews ({professional.review_count})</TabsTrigger>
         </TabsList>
@@ -97,6 +107,15 @@ export default async function TradeDashboardPage() {
             professionalId={professional.id}
             orgId={profile.org_id}
             documents={documents}
+          />
+        </TabsContent>
+
+        <TabsContent value="compliance" className="mt-4">
+          <ComplianceDocumentsManager
+            professionalId={professional.id}
+            orgId={profile.org_id}
+            documents={complianceDocs}
+            products={supplierProducts}
           />
         </TabsContent>
 

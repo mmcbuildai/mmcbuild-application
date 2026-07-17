@@ -144,6 +144,23 @@ How results are labelled, gated, or warned. [A]
 
 ---
 
-## 2. <next feature>
+## 2. MMC Direct — supplier compliance documents (SCRUM-175)
 
-*Not yet documented. Copy the §0 template block to add MMC Comply (compliance pipeline + RAG retrieval), MMC Build (3D extraction + design optimisation), MMC Direct, MMC Train, or Billing. Per the keep-it-current convention, the PR that next touches one of these should land its LLD block.*
+**Status:** `NEW — 2026-07-17`. **Module:** MMC Direct.
+
+**`[V]` Value:** Karen — "when I bring on board all of my suppliers, I actually can get their compliance documentation and upload that … so we can have only the compliant products." Suppliers can now upload compliance docs (CodeMark certs, NCC reports, datasheets), an operator verifies them, and verified + unexpired docs surface publicly + in Build.
+
+- **Data model** (`supabase/migrations/00084_supplier_compliance_documents.sql`): `supplier_compliance_documents` (professional_id, org_id, optional `product_id` tag, `doc_type`, title, file_url, `issued_at`, **`expires_at`**, `verified`/`verified_by`/`verified_at`, `reminder_sent_at`). RLS: public SELECT only when **`verified` AND (`expires_at` IS NULL OR `expires_at >= CURRENT_DATE`) AND supplier approved**; owning org sees all its own; INSERT forces `verified=false`. Files reuse the `directory-uploads` bucket (SCRUM-57 `FileUpload`).
+- **"Supplier portal" = the trade dashboard.** There is **no supplier auth role** — a supplier is an org owning an approved `professionals` listing (`src/lib/auth/operator.ts` note). So the upload UI is a new **Compliance tab** on `/direct/dashboard` (`ComplianceDocumentsManager`), *not* a separate `/direct/portal` route (which would duplicate the ownership gate). Actions in `direct/actions.ts`: `getMyComplianceDocuments` / `addComplianceDocument` / `deleteComplianceDocument` (org-ownership checked; optional product tag must belong to the supplier).
+- **Operator verification:** `admin/suppliers` page (operator-allowlist gated, `requireOperator`) gains a review queue (`SupplierComplianceReview`) driven by `getComplianceReviewQueue` + `setComplianceDocumentVerified` (sets `verified_by`/`verified_at`).
+- **Public surface:** `getProfessionalProfile` returns `complianceDocuments` filtered by `isPubliclyVisible` (verified + not-expired); the public listing Documents tab shows a "Verified compliance documents" section. **Build:** `loadFeaturedProductsByCategory` flags suppliers with ≥1 verified/unexpired doc → a "Compliance verified" badge on featured products.
+- **Expiry:** pure helpers `daysUntilExpiry`/`expiryStatus`/`isPubliclyVisible`/`needsExpiryReminder` (`src/lib/direct/compliance-docs.ts`, 30-day band). Daily Inngest cron `remind-compliance-expiry` emails the supplier 30 days before expiry (once, guarded by `reminder_sent_at`) via `sendEmail`.
+- **Tests:** `tests/unit/lib/direct/compliance-docs.test.ts` (TC-DIRECT-175-001..008).
+
+**Deviation from ticket:** ticket named a `/direct/portal/compliance-docs` route with "supplier-tier auth"; built as a Compliance tab on the existing trade dashboard because there is no supplier role in this codebase (a supplier owns an approved listing) and the dashboard already *is* the authenticated supplier surface. Same capability, consistent with the module's architecture.
+
+---
+
+## 3. <next feature>
+
+*Not yet documented. Copy the §0 template block to add MMC Comply (compliance pipeline + RAG retrieval), MMC Build (3D extraction + design optimisation), MMC Train, or Billing. Per the keep-it-current convention, the PR that next touches one of these should land its LLD block.*

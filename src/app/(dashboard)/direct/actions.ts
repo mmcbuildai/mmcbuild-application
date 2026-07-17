@@ -11,13 +11,20 @@ import {
   enquirySchema,
   portfolioItemSchema,
   companyDocumentSchema,
+  complianceDocumentSchema,
   type RegistrationInput,
   type ProfileUpdateInput,
   type ReviewInput,
   type EnquiryInput,
   type PortfolioItemInput,
   type CompanyDocumentInput,
+  type ComplianceDocumentInput,
 } from "@/lib/direct/validators";
+import {
+  COMPLIANCE_DOC_TYPES,
+  isPubliclyVisible,
+} from "@/lib/direct/compliance-docs";
+import type { SupplierComplianceDocument } from "@/lib/direct/types";
 
 async function getAuthProfile() {
   const supabase = await createClient();
@@ -397,12 +404,26 @@ export async function getProfessionalProfile(id: string) {
       .order("created_at", { ascending: false }),
   ]);
 
+  // SCRUM-175 — verified, unexpired compliance docs for the public profile.
+  // db() bypasses RLS, so the verified filter is applied here explicitly and the
+  // not-expired rule via isPubliclyVisible (mirrors the RLS SELECT policy).
+  const { data: complianceRaw } = await cdocs
+    .from("supplier_compliance_documents")
+    .select("*")
+    .eq("professional_id", id)
+    .eq("verified", true)
+    .order("created_at", { ascending: false });
+  const complianceDocuments = (
+    (complianceRaw ?? []) as SupplierComplianceDocument[]
+  ).filter((d) => isPubliclyVisible(d));
+
   return {
     ...professional,
     specialisations: specResult.data ?? [],
     portfolio: portfolioResult.data ?? [],
     reviews: reviewResult.data ?? [],
     documents: docsResult.data ?? [],
+    complianceDocuments,
   };
 }
 
@@ -460,6 +481,117 @@ export async function deleteCompanyDocument(documentId: string) {
 
   const { error } = await cdocs
     .from("company_documents")
+    .delete()
+    .eq("id", documentId);
+  if (error) return { error: `Failed: ${error.message}` };
+  return { success: true };
+}
+
+// ─── Compliance documents (SCRUM-175) ───
+
+/** The supplier's own compliance docs (all — incl. unverified/expired) for the portal. */
+export async function getMyComplianceDocuments(
+  professionalId: string,
+): Promise<SupplierComplianceDocument[]> {
+  const profile = await getAuthProfile();
+  if (!profile) return [];
+
+  // Ownership: the listing must belong to the caller's org.
+  const { data: pro } = await db()
+    .from("professionals")
+    .select("org_id")
+    .eq("id", professionalId)
+    .single();
+  if (!pro || (pro as { org_id: string }).org_id !== profile.org_id) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cdocs = db() as unknown as any;
+  const { data } = await cdocs
+    .from("supplier_compliance_documents")
+    .select("*")
+    .eq("professional_id", professionalId)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as SupplierComplianceDocument[];
+}
+
+export async function addComplianceDocument(
+  professionalId: string,
+  input: ComplianceDocumentInput,
+) {
+  const profile = await getAuthProfile();
+  if (!profile) return { error: "Not authenticated" };
+
+  const parsed = complianceDocumentSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (!COMPLIANCE_DOC_TYPES.some((t) => t.key === parsed.data.doc_type)) {
+    return { error: "Invalid document type" };
+  }
+
+  // Ownership: the listing must belong to the caller's org.
+  const { data: pro } = await db()
+    .from("professionals")
+    .select("org_id")
+    .eq("id", professionalId)
+    .single();
+  if (!pro || (pro as { org_id: string }).org_id !== profile.org_id) {
+    return { error: "Not authorised" };
+  }
+
+  // If a product tag is supplied, it must belong to this supplier.
+  if (parsed.data.product_id) {
+    const { data: prod } = await db()
+      .from("supplier_products")
+      .select("professional_id")
+      .eq("id", parsed.data.product_id)
+      .single();
+    if (
+      !prod ||
+      (prod as { professional_id: string }).professional_id !== professionalId
+    ) {
+      return { error: "Selected product is not yours" };
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cdocs = db() as unknown as any;
+  const { data, error } = await cdocs
+    .from("supplier_compliance_documents")
+    .insert({
+      professional_id: professionalId,
+      org_id: profile.org_id,
+      product_id: parsed.data.product_id ?? null,
+      doc_type: parsed.data.doc_type,
+      title: parsed.data.title,
+      file_url: parsed.data.file_url,
+      file_name: parsed.data.file_name ?? null,
+      issued_at: parsed.data.issued_at ?? null,
+      expires_at: parsed.data.expires_at ?? null,
+      verified: false,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: `Failed: ${error.message}` };
+  return { id: (data as { id: string }).id };
+}
+
+export async function deleteComplianceDocument(documentId: string) {
+  const profile = await getAuthProfile();
+  if (!profile) return { error: "Not authenticated" };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cdocs = db() as unknown as any;
+  const { data: doc } = await cdocs
+    .from("supplier_compliance_documents")
+    .select("org_id")
+    .eq("id", documentId)
+    .single();
+  if (!doc) return { error: "Document not found" };
+  if ((doc as { org_id: string }).org_id !== profile.org_id) {
+    return { error: "Not authorised" };
+  }
+
+  const { error } = await cdocs
+    .from("supplier_compliance_documents")
     .delete()
     .eq("id", documentId);
   if (error) return { error: `Failed: ${error.message}` };
