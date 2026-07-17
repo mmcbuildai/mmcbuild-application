@@ -129,6 +129,19 @@ How results are labelled, gated, or warned. [A]
 - **Inngest function `run-cost-estimate` → `run-cost-estimation`.**
 - Confirmed unchanged: $2,175/m² base, 6 references $3,305–$4,083/m², green/amber strings, whole-module (not per-trade) model, data-gap flagging.
 
+### 1a. MMC Quote — multi-supplier comparison (SCRUM-172)
+
+**Status:** `NEW — 2026-07-17`. A **self-contained** surface alongside the whole-plan cost engine (§1) — it does **not** modify `cost_estimates` / `run-cost-estimation`.
+
+**`[V]` Value:** Karen (2026-05-01): "choose three different people who do precast concrete and give me a quote for each." A builder picks up to **3 suppliers** (`MAX_SUPPLIERS_PER_COMPONENT`, `src/lib/quote/supplier-comparison.ts`) for one MMC component (technology category) and gets **parallel-priced rows** with a delta-vs-lowest + a PDF.
+
+- **Data model** (`supabase/migrations/00083_supplier_quote_comparisons.sql`): `supplier_quote_comparisons` (one run per project+category, `status` queued/processing/completed/error, `region`, `summary`) + `supplier_quote_variants` (one row per selected `supplier_products` product; denormalised supplier/product identity captured at request time; AI-filled `estimated_total`/`unit_rate`/`quantity`/`confidence`/`notes` + derived `delta_vs_lowest_pct`/`is_lowest`). Both RLS org-scoped via `get_user_org_id()`.
+- **Supplier source:** the approved+active `supplier_products` marketplace (00079) — **any** approved supplier, not just the Growth-Partner featured tier (this is a builder comparison tool, not sponsored placement).
+- **Server actions** (`src/app/(dashboard)/quote/supplier-actions.ts`, all org-guarded): `getSupplierComparisonOptions` (categories with ≥1 product), `requestSupplierComparison` (Zod-validated, ≤3 cap, project-ownership + per-(project,category) duplicate-run guard, seeds variants, fires event), `getSupplierComparison` / `getProjectSupplierComparisons` (org-scoped reads).
+- **Background job:** `src/lib/inngest/functions/run-supplier-comparison.ts` — event `quote/supplier-comparison.requested`. **Fans out one `callModel("cost_primary")` price-call per (component × supplier)** (`SUPPLIER_QUOTE_PROMPT`), computes deltas via the pure `computeVariantDeltas`, writes a `SUPPLIER_COMPARISON_SUMMARY_PROMPT` summary. Honest-error discipline: a failed price-call degrades to an unpriced row (never a fake figure); `onFailure` + try/catch mark the run `error` so the UI stops polling. Registered in `src/app/api/inngest/route.ts`.
+- **UI:** `SupplierComparisonPanel` (picker, 44px toggle cards, ≤3) on the Quote project page → result route `/quote/[projectId]/suppliers/[comparisonId]` (`SupplierComparisonResult` polls until done, parallel columns, lowest highlighted). **PDF** (parallel columns, delta-vs-lowest, lowest column green): `src/lib/quote/supplier-comparison-pdf.ts` served from `/api/quote/supplier-comparison/[comparisonId]`.
+- **Tests:** `tests/unit/lib/quote/supplier-comparison.test.ts` (TC-QUOTE-001..006 — delta/lowest math, ties, unpriced rows, ≤3 cap).
+
 ---
 
 ## 2. <next feature>
