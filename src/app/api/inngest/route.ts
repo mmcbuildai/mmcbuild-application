@@ -18,6 +18,7 @@ import { sendRemediationEmail } from "@/lib/inngest/functions/send-remediation-e
 import { notifyRemediationResponse } from "@/lib/inngest/functions/notify-remediation-response";
 import { runDesignOptimisation } from "@/lib/inngest/functions/run-design-optimisation";
 import { runCostEstimation } from "@/lib/inngest/functions/run-cost-estimation";
+import { runSupplierComparison } from "@/lib/inngest/functions/run-supplier-comparison";
 import { ingestCostRates } from "@/lib/inngest/functions/ingest-cost-rates";
 import { sendEnquiryNotification } from "@/lib/inngest/functions/send-enquiry-notification";
 import { sendReviewNotification } from "@/lib/inngest/functions/send-review-notification";
@@ -32,7 +33,7 @@ import { purgeSupersededPlans } from "@/lib/inngest/functions/purge-superseded-p
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [testFunction, processPlan, extractDesignAttributes, runComplianceCheck, processKbDocument, classifyRdCommit, processCertification, sendRemediationEmail, notifyRemediationResponse, runDesignOptimisation, runCostEstimation, ingestCostRates, sendEnquiryNotification, sendReviewNotification, generateTrainingContent, issueTrainingCertificate, syncStripeSubscription, syncHubspotListing, runTest3DExtractionFn, notifyNewProfessional, reapStuckJobs, purgeSupersededPlans],
+  functions: [testFunction, processPlan, extractDesignAttributes, runComplianceCheck, processKbDocument, classifyRdCommit, processCertification, sendRemediationEmail, notifyRemediationResponse, runDesignOptimisation, runCostEstimation, runSupplierComparison, ingestCostRates, sendEnquiryNotification, sendReviewNotification, generateTrainingContent, issueTrainingCertificate, syncStripeSubscription, syncHubspotListing, runTest3DExtractionFn, notifyNewProfessional, reapStuckJobs, purgeSupersededPlans],
   // Force Inngest to call back to the production URL instead of the
   // deployment-specific URL which is behind Vercel Deployment Protection.
   serveHost: process.env.NEXT_PUBLIC_APP_URL || undefined,

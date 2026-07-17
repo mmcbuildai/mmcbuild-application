@@ -13,10 +13,17 @@ import { redirect } from "next/navigation";
 
 import { getProjectPlans } from "@/app/(dashboard)/projects/actions";
 import { getProjectCostEstimates } from "../actions";
+import {
+  getSupplierComparisonOptions,
+  getProjectSupplierComparisons,
+} from "../supplier-actions";
 import { RunEstimateButton } from "@/components/quote/run-estimate-button";
+import { SupplierComparisonPanel } from "@/components/quote/supplier-comparison-panel";
 import { ReportVersionList } from "@/components/shared/report-version-list";
 import { ProjectContextSummary } from "@/components/shared/project-context-summary";
 import { getReportVersions } from "@/lib/report-versions";
+import { getTechnologyLabel } from "@/lib/ai/types";
+import { Scale, ArrowUpRight } from "lucide-react";
 
 export default async function ProjectQuotePage({
   params,
@@ -73,11 +80,14 @@ export default async function ProjectQuotePage({
     );
   }
 
-  const [plans, estimates, versions] = await Promise.all([
-    getProjectPlans(projectId),
-    getProjectCostEstimates(projectId),
-    getReportVersions(projectId, "quote"),
-  ]);
+  const [plans, estimates, versions, supplierOptions, supplierComparisons] =
+    await Promise.all([
+      getProjectPlans(projectId),
+      getProjectCostEstimates(projectId),
+      getReportVersions(projectId, "quote"),
+      getSupplierComparisonOptions(projectId),
+      getProjectSupplierComparisons(projectId),
+    ]);
 
   const readyPlan = plans.find(
     (p: { status: string }) => p.status === "ready"
@@ -155,6 +165,51 @@ export default async function ProjectQuotePage({
           </CardContent>
         </Card>
       </div>
+
+      {/* SCRUM-172 — multi-supplier comparison quote */}
+      {supplierOptions.length > 0 && (
+        <SupplierComparisonPanel
+          projectId={projectId}
+          options={supplierOptions}
+        />
+      )}
+
+      {supplierComparisons.length > 0 && (
+        <div>
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+            <Scale className="h-5 w-5 text-violet-600" />
+            Supplier Comparisons
+          </h2>
+          <div className="space-y-2">
+            {supplierComparisons.map((c) => (
+              <Link
+                key={c.id}
+                href={`/quote/${projectId}/suppliers/${c.id}`}
+              >
+                <Card className="cursor-pointer transition-shadow hover:shadow-md">
+                  <CardContent className="flex items-center justify-between py-4">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {getTechnologyLabel(c.technology_category)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.status === "completed"
+                          ? "Completed"
+                          : c.status === "error"
+                            ? "Failed"
+                            : "In progress"}
+                        {" · "}
+                        {new Date(c.created_at).toLocaleString("en-AU")}
+                      </p>
+                    </div>
+                    <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Version history */}
       {versions.length > 0 && (
