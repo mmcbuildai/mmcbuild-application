@@ -22,6 +22,7 @@ import { SupplierComparisonPanel } from "@/components/quote/supplier-comparison-
 import { ReportVersionList } from "@/components/shared/report-version-list";
 import { ProjectContextSummary } from "@/components/shared/project-context-summary";
 import { getReportVersions } from "@/lib/report-versions";
+import { planHasContent } from "@/lib/comply/retriever";
 import { getTechnologyLabel } from "@/lib/ai/types";
 import { Scale, ArrowUpRight } from "lucide-react";
 
@@ -92,7 +93,13 @@ export default async function ProjectQuotePage({
   const readyPlan = plans.find(
     (p: { status: string }) => p.status === "ready"
   );
-  const canRun = !!readyPlan;
+  // A plan can be "ready" (usable for Build geometry) yet have no extracted text
+  // — cost estimation needs that text, so gate Run on real content, not just
+  // status, and explain the gap instead of enabling a doomed estimate. (SCRUM-348)
+  const hasPlanContent = readyPlan
+    ? await planHasContent((readyPlan as { id: string }).id)
+    : false;
+  const canRun = !!readyPlan && hasPlanContent;
 
   return (
     <div className="space-y-6">
@@ -121,11 +128,19 @@ export default async function ProjectQuotePage({
           </CardHeader>
           <CardContent>
             {readyPlan ? (
-              <div className="flex items-center gap-2 text-sm text-green-700">
-                <div className="h-2 w-2 rounded-full bg-green-500" />
-                Plan ready:{" "}
-                {(readyPlan as { file_name?: string }).file_name ??
-                  "Uploaded plan"}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-green-700">
+                  <div className="h-2 w-2 rounded-full bg-green-500" />
+                  Plan ready:{" "}
+                  {(readyPlan as { file_name?: string }).file_name ??
+                    "Uploaded plan"}
+                </div>
+                {!hasPlanContent && (
+                  <p className="text-xs text-amber-700">
+                    No readable text was extracted from this plan, so cost
+                    estimation can&apos;t run on it.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">
@@ -157,6 +172,13 @@ export default async function ProjectQuotePage({
                 projectId={projectId}
                 planId={readyPlan.id}
               />
+            ) : readyPlan && !hasPlanContent ? (
+              <p className="text-sm text-muted-foreground">
+                This plan has no readable text content, which cost estimation
+                needs — it looks like a scanned or image-only drawing. Re-upload
+                a text-based PDF (or a version with a selectable text layer) to
+                run an estimate.
+              </p>
             ) : (
               <p className="text-sm text-muted-foreground">
                 Upload and process a plan first.

@@ -294,7 +294,12 @@ export async function createProject(formData: FormData) {
     }
   }
 
-  revalidatePath("/projects");
+  // SCRUM-349: do NOT revalidatePath("/projects") here. The New Project dialog
+  // lives ON /projects, and revalidating the current route in the same
+  // transition as the client's router.push("/projects/[id]") clobbers the push —
+  // the user lands back on the list instead of the new project's overview. The
+  // sample-create path (createProjectFromSample) omits this call and navigates
+  // correctly; keep parity. The list is refreshed on next navigation.
   return { projectId: project.id };
 }
 

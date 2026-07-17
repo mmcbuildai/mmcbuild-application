@@ -67,3 +67,33 @@ export async function retrievePlanChunks(
 
   return (data ?? []).map((d: { content: string }) => d.content).join("\n\n");
 }
+
+/**
+ * Whether a plan has any extracted text content (document_embeddings rows).
+ *
+ * A plan can be `status = "ready"` for Build (its geometry is extracted by a
+ * separate job) yet have ZERO embedded text — a scanned or vector-only PDF
+ * extracts to no chunks, so ingestion writes nothing to document_embeddings.
+ * Cost estimation (MMC Quote) reads that text via retrievePlanChunks, so it
+ * must gate on real content, not just plan status — otherwise Run estimate is
+ * enabled and then fails with "No plan content found". (SCRUM-348)
+ *
+ * Scoped by the plan's own UUID (globally unique), so no org filter is needed
+ * for a safe existence check.
+ */
+export async function planHasContent(planId: string): Promise<boolean> {
+  const admin = createAdminClient();
+
+  const { count, error } = await admin
+    .from("document_embeddings")
+    .select("*", { count: "exact", head: true })
+    .eq("source_type", "plan")
+    .eq("source_id", planId);
+
+  if (error) {
+    console.error("[Retriever] Error counting plan chunks:", error.message);
+    return false;
+  }
+
+  return (count ?? 0) > 0;
+}

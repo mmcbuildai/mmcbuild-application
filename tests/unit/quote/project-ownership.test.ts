@@ -24,6 +24,12 @@ vi.mock("@/lib/inngest/client", () => ({
   inngest: { send: (...args: unknown[]) => mockInngestSend(...args) },
 }));
 
+// SCRUM-348: requestCostEstimation now gates on the plan having extracted text.
+const mockPlanHasContent = vi.fn();
+vi.mock("@/lib/comply/retriever", () => ({
+  planHasContent: (...args: unknown[]) => mockPlanHasContent(...args),
+}));
+
 import {
   requestCostEstimation,
   getCostReport,
@@ -56,6 +62,7 @@ beforeEach(() => {
   mockServerFrom.mockReturnValue(
     mockChain({ data: { id: "prof-1", org_id: "org-1" } }),
   );
+  mockPlanHasContent.mockResolvedValue(true);
 });
 
 describe("requestCostEstimation — cross-tenant isolation (SCRUM-340)", () => {
@@ -79,6 +86,21 @@ describe("requestCostEstimation — cross-tenant isolation (SCRUM-340)", () => {
 
     expect(result).toEqual({ estimateId: "est-1" });
     expect(mockInngestSend).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("requestCostEstimation — plan content guard (SCRUM-348)", () => {
+  it("rejects a plan with no extracted text and fires no run", async () => {
+    // Ownership passes, but the plan has no embedded text content.
+    mockDbFrom.mockReturnValueOnce(mockChain({ data: { org_id: "org-1" } }));
+    mockPlanHasContent.mockResolvedValue(false);
+
+    const result = await requestCostEstimation("proj-1", "plan-empty");
+
+    expect(result.error).toContain("no readable text content");
+    expect(mockInngestSend).not.toHaveBeenCalled();
+    // No estimate row should be created (insert never reached).
+    expect(mockDbFrom).toHaveBeenCalledTimes(1);
   });
 });
 
