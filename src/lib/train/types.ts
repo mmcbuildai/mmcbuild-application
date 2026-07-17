@@ -35,6 +35,9 @@ export interface Lesson {
   sort_order: number;
   quiz_questions: QuizQuestion[];
   estimated_reading_minutes: number;
+  // SCRUM-59 — optional lesson video (uploaded to the training-videos bucket).
+  video_url: string | null;
+  video_file_name: string | null;
   created_at: string;
   updated_at: string;
 }

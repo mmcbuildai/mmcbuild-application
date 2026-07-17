@@ -202,6 +202,8 @@ export async function createLesson(
     sort_order: number;
     quiz_questions: QuizQuestion[];
     estimated_reading_minutes: number;
+    video_url?: string | null;
+    video_file_name?: string | null;
   }
 ) {
   const profile = await getAuthProfile();
@@ -231,6 +233,8 @@ export async function createLesson(
       sort_order: parsed.data.sort_order,
       quiz_questions: JSON.stringify(parsed.data.quiz_questions),
       estimated_reading_minutes: parsed.data.estimated_reading_minutes,
+      video_url: parsed.data.video_url ?? null,
+      video_file_name: parsed.data.video_file_name ?? null,
     })
     .select("id")
     .single();
@@ -250,6 +254,8 @@ export async function updateLesson(
     sort_order?: number;
     quiz_questions?: QuizQuestion[];
     estimated_reading_minutes?: number;
+    video_url?: string | null;
+    video_file_name?: string | null;
   }
 ) {
   const profile = await getAuthProfile();
