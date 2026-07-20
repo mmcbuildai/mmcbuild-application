@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { getBetaProgress } from "@/app/(dashboard)/beta/actions";
 import { BetaTaskChecklist } from "./beta-task-checklist";
+import { isBetaTestingEnabled } from "@/lib/beta/enabled";
 import type { ModuleId } from "@/lib/stripe/plans";
 
 /**
@@ -13,6 +14,9 @@ import type { ModuleId } from "@/lib/stripe/plans";
  * (REGULATED) module page over a testing helper.
  */
 export async function BetaTaskPanel({ moduleId }: { moduleId: ModuleId }) {
+  // Hidden for Go Live (SCRUM-351) — the whole beta-testing module is gated off
+  // by one env flag. Off → render nothing on every module page.
+  if (!isBetaTestingEnabled()) return null;
   try {
     const supabase = await createClient();
     const {
