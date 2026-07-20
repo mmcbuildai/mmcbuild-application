@@ -11,6 +11,7 @@ import {
 } from "./actions";
 import { FixTesterButton } from "./fix-tester-button";
 import { DummyTesterButton } from "./dummy-tester-button";
+import { isBetaTestingEnabled } from "@/lib/beta/enabled";
 
 /** A tester is "stranded" if their email is unconfirmed or they have no org/profile. */
 function needsFix(r: GlobalBetaTesterRow): boolean {
@@ -33,6 +34,10 @@ export default async function GlobalBetaActivityPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Hidden for Go Live (SCRUM-351) — beta monitoring is off with the rest of the
+  // beta module. Re-enable via NEXT_PUBLIC_BETA_TESTING_ENABLED.
+  if (!isBetaTestingEnabled()) redirect("/dashboard");
 
   // Platform-wide data is operator-only (email allowlist, NOT org role).
   if (!isOperatorEmail(user.email)) redirect("/dashboard");

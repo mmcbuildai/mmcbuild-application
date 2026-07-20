@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { provisionUser } from "@/lib/auth/provision";
+import { isBetaTestingEnabled } from "@/lib/beta/enabled";
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -74,7 +75,11 @@ export async function GET(request: Request) {
         .select("role")
         .eq("user_id", sessionUser.id)
         .single();
-      if ((prof as { role?: string } | null)?.role === "beta") dest = "/beta";
+      // Beta testers land on /beta only while the beta module is enabled
+      // (SCRUM-351) — otherwise the normal dashboard.
+      if ((prof as { role?: string } | null)?.role === "beta" && isBetaTestingEnabled()) {
+        dest = "/beta";
+      }
     }
     return NextResponse.redirect(`${origin}${dest}`);
   }

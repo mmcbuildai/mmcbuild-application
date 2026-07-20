@@ -22,6 +22,7 @@ import { signOut } from "@/app/(auth)/actions";
 import { OrgSwitcher } from "./org-switcher";
 import { SignOutButton } from "./sign-out-button";
 import { isRunLimited, TRIAL_RUN_LIMIT } from "@/lib/persona-access";
+import { isBetaTestingEnabled } from "@/lib/beta/enabled";
 import {
   isModuleLaunched,
   canBypassLaunchGate,
@@ -98,7 +99,9 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
 
       {/* Top nav (Dashboard, Projects) */}
       <nav className="px-3 pt-2 space-y-0.5">
-        {topNav.map((item) => {
+        {topNav
+          .filter((item) => item.href !== "/beta" || isBetaTestingEnabled())
+          .map((item) => {
           const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
           return (
             <Link

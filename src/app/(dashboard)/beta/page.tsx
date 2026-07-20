@@ -1,9 +1,15 @@
+import { redirect } from "next/navigation";
 import { getBetaProgress } from "./actions";
 import { BetaDashboard } from "./beta-dashboard";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isBetaTestingEnabled } from "@/lib/beta/enabled";
 
 export default async function BetaPage() {
+  // Hidden for Go Live (SCRUM-351) — beta testers land on the normal dashboard
+  // when the module is switched off. Re-enable via NEXT_PUBLIC_BETA_TESTING_ENABLED.
+  if (!isBetaTestingEnabled()) redirect("/dashboard");
+
   const progress = await getBetaProgress();
 
   // Step-1 gate: the module test-cards stay locked until THIS tester has created

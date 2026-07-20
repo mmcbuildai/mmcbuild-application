@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSubscriptionStatus } from "@/lib/stripe/subscription";
 import { DashboardShell } from "./dashboard-shell";
 import { redirect } from "next/navigation";
+import { isBetaTestingEnabled } from "@/lib/beta/enabled";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -44,7 +45,12 @@ export default async function DashboardPage() {
   // invite link, magic link, or a direct visit — so a beta tester always lands
   // on /beta.
   // role enum includes 'beta' on live; generated types lag, so compare as string.
-  if ((profile.role as string) === "beta") redirect("/beta");
+  // Only route to /beta while the beta module is enabled — otherwise a beta-role
+  // user would bounce /dashboard → /beta → /dashboard (SCRUM-351: /beta redirects
+  // back here when hidden). Hidden → beta users just use the normal dashboard.
+  if ((profile.role as string) === "beta" && isBetaTestingEnabled()) {
+    redirect("/beta");
+  }
 
   const [status, projectCount] = await Promise.all([
     getSubscriptionStatus(profile.org_id),

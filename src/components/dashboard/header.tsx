@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { HelpButton } from "@/components/ai-assistant/help-button";
 import { RunningJobsChip } from "./running-jobs-chip";
 import { BetaPageFeedbackButton } from "@/components/beta/beta-page-feedback-button";
+import { isBetaTestingEnabled } from "@/lib/beta/enabled";
 
 export type DashboardHeaderProps = {
   mobileOpen: boolean;
@@ -56,7 +57,7 @@ export function DashboardHeader({
         {/* Beta-only "Feedback on this page" — sits here in the header's action
             cluster (top-right empty space) so it can never cover the sidebar
             Sign Out button or the bottom-right SayFix / assistant controls. */}
-        {role === "beta" && <BetaPageFeedbackButton />}
+        {role === "beta" && isBetaTestingEnabled() && <BetaPageFeedbackButton />}
         <RunningJobsChip />
         <HelpButton />
         <div className="hidden text-right sm:block">
