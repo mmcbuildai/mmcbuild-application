@@ -10,6 +10,7 @@ import { CheckProgress } from "@/components/comply/check-progress";
 import { WorkflowTabs } from "@/components/comply/workflow-tabs";
 import { CheckDeltaPanel } from "@/components/comply/check-delta-panel";
 import { computeCheckDelta } from "@/lib/comply/check-delta";
+import { readComplianceCheckWithRetry } from "@/lib/comply/read-check-with-retry";
 import type { RemediationResponse } from "@/components/comply/finding-review-card";
 
 export default async function CheckPage({
@@ -19,7 +20,14 @@ export default async function CheckPage({
 }) {
   const { projectId, checkId } = await params;
 
-  const result = await getComplianceReport(checkId);
+  // The check is created immediately before the user lands here, so the first
+  // read can transiently miss (getUser() hiccup / read-after-write gap). Retry a
+  // few times before treating the check as gone — a single failed read used to
+  // redirect the user straight back to /comply/[projectId], flashing the progress
+  // screen then bouncing to the saved page while the check kept running
+  // (SCRUM-350). A genuinely missing / cross-org check still errors on every
+  // attempt and falls through to the redirect below.
+  const result = await readComplianceCheckWithRetry(getComplianceReport, checkId);
 
   if (result.error || !result.check) {
     redirect(`/comply/${projectId}`);
