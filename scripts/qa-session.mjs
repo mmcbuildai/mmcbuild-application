@@ -13,10 +13,15 @@
  *   Mode A — test the auth PATH: type these creds into the real /login form.
  *   Mode B — get PAST auth fast (this script): inject the session cookie, skip the form.
  *
- * Usage (creds come from env, never hard-coded here):
- *   QA_TEST_EMAIL=mcmdennis+qa@gmail.com QA_TEST_PASSWORD=... node scripts/qa-session.mjs
- *   # or rely on the default email and pass only the password:
- *   QA_TEST_PASSWORD=... node scripts/qa-session.mjs
+ * Usage (creds come from env, never hard-coded here). Pick the IDENTITY with
+ * --as, because MMC Build has three test identities that see different things
+ * and a bug found as one is invisible to the others (SCRUM-319):
+ *   node scripts/qa-session.mjs --as admin   # QA_TEST_ADMIN_EMAIL / _PASSWORD (owner + operator surfaces)
+ *   node scripts/qa-session.mjs --as user    # QA_TEST_USER_EMAIL  / _PASSWORD (plain org member)
+ *   node scripts/qa-session.mjs --as beta    # QA_TEST_BETA_EMAIL  / _PASSWORD (role `beta` — the tester's view)
+ *
+ * Defaults to --as admin. The legacy QA_TEST_EMAIL / QA_TEST_PASSWORD pair is
+ * still honoured as the admin identity so existing invocations keep working.
  *
  * Reads NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY from .env.local.
  */
@@ -43,17 +48,51 @@ function envFromFile(file) {
 const fileEnv = envFromFile(".env.local");
 const SUPA = process.env.NEXT_PUBLIC_SUPABASE_URL || fileEnv.NEXT_PUBLIC_SUPABASE_URL;
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || fileEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const email = process.env.QA_TEST_EMAIL || "mcmdennis+qa@gmail.com";
-const password = process.env.QA_TEST_PASSWORD;
+// Three identities, because role decides what a tester can even reach. Testing
+// only as the owner is how the beta-role upload failure reached two client demos
+// (migrations 00066 → 00071 → 00072); `--as beta` exists so that stops happening.
+const IDENTITIES = {
+  admin: {
+    email: process.env.QA_TEST_ADMIN_EMAIL || process.env.QA_TEST_EMAIL || "mcmdennis+qa@gmail.com",
+    password: process.env.QA_TEST_ADMIN_PASSWORD || process.env.QA_TEST_PASSWORD,
+    passwordVar: "QA_TEST_ADMIN_PASSWORD",
+  },
+  user: {
+    email: process.env.QA_TEST_USER_EMAIL,
+    password: process.env.QA_TEST_USER_PASSWORD,
+    passwordVar: "QA_TEST_USER_PASSWORD",
+  },
+  beta: {
+    email: process.env.QA_TEST_BETA_EMAIL || "beta.demo@mmcbuild.com.au",
+    password: process.env.QA_TEST_BETA_PASSWORD,
+    passwordVar: "QA_TEST_BETA_PASSWORD",
+  },
+};
+
+const asIndex = process.argv.indexOf("--as");
+const identityName = asIndex === -1 ? "admin" : process.argv[asIndex + 1];
+const identity = IDENTITIES[identityName];
+
+if (!identity) {
+  console.error(`Unknown identity "${identityName}". Use --as admin | user | beta (see docs/TESTING.md).`);
+  process.exit(2);
+}
+
+const { email, password } = identity;
 
 if (!SUPA || !ANON) {
   console.error("Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY (env or .env.local).");
   process.exit(2);
 }
-if (!password) {
-  console.error("Set QA_TEST_PASSWORD (the persistent QA account password, from your password manager). Never commit it.");
+if (!email) {
+  console.error(`Set QA_TEST_${identityName.toUpperCase()}_EMAIL for the "${identityName}" identity (see docs/TESTING.md).`);
   process.exit(2);
 }
+if (!password) {
+  console.error(`Set ${identity.passwordVar} (from the password manager) for the "${identityName}" identity. Never commit it.`);
+  process.exit(2);
+}
+console.error(`[qa-session] minting a session as "${identityName}" (${email})`);
 
 // Project ref = the subdomain of the Supabase URL; the SSR cookie is named after it.
 const ref = new URL(SUPA).hostname.split(".")[0];
