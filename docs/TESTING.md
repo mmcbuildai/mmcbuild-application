@@ -130,24 +130,28 @@ These are the paths where a role gate can silently block a real user, so they ar
 | `plan-uploads` | `components/projects/plan-dropzone.tsx`, `components/build/test-3d-harness.tsx` | org-scoped, no role gate | ✅ yes |
 | `engineering-certs` | `components/projects/certification-upload.tsx` | org-scoped, no role gate | ✅ yes |
 | `training-videos` | `components/train/video-upload.tsx` | scoped to the owning **course**'s org | ✅ yes |
-| `kb-uploads` | `components/knowledge/kb-document-upload.tsx` | org-scoped **+ role in owner/admin/architect/builder** | ❌ **no — see below** |
-| `directory-uploads` | `components/direct/file-upload.tsx`, `image-upload.tsx` | org-scoped **+ role in owner/admin/architect/builder** | ❌ **no — see below** |
+| `kb-uploads` | `components/knowledge/kb-document-upload.tsx` | org-scoped, no role gate (`20260727110000`) | ✅ yes |
+| `directory-uploads` | `components/direct/file-upload.tsx`, `image-upload.tsx` | org-scoped, no role gate (`20260727110000`) | ✅ yes |
 | `test-screenshots` | `components/admin/test-regime-board.tsx` | org-scoped + role gate | admin surface |
+
+On all of these, `DELETE` keeps an owner/admin gate. Removing the role gate applies to `INSERT`
+only — org scope is what does the security work, and it is untouched.
 
 A `new row violates row-level security policy` on any of these is a **policy** finding, not a UI
 one — report the bucket name so it can be traced to its migration.
 
-### Open: `kb-uploads` and `directory-uploads` deny the `beta` role
+### Resolved: `kb-uploads` and `directory-uploads` used to deny the `beta` role
 
-Measured 2026-07-27 with a real beta session: both return `new row violates row-level security
-policy` for the tester's **own** org. Their role gate lists `owner/admin/architect/builder` and
-omits `beta`, which is the same shape as the original SCRUM-319 failure. Neither surface gates on
-role in the UI, so a beta tester can reach them and be refused — `directory-uploads` in particular
-backs the MMC Direct document and portfolio uploads a tester would exercise as a matter of course.
+Measured 2026-07-27 with a real beta session: both returned `new row violates row-level security
+policy` for the tester's **own** org. Their INSERT gate listed `owner/admin/architect/builder` and
+omitted `beta` — the same shape as the original SCRUM-319 failure, and neither surface gates on role
+in the UI, so a tester was offered the control and then refused by the database.
 
-Whether the fix is to add `beta` or to gate the UI is a product decision, so it is **not** encoded
-in the automated check below — asserting the current behaviour would freeze a probable bug into a
-passing test.
+The role distribution is what settled it. All 40 production accounts hold exactly three roles —
+`owner` (19), `beta` (17), `admin` (4) — so the gate permitted two roles **nobody has**
+(`architect`, `builder`) while refusing the second-largest population on the system. Migration
+`20260727110000` (SCRUM-359) drops the INSERT role gate on both, matching the majority pattern.
+Both buckets are now covered by the check below.
 
 ---
 

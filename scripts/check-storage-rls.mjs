@@ -119,6 +119,8 @@ const PAYLOAD = {
   "plan-uploads": { body: PDF, type: "application/pdf", ext: "pdf" },
   "engineering-certs": { body: PDF, type: "application/pdf", ext: "pdf" },
   "training-videos": { body: MP4, type: "video/mp4", ext: "mp4" },
+  "kb-uploads": { body: PDF, type: "application/pdf", ext: "pdf" },
+  "directory-uploads": { body: PDF, type: "application/pdf", ext: "pdf" },
 };
 const STAMP = `rls-check-${Date.now()}`;
 
@@ -214,8 +216,11 @@ async function main() {
   console.log(`beta identity ${BETA_EMAIL}  org ${beta.orgId}`);
   console.log(`foreign org    ${other.orgId} (from ${OTHER_EMAIL})\n`);
 
-  // The two buckets the browser writes with a plain org prefix.
-  for (const bucket of ["plan-uploads", "engineering-certs"]) {
+  // The buckets the browser writes with a plain org prefix. kb-uploads and
+  // directory-uploads joined this list in 20260727110000 (SCRUM-359): they were
+  // the only two carrying a role gate on INSERT, which refused `beta` — 17 of the
+  // 40 production accounts — on their own org's folder.
+  for (const bucket of ["plan-uploads", "engineering-certs", "kb-uploads", "directory-uploads"]) {
     await expectAllowed(token, bucket, `${beta.orgId}/${STAMP}.pdf`, `${bucket}: beta writes own org`);
     await expectDenied(token, bucket, `${other.orgId}/${STAMP}.pdf`, `${bucket}: beta blocked from other org`);
   }
