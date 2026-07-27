@@ -63,7 +63,7 @@ PROJECT DETAILS:
 
 CLASSIFICATION & GENERAL:
 - Building Classification: ${v("building_class", "Class 1a")}
-- Construction Type: ${v("construction_type", "Type C")}
+- Construction Type: ${v("construction_type")}
 
 H1 — STRUCTURE & FOOTINGS:
 - Number of Storeys: ${v("storeys", "1")}

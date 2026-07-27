@@ -330,7 +330,8 @@ export const EXECUTION_PHASES: NccCategory[][] = [
   // Phase C: Depends on A+B
   ["ventilation", "glazing", "health_amenity", "safe_movement"],
   // Phase D: Depends on all above
-  ["ancillary", "livable_housing", "termite", "accessibility"],
+  // "accessibility" retired (SCRUM-314) — superseded by H5 safe_movement + H8 livable_housing.
+  ["ancillary", "livable_housing", "termite"],
 ];
 
 /**
