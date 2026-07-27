@@ -53,9 +53,20 @@ const MIGRATIONS_DIR = join(root, "supabase", "migrations");
 const REF = process.env.MMC_SUPABASE_REF || "lztzyfeivpsbqbsfzctw";
 const REST = `https://${REF}.supabase.co/rest/v1`;
 
+/**
+ * Resolution order: MMC_SERVICE_ROLE_KEY (value or path) -> SUPABASE_SERVICE_ROLE_KEY
+ * (the conventional name, and what CI supplies) -> ~/.mmc-serv-rol on a dev box.
+ *
+ * The probes are read-only and only ever ask "does this object exist", which
+ * PostgREST answers before RLS is consulted. A service-role key is therefore
+ * more privilege than this needs — the anon key would do. It is used only
+ * because it is the key already available to CI. See docs/MIGRATIONS.md.
+ */
 function serviceRoleKey() {
   const raw = process.env.MMC_SERVICE_ROLE_KEY;
   if (raw && !raw.includes("/") && !raw.includes("\\") && raw.length > 60) return raw.trim();
+  const fromEnv = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (fromEnv && fromEnv.trim().length > 60) return fromEnv.trim();
   const candidate = raw || join(homedir(), ".mmc-serv-rol");
   if (existsSync(candidate)) return readFileSync(candidate, "utf8").trim();
   return null;
@@ -116,8 +127,13 @@ async function probe(key, table, column) {
 async function verify() {
   const key = serviceRoleKey();
   if (!key) {
+    // Fail rather than skip. A drift check that quietly does nothing is
+    // indistinguishable from one that passed, which is the exact failure mode
+    // this script exists to end.
     console.error(
-      "No service-role key. Set MMC_SERVICE_ROLE_KEY (value or file path), or place it at ~/.mmc-serv-rol.",
+      "No service-role key. Set SUPABASE_SERVICE_ROLE_KEY (or MMC_SERVICE_ROLE_KEY), " +
+        "or place it at ~/.mmc-serv-rol.\n" +
+        "Refusing to exit 0 unconfigured — an unrun check must not look like a passing one.",
     );
     process.exit(2);
   }

@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # 20:00 UTC = 06:00 Brisbane. Drives the schema-drift job only; a cron is
+    # required because drift can appear with no push at all (a migration merged
+    # days ago and still not applied looks identical to a healthy repo).
+    - cron: "0 20 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -65,6 +70,41 @@ jobs:
 
       - name: Unit tests
         run: pnpm test
+
+  # Is production's schema actually running the migrations on main? (SCRUM-233)
+  #
+  # Migrations here reach production via `supabase db push`, which is a manual
+  # step — so a migration can be merged and never applied, and nothing about the
+  # repo looks wrong afterwards. That is not hypothetical: 00075 sat unapplied
+  # for three weeks, leaving the stuck-job reaper failing 42703 on every cron
+  # run, Build-3D ghost jobs unreaped, and the SCRUM-309 fix never actually live.
+  # 00081 did the same thing earlier and blocked SCRUM-238 for weeks.
+  #
+  # Deliberately NOT run on pull_request: a PR that adds a migration has not been
+  # pushed to production yet, so it would fail by design and train people to
+  # ignore it. It runs on merge to main (where an unapplied migration IS the
+  # signal) and daily (because drift needs no push to appear).
+  schema-drift:
+    name: Production schema drift
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Read-only existence probes via PostgREST. See the note in
+      # scripts/migration-baseline.mjs — the anon key would suffice; this is the
+      # key CI already has. Narrowing it is a tracked follow-up.
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # No pnpm install: the script is zero-dependency by design, so this job
+      # cannot be broken by the dependency graph it is meant to outlive.
+      - name: Verify every migration is applied to production
+        run: node scripts/migration-baseline.mjs verify
 
   # E2E runs separately (Playwright is slow + needs browsers + secrets).
   # Manual trigger for now. Promote to on-PR once the suite is stable in CI.
