@@ -51,12 +51,26 @@ empty ledger.
 node scripts/migration-baseline.mjs verify
 ```
 
-Probes each migration's tables/columns through PostgREST with the service-role key (read-only) and
-classifies every file as `applied`, `MISSING`, or `unverifiable`. `unverifiable` means the
-migration only creates policies, functions, or data — there is no object a REST probe can see, so
-it is reported honestly rather than assumed to have passed.
+Classifies every file as `applied`, `MISSING`, or `DRIFT`, using **two independent signals**:
 
-First run, 2026-07-27: **58 confirmed applied, 25 unverifiable, 1 MISSING (`00075`).**
+1. **Production's migration ledger** (`supabase_migrations.schema_migrations`), read through the
+   `public.applied_migration_versions()` function added in `20260727120000`. This is authoritative
+   for *"was this migration ever applied"* and covers **every** migration regardless of contents.
+   A file whose version is absent from the ledger is `MISSING` — merged but never pushed.
+2. **Object probes** — the migration's tables/columns through PostgREST with the service-role key
+   (read-only). A migration in the ledger whose object is *not* there is `DRIFT`: the ledger is
+   lying, most likely a bad baseline entry or something dropped by hand.
+
+The two are kept separate because the ledger records *registration*, not presence — this repo's
+ledger was baselined by marking 84 hand-applied migrations as applied without re-running them. And
+`DRIFT` needs a different fix from `MISSING`: pushing again will not help, because the CLI skips
+anything already in the ledger.
+
+> **Historical note.** Until `20260727120000` the ledger was unreachable (PostgREST exposes only
+> `public`), so the gate had object probes alone and reported policy/function/data-only migrations
+> as `unverifiable` — **27 of 86**, including every storage-policy migration. CI stayed green
+> whether or not those had been applied. First run, 2026-07-27: *58 applied, 25 unverifiable, 1
+> MISSING (`00075`)*. The ledger signal closes that blind spot; nothing is `unverifiable` now.
 
 ### Step 2 — apply the missing migration ✅
 
