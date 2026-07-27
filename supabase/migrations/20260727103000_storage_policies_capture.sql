@@ -310,17 +310,28 @@ DROP POLICY IF EXISTS "Anyone can view training videos" ON storage.objects;
 DROP POLICY IF EXISTS "Authed users can replace training videos" ON storage.objects;
 DROP POLICY IF EXISTS "Authed users can upload training videos" ON storage.objects;
 
+-- Drop the new names too, so a re-run converges instead of failing 42710. The
+-- captured policies above all do this; these four must match that contract.
+DROP POLICY IF EXISTS "training_videos_select_public" ON storage.objects;
+DROP POLICY IF EXISTS "training_videos_insert_course_org" ON storage.objects;
+DROP POLICY IF EXISTS "training_videos_update_course_org" ON storage.objects;
+DROP POLICY IF EXISTS "training_videos_delete_course_org" ON storage.objects;
+
 CREATE POLICY "training_videos_select_public" ON storage.objects
   FOR SELECT TO public
   USING (bucket_id = 'training-videos');
 
+-- The folder is compared as TEXT (courses.id::text), not cast to uuid. A path
+-- whose first segment is not a valid uuid must be DENIED, and `::uuid` would
+-- instead raise 22P02 — surfacing a raw cast error to the uploader rather than
+-- a permission failure. Text comparison degrades honestly to "no match".
 CREATE POLICY "training_videos_insert_course_org" ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (
     bucket_id = 'training-videos'
     AND EXISTS (
       SELECT 1 FROM courses
-      WHERE courses.id = ((storage.foldername(name))[1])::uuid
+      WHERE courses.id::text = (storage.foldername(name))[1]
         AND courses.created_by_org_id = get_user_org_id()
     )
   );
@@ -331,7 +342,7 @@ CREATE POLICY "training_videos_update_course_org" ON storage.objects
     bucket_id = 'training-videos'
     AND EXISTS (
       SELECT 1 FROM courses
-      WHERE courses.id = ((storage.foldername(name))[1])::uuid
+      WHERE courses.id::text = (storage.foldername(name))[1]
         AND courses.created_by_org_id = get_user_org_id()
     )
   );
@@ -342,7 +353,7 @@ CREATE POLICY "training_videos_delete_course_org" ON storage.objects
     bucket_id = 'training-videos'
     AND EXISTS (
       SELECT 1 FROM courses
-      WHERE courses.id = ((storage.foldername(name))[1])::uuid
+      WHERE courses.id::text = (storage.foldername(name))[1]
         AND courses.created_by_org_id = get_user_org_id()
     )
   );
