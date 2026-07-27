@@ -126,7 +126,13 @@ export const NCC_CATEGORIES: {
   { key: "fire_safety", label: "Fire Safety", volume: 2 },
   { key: "structural", label: "Structural", volume: 2 },
   { key: "energy_efficiency", label: "Energy Efficiency", volume: 2 },
-  { key: "accessibility", label: "Accessibility", volume: 1 },
+  // RETIRED (SCRUM-314): the generic "accessibility" domain double-counted the
+  // H8 ground now covered precisely by "safe_movement" (H5) + "livable_housing"
+  // (H8), and its volume:1 mapping mislabelled residential reports as "NCC
+  // Volume 1" (this tool is residential / Volume Two). Removing it here stops it
+  // being run and rendered; it stays in NccCategory + SECTION_PROMPTS so any
+  // historical finding keyed "accessibility" still resolves via the getCategory*
+  // fallbacks (Volume 2, "Accessibility"). Do NOT re-add without a volume review.
   { key: "waterproofing", label: "Waterproofing", volume: 2 },
   { key: "ventilation", label: "Ventilation", volume: 2 },
   { key: "glazing", label: "Glazing", volume: 2 },
