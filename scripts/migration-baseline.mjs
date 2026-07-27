@@ -124,6 +124,23 @@ async function probe(key, table, column) {
   return { ok: false, detail: `${res.status} ${(await res.text()).slice(0, 200)}` };
 }
 
+/**
+ * The applied-version list straight from production's CLI ledger, via the
+ * SECURITY DEFINER function added in 20260727120000. This is what closed the
+ * gate's original blind spot: object probes can only see migrations that create
+ * a table or column, so anything policy/function/data-only was unverifiable.
+ * The ledger knows about all of them.
+ */
+async function appliedVersions(key) {
+  const res = await fetch(`${REST}/rpc/applied_migration_versions`, {
+    method: "POST",
+    headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (res.ok) return new Set(await res.json());
+  return { error: `${res.status} ${(await res.text()).slice(0, 200)}` };
+}
+
 async function verify() {
   const key = serviceRoleKey();
   if (!key) {
@@ -138,47 +155,101 @@ async function verify() {
     process.exit(2);
   }
 
+  const applied = await appliedVersions(key);
+  if (applied.error) {
+    // Same reasoning as the missing-key branch: without the ledger this check is
+    // back to its old partial coverage, and a partial check that reports success
+    // is how 00075 hid for three weeks.
+    console.error(
+      `Could not read the migration ledger: ${applied.error}\n` +
+        "If the function is absent, migration 20260727120000 has not been applied to production —\n" +
+        "run Actions -> 'Apply migrations (production)'. Refusing to fall back to probe-only\n" +
+        "coverage silently, because that is the blind spot this check exists to close.",
+    );
+    // Set the code and return rather than process.exit() here: exiting while a
+    // fetch socket is still closing aborts Node with a libuv assertion on Windows
+    // and reports 127, so the exit code — the only thing CI reads — becomes
+    // meaningless. Let the caller exit once the event loop has settled.
+    process.exitCode = 2;
+    return { rows: [], missing: [], drift: [], orphans: [], fatal: true };
+  }
+
   const rows = [];
   for (const mig of migrations()) {
-    const checks = checksFor(mig.sql);
-    if (checks.length === 0) {
-      // Policy-only / function-only / data-only migrations have no object a REST
-      // probe can see. Reported honestly as unverifiable rather than as a pass.
-      rows.push({ ...mig, status: "unverifiable", detail: "no table/column DDL to probe" });
+    // The ledger is authoritative for "did this ever get applied", and it covers
+    // every migration regardless of what the SQL contains.
+    if (mig.version && !applied.has(mig.version)) {
+      rows.push({
+        ...mig,
+        status: "MISSING",
+        detail: `version ${mig.version} is absent from production's migration ledger — merged but never pushed`,
+      });
       continue;
     }
+
+    const checks = checksFor(mig.sql);
+    if (checks.length === 0) {
+      // Previously "unverifiable". The ledger now answers it, so this is a real
+      // result rather than a shrug — but say WHICH signal confirmed it, because
+      // the ledger records registration, not the presence of the objects.
+      rows.push({ ...mig, status: "applied", detail: "ledger (no table/column DDL to probe)" });
+      continue;
+    }
+
     let status = "applied";
     let detail = checks.map((c) => `${c.table}.${c.column}`).join(", ");
     for (const c of checks) {
       const r = await probe(key, c.table, c.column);
       if (!r.ok) {
-        status = "MISSING";
-        detail = `${c.table}.${c.column} -> ${r.detail}`;
+        // In the ledger, yet the object is not there. The ledger is lying — most
+        // likely a bad baseline entry, or something dropped by hand. Distinct
+        // from MISSING because the fix is different: re-running the migration
+        // will be skipped by the CLI until the ledger entry is repaired.
+        status = "DRIFT";
+        detail = `ledger says applied, but ${c.table}.${c.column} -> ${r.detail}`;
         break;
       }
     }
     rows.push({ ...mig, status, detail });
   }
 
+  // A version in production that no longer exists in the repo: a migration was
+  // pushed from somewhere else, or a committed file was deleted after applying.
+  const repoVersions = new Set(migrations().map((m) => m.version).filter(Boolean));
+  const orphans = [...applied].filter((v) => !repoVersions.has(v));
+
   const missing = rows.filter((r) => r.status === "MISSING");
-  const unverifiable = rows.filter((r) => r.status === "unverifiable");
+  const drift = rows.filter((r) => r.status === "DRIFT");
 
   for (const r of rows) {
-    if (r.status !== "applied") console.log(`${r.status.padEnd(12)} ${r.file}  ${r.detail}`);
+    if (r.status !== "applied") console.log(`${r.status.padEnd(8)} ${r.file}  ${r.detail}`);
   }
+  for (const v of orphans) {
+    console.log(`ORPHAN   version ${v} is applied in production but has no file in this repo`);
+  }
+
+  const ledgerOnly = rows.filter((r) => r.detail?.startsWith("ledger (")).length;
   console.log(
-    `\n${rows.length} migrations: ${rows.length - missing.length - unverifiable.length} confirmed applied, ` +
-      `${unverifiable.length} unverifiable (policy/function/data only), ${missing.length} MISSING from production.`,
+    `\n${rows.length} migrations: ${rows.length - missing.length - drift.length} applied ` +
+      `(${rows.length - missing.length - drift.length - ledgerOnly} confirmed by object probe, ${ledgerOnly} by ledger only), ` +
+      `${missing.length} MISSING, ${drift.length} DRIFT, ${orphans.length} orphaned in production.`,
   );
 
   if (missing.length > 0) {
     console.log(
-      "\nApply the MISSING migrations to production BEFORE baselining — baselining them would\n" +
-        "mark them applied and they would never run:",
+      "\nMISSING = in the repo, absent from production's ledger. Apply them:\n" +
+        "  Actions -> 'Apply migrations (production)' -> type `apply`",
     );
     for (const r of missing) console.log(`  supabase/migrations/${r.file}`);
   }
-  return { rows, missing, unverifiable };
+  if (drift.length > 0) {
+    console.log(
+      "\nDRIFT = the ledger claims applied but the object is absent, so `db push` will SKIP it.\n" +
+        "Repair the ledger entry (or re-run the DDL by hand) — pushing again will not fix this:",
+    );
+    for (const r of drift) console.log(`  supabase/migrations/${r.file}`);
+  }
+  return { rows, missing, drift, orphans };
 }
 
 function plan(rows) {
@@ -207,8 +278,10 @@ function plan(rows) {
 const mode = process.argv[2] || "verify";
 
 if (mode === "verify") {
-  const { missing } = await verify();
-  process.exit(missing.length > 0 ? 1 : 0);
+  const { missing, drift, fatal } = await verify();
+  // DRIFT fails too: "the ledger says applied but the object isn't there" is a
+  // worse state than MISSING, because `db push` will silently skip it.
+  if (!fatal) process.exitCode = missing.length + drift.length > 0 ? 1 : 0;
 } else if (mode === "plan") {
   const { rows, missing } = await verify();
   console.log("");
