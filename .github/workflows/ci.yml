@@ -106,6 +106,40 @@ jobs:
       - name: Verify every migration is applied to production
         run: node scripts/migration-baseline.mjs verify
 
+  # Can a BETA-role tester still upload, and still not reach another org? (SCRUM-319)
+  #
+  # This is the half the schema-drift job cannot see. That check probes for tables
+  # and columns, so a migration that only creates RLS policies is reported
+  # "unverifiable" and CI stays green whether or not it was ever applied — 26 of
+  # the 85 migrations are in that bucket. Storage policies are exactly that shape,
+  # and they are also the ones that have broken twice (00066 -> 00071 -> 00072).
+  # So this job asserts the BEHAVIOUR instead of the object: it signs in as the
+  # beta QA account and tries the uploads, which is the only thing that proves a
+  # policy is both present and correct.
+  #
+  # Same trigger policy as schema-drift, and for the same reason — it judges
+  # production, not the pull request. It writes and then deletes one small object
+  # per bucket in the QA beta org.
+  storage-rls:
+    name: Storage RLS (beta role)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Mints the QA session via admin generate_link and cleans up afterwards; the
+      # uploads under test run as the beta USER, subject to RLS like anyone else.
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Zero-dependency by design, as above.
+      - name: Beta-role upload + cross-tenant checks
+        run: node scripts/check-storage-rls.mjs
+
   # E2E runs separately (Playwright is slow + needs browsers + secrets).
   # Manual trigger for now. Promote to on-PR once the suite is stable in CI.
   e2e:

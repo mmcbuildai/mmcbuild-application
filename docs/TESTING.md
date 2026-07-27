@@ -125,14 +125,50 @@ These are the paths where a role gate can silently block a real user, so they ar
 `beta` identity exists to exercise. Each is written **from the browser**, so RLS on
 `storage.objects` is the only thing standing between the click and a failure:
 
-| Bucket | Uploaded from | Canonical policy shape |
-|---|---|---|
-| `plan-uploads` | `components/projects/plan-dropzone.tsx`, `components/build/test-3d-harness.tsx` | org-scoped, any member (`00072`) |
-| `engineering-certs` | `components/projects/certification-upload.tsx` | org-scoped, any member (`00071`) |
-| `kb-uploads` | `components/knowledge/kb-document-upload.tsx` | authenticated (no org scope — see SCRUM-319) |
-| `directory-uploads` | `components/direct/file-upload.tsx`, `image-upload.tsx` | authenticated (no org scope — see SCRUM-319) |
-| `training-videos` | `components/train/video-upload.tsx` | authenticated (no org scope — see SCRUM-319) |
-| `test-screenshots` | `components/admin/test-regime-board.tsx` | admin surface |
+| Bucket | Uploaded from | Policy shape (after `20260727103000`) | `beta` can write? |
+|---|---|---|---|
+| `plan-uploads` | `components/projects/plan-dropzone.tsx`, `components/build/test-3d-harness.tsx` | org-scoped, no role gate | ✅ yes |
+| `engineering-certs` | `components/projects/certification-upload.tsx` | org-scoped, no role gate | ✅ yes |
+| `training-videos` | `components/train/video-upload.tsx` | scoped to the owning **course**'s org | ✅ yes |
+| `kb-uploads` | `components/knowledge/kb-document-upload.tsx` | org-scoped **+ role in owner/admin/architect/builder** | ❌ **no — see below** |
+| `directory-uploads` | `components/direct/file-upload.tsx`, `image-upload.tsx` | org-scoped **+ role in owner/admin/architect/builder** | ❌ **no — see below** |
+| `test-screenshots` | `components/admin/test-regime-board.tsx` | org-scoped + role gate | admin surface |
 
 A `new row violates row-level security policy` on any of these is a **policy** finding, not a UI
 one — report the bucket name so it can be traced to its migration.
+
+### Open: `kb-uploads` and `directory-uploads` deny the `beta` role
+
+Measured 2026-07-27 with a real beta session: both return `new row violates row-level security
+policy` for the tester's **own** org. Their role gate lists `owner/admin/architect/builder` and
+omits `beta`, which is the same shape as the original SCRUM-319 failure. Neither surface gates on
+role in the UI, so a beta tester can reach them and be refused — `directory-uploads` in particular
+backs the MMC Direct document and portfolio uploads a tester would exercise as a matter of course.
+
+Whether the fix is to add `beta` or to gate the UI is a product decision, so it is **not** encoded
+in the automated check below — asserting the current behaviour would freeze a probable bug into a
+passing test.
+
+---
+
+## The automated storage-RLS check (`pnpm test:storage-rls`)
+
+`scripts/check-storage-rls.mjs` runs the beta-role upload matrix without a browser. It mints a real
+session for the beta QA account (admin `generate_link` + `verify` — no password, no email
+round-trip, no auth bypass), then per bucket asserts **both** directions:
+
+- **positive** — beta can write its own org's prefix (catches a role gate locking testers out);
+- **negative** — beta cannot write another org's prefix (catches a policy so loose it leaks across
+  tenants). A check that only proved the upload works would pass just as happily against a bucket
+  with no org scope at all.
+
+It creates and deletes a disposable course so the `training-videos` course-ownership policy is
+genuinely exercised rather than skipped, and it cleans up every object it writes.
+
+Two traps it encodes, both hit while writing it: the MIME allow-list is enforced **before** RLS, so
+the wrong content type returns 415 and a cross-tenant assertion scores as a pass; and a bucket
+denial that isn't an RLS denial is reported `SKIP`, not `pass`. `SKIP` counts against the run — an
+assertion that could not be made is not evidence that the property holds.
+
+Runs in CI on merge to main and daily (never on PRs — like the schema-drift gate, it judges
+production, not the branch). Needs `SUPABASE_SERVICE_ROLE_KEY`; refuses to exit 0 unconfigured.
