@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "check:cross-tenant": "node scripts/check-cross-tenant-guards.mjs",
+    "test:storage-rls": "node scripts/check-storage-rls.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
