@@ -1,0 +1,130 @@
+name: Apply migrations (production)
+
+# Applies pending Supabase migrations to PRODUCTION, on a manual click.
+#
+# WHY THIS EXISTS
+# `supabase db push` needs the database password, so until now every migration
+# meant handing that password to whoever was applying it — pasted into a chat,
+# then rotated afterwards because it had been pasted into a chat. The secret now
+# lives in GitHub (SUPABASE_DB_PASSWORD) and is never transcribed again.
+#
+# WHY IT IS NOT AUTOMATIC ON MERGE
+# Deliberate. This is a REGULATED product and a migration is not reversible by
+# re-running CI. Merging code and changing the production database stay two
+# separate human decisions; this workflow removes the credential hand-off, not
+# the decision.
+#
+# HOW TO RUN
+# Actions -> "Apply migrations (production)" -> Run workflow -> type `apply`.
+# Leave the box empty (or type anything else) and it stops after the dry run,
+# which is a safe way to see what is pending.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "apply" to push pending migrations to PRODUCTION. Anything else = dry run only.'
+        required: false
+        default: ""
+
+concurrency:
+  # Never let two pushes touch the database at once.
+  group: apply-migrations
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: supabase db push
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_REF: lztzyfeivpsbqbsfzctw
+      # Session mode (5432), NOT the transaction pooler (6543). 6543 authenticates
+      # and then fails mid-run with `prepared statement "lrupsc_1_0" already exists`,
+      # which during an auth flake reads convincingly like "the port that works".
+      SUPABASE_POOLER_HOST: aws-1-ap-southeast-2.pooler.supabase.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Show pending migrations, and apply them if confirmed
+        env:
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${DB_PASSWORD:-}" ]; then
+            echo "::error::SUPABASE_DB_PASSWORD is not set. Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+          # --db-url "must be percent-encoded" (supabase db push --help). A rotated
+          # password containing @ : / or # silently produces a malformed URL otherwise.
+          ENC=$(node -e 'process.stdout.write(encodeURIComponent(process.env.DB_PASSWORD))')
+          # Encoding changes the string, so GitHub's automatic secret masking no
+          # longer recognises it. Mask the encoded form explicitly or a stack trace
+          # could print the password in the clear.
+          echo "::add-mask::$ENC"
+          URL="postgresql://postgres.${SUPABASE_REF}:${ENC}@${SUPABASE_POOLER_HOST}:5432/postgres"
+
+          # The pooler intermittently rejects a CORRECT password with 28P01 — seen
+          # four times consecutively, then succeeding first try minutes later. Retry
+          # before believing it; a single failure here means nothing.
+          run_with_retry() {
+            local label="$1"; shift
+            for attempt in $(seq 1 10); do
+              set +e
+              OUT=$("$@" 2>&1)
+              CODE=$?
+              set -e
+              if echo "$OUT" | grep -q "28P01"; then
+                echo "$label: pooler auth flake (attempt $attempt/10), retrying..."
+                sleep 6
+                continue
+              fi
+              echo "$OUT"
+              return $CODE
+            done
+            echo "::error::$label: pooler rejected the password on 10 consecutive attempts."
+            echo "That is no longer a flake — the password has probably been rotated. Update the SUPABASE_DB_PASSWORD secret."
+            return 1
+          }
+
+          echo "::group::Dry run — what would be applied"
+          # --include-all because this repo mixes numbering schemes (00001_… and
+          # timestamped); without it an out-of-order migration is silently skipped.
+          run_with_retry "dry-run" supabase db push --dry-run --include-all --db-url "$URL"
+          echo "::endgroup::"
+
+          if [ "$CONFIRM" != "apply" ]; then
+            echo "Confirmation was '${CONFIRM}', not 'apply' — stopping after the dry run. Nothing was changed."
+            exit 0
+          fi
+
+          echo "::group::Applying to production"
+          run_with_retry "push" bash -c 'echo y | supabase db push --include-all --db-url "$0"' "$URL"
+          echo "::endgroup::"
+
+      - name: Verify production matches the repo
+        if: inputs.confirm == 'apply'
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/migration-baseline.mjs verify
+
+      # A policy-only migration is invisible to the check above (it probes for
+      # tables and columns), so assert the behaviour too — otherwise a storage
+      # policy could be pushed wrong and everything would still look green.
+      - name: Re-check storage RLS after the push
+        if: inputs.confirm == 'apply'
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/check-storage-rls.mjs
