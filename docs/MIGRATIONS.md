@@ -143,22 +143,56 @@ wrong-account credential.)
    — this repo has already been bitten by out-of-band production drift where a policy had been
    renamed, so a bare `create` silently no-ops. Migrations `00071`/`00072` are the pattern: drop
    *both* the repo-canonical and the drifted production name before recreating.
-4. **Push, don't paste.** Use `--db-url` (see Step 4 — `supabase link` cannot authenticate against
-   this project):
-   ```bash
-   supabase db push --db-url "postgresql://postgres.lztzyfeivpsbqbsfzctw:<password>@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres"
-   ```
-   Dry-run first. The password is **operator-provided** and is not stored on disk.
-5. **Verify after every push**, because a green CLI is not proof the object exists:
-   ```bash
-   node scripts/migration-baseline.mjs verify
-   ```
+4. **Apply from GitHub, not from a laptop.** **Actions → "Apply migrations (production)"** — leave
+   the confirm box empty for a dry run, type `apply` to push. It reads the password from the
+   `SUPABASE_DB_PASSWORD` secret and verifies afterwards. Nobody needs to hold, paste or rotate the
+   credential. Manual by design (not on merge): a migration is not reversible by re-running CI, so
+   merging code and changing the database stay two decisions.
+5. **Expect a red build between merge and apply.** `Production schema drift` fails while a merged
+   migration is unapplied. That is the gate working — apply, and it goes green.
+
+The local `supabase db push --db-url "...pooler...:5432/postgres"` path still works and is the
+fallback if the workflow is unavailable. Port **5432** (session mode) — 6543 authenticates and then
+dies on `prepared statement "lrupsc_1_0" already exists`. The pooler also rejects a *correct*
+password with `28P01` intermittently (seen four times in a row, then fine), so retry before
+concluding it was rotated.
 
 ---
 
-## Guardrail worth adding next
+## For anyone with production database access
 
-`migration-baseline.mjs verify` exits non-zero when production is missing a migration, so it can
-run as a CI step against production on a schedule. That converts "someone remembers to check" into
-"the build tells us" — which is the only reason `00075` sat undetected for three weeks. Wire it
-into `.github/workflows/` alongside the existing `check:cross-tenant` gate.
+The Supabase project lives in MMC's own account, so more people can reach the SQL editor and the
+dashboard than can merge a pull request. This section is for all of them.
+
+**The request: don't change schema or policies in the dashboard or SQL editor.**
+
+Not a process preference — it is the specific thing that produced the problem below.
+
+**What happened.** Production accumulated **51** `storage.objects` policies while the repo described
+**19**. Nobody did anything unreasonable: policies were tightened directly on the live database
+during an incident, which was the fast and sensible thing to do at the time, and the change was
+never written back into a migration. The cost surfaced later and twice over — a rebuild from the
+repo alone would have shipped a wide-open storage layer, and a role gate that existed only in
+production locked every beta tester out of uploads through two client demos before anyone could see
+why (SCRUM-319, and again in SCRUM-359).
+
+The same shape, from the other direction: `00075` and `00081` were written, reviewed and merged, and
+never applied. `00075` left the stuck-job reaper failing on every cron run for three weeks, so a
+bug fix that had "shipped" was never actually live.
+
+**So the rule is simply that the repo and production must never disagree**, in either direction.
+
+1. Every schema or policy change starts as a migration file in the repo — even a one-line policy
+   tweak.
+2. It reaches production through **Actions → "Apply migrations (production)"**. You don't need the
+   database password; that is deliberate, and it removes most reasons to open the SQL editor.
+3. **If an emergency hand-fix is genuinely unavoidable** — and sometimes it is — the fix is not
+   finished until an idempotent migration describing it exists in the repo, the same day. Write it
+   while you still remember what you changed.
+4. **Read the green build accurately.** CI now catches a merged-but-unapplied migration and a
+   missing table or column, on every merge and daily. It does **not** yet detect a policy edited
+   directly in the dashboard — that check does not exist yet. So a green build is not evidence that
+   production matches the repo where policies are concerned.
+
+If you are unsure whether something counts, it is cheaper to ask than to reconcile it later: the
+reconciliation above took a day and produced four tickets.
