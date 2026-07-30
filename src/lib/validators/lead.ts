@@ -1,6 +1,15 @@
 import { z } from "zod";
 
-export const leadFormTypes = ["contact", "waitlist", "trades-supplier"] as const;
+// 'signup' is written server-side when a user creates an account (the social-ad
+// CTA destination), not submitted by a public form — but it shares the leads row
+// + HubSpot sync shape, so it belongs in the same union. Kept in step with the
+// leads_form_type_check constraint (migration 20260730120000).
+export const leadFormTypes = [
+  "contact",
+  "waitlist",
+  "trades-supplier",
+  "signup",
+] as const;
 export type LeadFormType = (typeof leadFormTypes)[number];
 
 export const leadSchema = z.object({
