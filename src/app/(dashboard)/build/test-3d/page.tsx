@@ -1,4 +1,6 @@
+import { notFound } from "next/navigation";
 import { Test3DHarness } from "@/components/build/test-3d-harness";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 
 export const metadata = {
   title: "3D Extractor Test Harness",
@@ -11,6 +13,12 @@ export const metadata = {
 export const maxDuration = 300;
 
 export default function Test3DPage() {
+  // This harness renders the raw extractor output in 3D and carries no operator
+  // gate of its own — any signed-in user who guesses the URL reaches it. With 3D
+  // switched off for Go Live 1, that is exactly the render we are hiding, so the
+  // route 404s rather than leaving a back door to it.
+  if (!is3dRenderingEnabled()) notFound();
+
   return (
     <div className="max-w-5xl space-y-6">
       <div>
