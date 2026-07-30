@@ -14,6 +14,8 @@ export type DashboardShellProps = {
   fullName: string | null;
   role: string | null;
   orgName: string;
+  /** Operator email allowlist, resolved server-side in the dashboard layout. */
+  isOperator?: boolean;
 };
 
 const MOBILE_QUERY = "(max-width: 767px)";
@@ -25,6 +27,7 @@ export function DashboardShell({
   fullName,
   role,
   orgName,
+  isOperator = false,
 }: DashboardShellProps) {
   // Two independent states so default-shown-on-desktop and default-hidden-on-mobile
   // can coexist without a paint flash. Toggle picks the right one per viewport.
@@ -75,6 +78,7 @@ export function DashboardShell({
           tier={tier}
           runCount={runCount}
           role={role}
+          isOperator={isOperator}
         />
       </div>
 
