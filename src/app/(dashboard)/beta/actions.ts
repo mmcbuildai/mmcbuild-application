@@ -531,7 +531,7 @@ export async function submitPageFeedback(input: {
     .maybeSingle();
 
   try {
-    const { error } = await db()
+    const { data: insertedRow, error } = await db()
       .from("beta_page_feedback")
       .insert({
         user_id: user.id,
@@ -539,38 +539,55 @@ export async function submitPageFeedback(input: {
         page_url: (input.pageUrl ?? "").slice(0, 1000),
         page_path: input.pagePath ? input.pagePath.slice(0, 500) : null,
         message,
-      });
-    if (error) {
-      console.error("[submitPageFeedback] insert failed:", error.message);
+      })
+      .select("id")
+      .single();
+    if (error || !insertedRow) {
+      console.error("[submitPageFeedback] insert failed:", error?.message);
       return {
         error:
           "Couldn't save your feedback just now — please try the Report a problem button.",
       };
     }
 
-    // Best-effort: alert the operators so feedback gets actioned, not just stored.
-    // Never fail the submission on an email error.
+    // Alert the operators so a request gets ACTIONED, not just stored. This must
+    // never fail the submission — the entry is already saved and visible at
+    // /admin/feedback, so the user's "we've logged your request" is true either
+    // way. But the outcome is now RECORDED rather than swallowed: Karen sent a
+    // course request live on the 2026-07-29 call, got the success message, and
+    // no email arrived — and nothing anywhere could say whether the send had
+    // failed or the mail had simply gone to a mailbox nobody was watching.
+    // Mirrors the leads table's email_alert_sent_at / email_alert_error.
+    const isCourse = message.startsWith("[Course request]");
     try {
       const to = [
         process.env.KAREN_EMAIL || "karen.engel@mmcbuild.com.au",
         process.env.KARTHIK_EMAIL || "karthik.rao@mmcbuild.com.au",
       ];
-      const isCourse = message.startsWith("[Course request]");
       await sendEmail({
         to,
         subject: isCourse
           ? "MMC Build — new course request"
-          : `MMC Build — beta feedback on ${input.pagePath ?? "a page"}`,
+          : `MMC Build — page feedback on ${input.pagePath ?? "a page"}`,
         text:
-          `${isCourse ? "Course request" : "Beta feedback"} from ${user.email ?? user.id}\n\n` +
+          `${isCourse ? "Course request" : "Page feedback"} from ${user.email ?? user.id}\n\n` +
           `Page: ${input.pageUrl}\n\n` +
-          `${message}`,
+          `${message}\n\n` +
+          `All requests are also listed at https://app.mmcbuild.com.au/admin/feedback`,
       });
+      await db()
+        .from("beta_page_feedback")
+        .update({ alert_email_sent_at: new Date().toISOString(), alert_email_error: null })
+        .eq("id", insertedRow.id);
     } catch (e) {
-      console.error(
-        "[submitPageFeedback] alert email failed (non-fatal):",
-        (e as Error).message,
-      );
+      const reason = (e as Error).message;
+      console.error("[submitPageFeedback] alert email failed:", reason);
+      await db()
+        .from("beta_page_feedback")
+        .update({ alert_email_error: reason.slice(0, 500) })
+        .eq("id", insertedRow.id)
+        // A failure to record the failure must still not break the submission.
+        .then(undefined, () => undefined);
     }
     return { ok: true };
   } catch (e) {

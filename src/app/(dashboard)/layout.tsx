@@ -108,6 +108,7 @@ export default async function DashboardLayout({
       fullName={profile?.full_name ?? null}
       role={profile?.role ?? null}
       orgName={orgName}
+      isOperator={isOperator}
     >
       {children}
       <TermsGate needsTerms={needsTerms} />

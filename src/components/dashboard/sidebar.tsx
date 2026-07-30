@@ -17,6 +17,7 @@ import {
   ArrowUpRight,
   FlaskConical,
   HelpCircle,
+  MessageSquarePlus,
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { OrgSwitcher } from "./org-switcher";
@@ -56,14 +57,27 @@ const bottomNav = [
   { name: "Support", href: "/support", icon: HelpCircle },
 ];
 
+// Operator-only. /admin/feedback collects course requests and page feedback from
+// LIVE users (the "Looking for a course we don't have yet?" card ships on the
+// public Train page, not behind the beta gate), but its only link lived on
+// /admin/beta-activity-global — which redirects away once
+// NEXT_PUBLIC_BETA_TESTING_ENABLED=false at Go Live. That left requests saving
+// into a page with no route to it, with a silently-swallowed alert email as the
+// sole notification. Hence a permanent entry point that does not depend on beta.
+const operatorNav = [
+  { name: "Feedback & Requests", href: "/admin/feedback", icon: MessageSquarePlus },
+];
+
 export type SidebarProps = {
   isOpen: boolean;
   tier: string | null;
   runCount: number;
   role: string | null;
+  /** Operator email allowlist (see @/lib/auth/operator), resolved server-side. */
+  isOperator?: boolean;
 };
 
-export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
+export function Sidebar({ isOpen, tier, runCount, role, isOperator = false }: SidebarProps) {
   const pathname = usePathname();
 
   const runLimited = isRunLimited(tier);
@@ -119,6 +133,25 @@ export function Sidebar({ isOpen, tier, runCount, role }: SidebarProps) {
             </Link>
           );
         })}
+        {isOperator &&
+          operatorNav.map((item) => {
+            const isActive = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  "flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap md:min-h-0",
+                  isActive
+                    ? "bg-white/10 text-white"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white",
+                )}
+              >
+                <item.icon className="h-4 w-4 shrink-0" />
+                {item.name}
+              </Link>
+            );
+          })}
       </nav>
 
       {/* Divider */}

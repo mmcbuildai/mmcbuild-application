@@ -64,9 +64,12 @@ export default async function FeedbackDashboardPage() {
       <div>
         <h1 className="text-2xl font-bold">Feedback &amp; Requests</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          What beta testers have told us — page feedback and course requests,
-          newest first. Use it to prioritise what users are actually asking for.
-          Each entry is tagged with the page it came from and the user.
+          What users have told us — page feedback and course requests, newest
+          first. Use it to prioritise what users are actually asking for. Each
+          entry is tagged with the page it came from and the user. The
+          &ldquo;Looking for a course we don&rsquo;t have yet?&rdquo; card ships
+          on the live Train page, so requests arrive here from paying users, not
+          just beta testers.
         </p>
       </div>
 
