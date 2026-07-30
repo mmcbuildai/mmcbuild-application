@@ -14,6 +14,7 @@ import Link from "next/link";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
 import { ModuleIntro } from "@/components/shared/module-intro";
 import { BetaTaskPanel } from "@/components/beta/beta-task-panel";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 
 export default async function BuildPage() {
   const supabase = await createClient();
@@ -31,7 +32,11 @@ export default async function BuildPage() {
     <div className="space-y-6">
       <ModuleIntro
         module="build"
-        description="MMC Build turns your uploaded plans into an interactive 3D model and design-optimisation view. Open a project to explore its modular build sequence and see where prefabricated methods can save time and cost."
+        description={
+          is3dRenderingEnabled()
+            ? "MMC Build turns your uploaded plans into an interactive 3D model and design-optimisation view. Open a project to explore its modular build sequence and see where prefabricated methods can save time and cost."
+            : "MMC Build reads your uploaded plans and compares what each modern method of construction would mean for your design. Open a project to weigh the four MMC systems on cost, time and on-site labour, and see where prefabricated methods can save time and cost."
+        }
       />
       <BetaTaskPanel moduleId="build" />
       <ExplainerVideo module="build" videoUrl="/videos/build-explainer.mp4" />

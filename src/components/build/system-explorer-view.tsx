@@ -16,6 +16,7 @@ import {
   type TraditionalVariant,
 } from "@/lib/build/system-renderer";
 import { getTopStoreyIndex } from "@/lib/build/spatial";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 
 const SYSTEMS: MMCSystem[] = [
@@ -105,6 +106,10 @@ function SystemCanvas({
 }
 
 export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
+  // Go Live 1: the per-system 3D canvases are hidden, but everything that makes
+  // this view the sell — the cost/time/labour metrics, pros, cons and
+  // suitability — stays. See src/lib/build/render-3d.ts.
+  const show3d = is3dRenderingEnabled();
   const [traditionalVariant, setTraditionalVariant] =
     useState<TraditionalVariant>("brick-veneer");
   // One storey selector controls all four system canvases, so you can compare
@@ -132,12 +137,28 @@ export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
         <p className="mt-1">
           Numbers shown for each system are AU-residential rules of thumb. Cost /
           time / labour deltas will be replaced with MMC Build&apos;s confirmed
-          figures in v0.5.x. Use this view to compare what each MMC system means
-          for <strong>your</strong> design before choosing one.
+          figures in v0.5.x.{" "}
+          {show3d ? (
+            <>
+              Use this view to compare what each MMC system means for{" "}
+              <strong>your</strong> design before choosing one.
+            </>
+          ) : (
+            // Without the per-system canvases these figures are general
+            // guidance, identical for every project — say so rather than imply
+            // they were derived from this plan.
+            <>
+              These figures are general guidance, not calculated from your plan.
+              Use them to compare what each MMC system involves before choosing
+              one — your design-specific analysis comes from Design Optimisation.
+            </>
+          )}
         </p>
       </div>
 
-      {isMultiStorey && (
+      {/* The storey selector only filters the 3D canvases, so it has nothing to
+          act on when rendering is off. */}
+      {show3d && isMultiStorey && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-zinc-600">Storey:</span>
           <div className="inline-flex flex-wrap gap-1 rounded-md border bg-white p-0.5">
@@ -193,7 +214,9 @@ export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
                   </span>
                 </div>
                 <p className="mt-0.5 text-xs text-zinc-600">{spec.tagline}</p>
-                {sys === "traditional" && (
+                {/* Brick-veneer vs masonry changes only what the canvas draws,
+                    so it is hidden with it rather than left as a dead control. */}
+                {show3d && sys === "traditional" && (
                   <div className="mt-2 inline-flex rounded-md border bg-white p-0.5 text-[11px]">
                     {(
                       [
@@ -218,14 +241,16 @@ export function SystemExplorerView({ layout }: { layout: SpatialLayout }) {
                 )}
               </div>
 
-              <div className="h-[320px] bg-gradient-to-b from-zinc-100 to-white">
-                <SystemCanvas
-                  layout={layout}
-                  system={sys}
-                  variant={sys === "traditional" ? traditionalVariant : "brick-veneer"}
-                  storeyFilter={storeyFilter}
-                />
-              </div>
+              {show3d && (
+                <div className="h-[320px] bg-gradient-to-b from-zinc-100 to-white">
+                  <SystemCanvas
+                    layout={layout}
+                    system={sys}
+                    variant={sys === "traditional" ? traditionalVariant : "brick-veneer"}
+                    storeyFilter={storeyFilter}
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t bg-zinc-50/50 px-4 py-3 text-xs">
                 <div>

@@ -18,6 +18,7 @@ import {
   hasValidExtraction,
 } from "../actions";
 import { SystemPreviewPanel } from "@/components/build/system-preview-panel";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 import { ReportVersionList } from "@/components/shared/report-version-list";
 import { ProjectContextSummary } from "@/components/shared/project-context-summary";
 import { getReportVersions } from "@/lib/report-versions";
@@ -175,8 +176,13 @@ export default async function ProjectBuildPage({
               </p>
             ) : !hasValidDesign ? (
               <p className="text-sm text-muted-foreground">
-                Run <span className="font-medium">&ldquo;See your design built
-                in the 4 MMC systems&rdquo;</span> above first. Design
+                Run{" "}
+                <span className="font-medium">
+                  {is3dRenderingEnabled()
+                    ? "“See your design built in the 4 MMC systems”"
+                    : "“Compare your design across the 4 MMC systems”"}
+                </span>{" "}
+                above first. Design
                 Optimisation unlocks once your design extracts successfully — if
                 it can&apos;t, you&apos;ll be told why so you can fix and
                 re-upload it.

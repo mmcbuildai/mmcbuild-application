@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { DesignReport } from "./design-report";
 import { PlanComparison3D } from "./plan-comparison-3d";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
 import type { SuggestionDecision } from "@/app/(dashboard)/build/actions";
 import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
@@ -61,7 +62,11 @@ export function ReportDecisionsView({
   );
 
   const layout = (check.spatial_layout ?? null) as SpatialLayout | null;
+  // The curated-design render is a 3D view, so it goes with the rest of them at
+  // Go Live 1 (see @/lib/build/render-3d). The decision cards below are the
+  // substance of the report and are unaffected.
   const hasGeometry =
+    is3dRenderingEnabled() &&
     !!layout &&
     Array.isArray(layout.walls) &&
     layout.walls.length > 0 &&

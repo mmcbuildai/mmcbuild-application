@@ -10,6 +10,7 @@ import { PlanComparison3D } from "./plan-comparison-3d";
 import { SystemSelectChips } from "./system-select-chips";
 import { RunOptimisationButton } from "./run-optimisation-button";
 import { canRunOptimisationInline } from "@/lib/build/optimisation-gate";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 import {
   startProjectSystemPreview,
   getProjectSystemPreviewCached,
@@ -32,6 +33,16 @@ const PREVIEW_TIPS = [
   "Multi-storey designs take longer — each floor is read, then stacked in turn.",
   "Detecting walls, rooms and openings so the model matches your design.",
   "You can leave this page or work elsewhere — we'll keep building and have it ready when you return.",
+];
+
+// With 3D rendering off (Go Live 1) the same extraction still runs — it gates
+// Design Optimisation and feeds the system comparison — but nothing is drawn,
+// so the reassurance copy must not promise a model the user will never see.
+const ANALYSIS_TIPS = [
+  "Reading your floor plan from every page of the uploaded plan.",
+  "Multi-storey designs take longer — each floor is read in turn.",
+  "Detecting walls, rooms and openings so the comparison matches your design.",
+  "You can leave this page or work elsewhere — we'll keep going and have it ready when you return.",
 ];
 
 function fmtElapsed(secs: number): string {
@@ -77,10 +88,21 @@ export function SystemPreviewPanel({
   initialSystems: string[];
   hasDownstreamReports: boolean;
 }) {
+  // Go Live 1: 3D rendering off. Build Sequence and Standard Model are purely
+  // rendered views, so they go entirely; Compare Systems stays (it keeps its
+  // cost/time/labour metrics and pros/cons — see render-3d.ts).
+  const show3d = is3dRenderingEnabled();
+  const views = show3d
+    ? PREVIEW_VIEWS
+    : PREVIEW_VIEWS.filter((v) => v.key === "system-explorer");
+  const tips = show3d ? PREVIEW_TIPS : ANALYSIS_TIPS;
+
   const [phase, setPhase] = useState<Phase>("idle");
   const [layout, setLayout] = useState<SpatialLayout | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<ViewMode>("build-sequence");
+  const [view, setView] = useState<ViewMode>(
+    show3d ? "build-sequence" : "system-explorer",
+  );
   // The systems currently persisted on the project. Seeded from the server and
   // kept in sync when the chips save, so the inline Run Design Optimisation
   // action below can unlock from client state the instant the design is ready
@@ -122,14 +144,14 @@ export function SystemPreviewPanel({
       setElapsed(Math.floor((Date.now() - (startRef.current ?? Date.now())) / 1000));
     }, 1000);
     const r = setInterval(
-      () => setTipIndex((i) => (i + 1) % PREVIEW_TIPS.length),
+      () => setTipIndex((i) => (i + 1) % tips.length),
       7000,
     );
     return () => {
       clearInterval(t);
       clearInterval(r);
     };
-  }, [phase]);
+  }, [phase, tips.length]);
 
   // On a successful extraction, refresh server components so the Design
   // Optimisation gate unlocks (the build page re-checks hasPlanLayout). This
@@ -146,7 +168,9 @@ export function SystemPreviewPanel({
       ) {
         try {
           new Notification("MMC Build", {
-            body: "Your 3D design preview is ready.",
+            body: show3d
+              ? "Your 3D design preview is ready."
+              : "Your design analysis is ready.",
           });
         } catch {
           // best-effort
@@ -154,7 +178,7 @@ export function SystemPreviewPanel({
       }
       router.refresh();
     },
-    [router],
+    [router, show3d],
   );
 
   const armNotify = useCallback(async () => {
@@ -191,7 +215,9 @@ export function SystemPreviewPanel({
           // message is silently replaced with "no readable floor plan".
           setError(
             status.result.error ||
-              "We couldn't reconstruct a 3D model from this plan — no readable floor plan / wall geometry was found.",
+              (show3d
+                ? "We couldn't reconstruct a 3D model from this plan — no readable floor plan / wall geometry was found."
+                : "We couldn't read this design — no readable floor plan / wall geometry was found."),
           );
           setPhase("error");
         }
@@ -215,7 +241,7 @@ export function SystemPreviewPanel({
       pollRef.current = setTimeout(tick, 2500);
     };
     pollRef.current = setTimeout(tick, 2000);
-  }, [markReady]);
+  }, [markReady, show3d]);
 
   const start = useCallback(async () => {
     // Clear any in-flight poll chain so a retry can't run two loops at once.
@@ -264,14 +290,29 @@ export function SystemPreviewPanel({
           <Layers className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" />
           <div>
             <p className="text-base font-medium text-zinc-900">
-              See your design built in the 4 MMC systems
+              {show3d
+                ? "See your design built in the 4 MMC systems"
+                : "Choose a construction system for your design"}
             </p>
             <p className="mt-0.5 text-sm text-zinc-500">
-              Watch your uploaded plan built as a step-by-step sequence in each
-              system — Traditional (timber frame &amp; cladding, or block),
-              Volumetric, Panelised (incl. SIP), and 3D concrete printing. See
-              how they work, then choose your preferred system for design
-              optimisation below.
+              {show3d ? (
+                <>
+                  Watch your uploaded plan built as a step-by-step sequence in
+                  each system — Traditional (timber frame &amp; cladding, or
+                  block), Volumetric, Panelised (incl. SIP), and 3D concrete
+                  printing. See how they work, then choose your preferred system
+                  for design optimisation below.
+                </>
+              ) : (
+                <>
+                  We read your uploaded plan first — Design Optimisation runs on
+                  it. Then compare what each system involves — Traditional
+                  (timber frame &amp; cladding, or block), Volumetric, Panelised
+                  (incl. SIP), and 3D concrete printing — on cost, time to
+                  lockup and on-site labour, and choose your preferred system for
+                  design optimisation below.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -285,10 +326,12 @@ export function SystemPreviewPanel({
             {phase === "working" ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Building preview…
+                {show3d ? "Building preview…" : "Analysing…"}
               </>
-            ) : (
+            ) : show3d ? (
               "Show my design"
+            ) : (
+              "Analyse my design"
             )}
           </button>
         )}
@@ -298,7 +341,10 @@ export function SystemPreviewPanel({
         <div className="space-y-3 border-t px-4 py-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-zinc-700">
-              {STAGE_LABELS[stage ?? ""] ?? "Building your design in 3D…"}
+              {STAGE_LABELS[stage ?? ""] ??
+                (show3d
+                  ? "Building your design in 3D…"
+                  : "Analysing your design…")}
             </p>
             <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
               <Clock className="h-3.5 w-3.5" />
@@ -316,12 +362,12 @@ export function SystemPreviewPanel({
               style={{ width: `${Math.min(92, Math.max(6, elapsed * 0.7))}%` }}
             />
           </div>
-          <p className="text-xs text-zinc-500">{PREVIEW_TIPS[tipIndex]}</p>
+          <p className="text-xs text-zinc-500">{tips[tipIndex]}</p>
           {elapsed > 90 && (
             <p className="text-xs text-zinc-500">
               Large or multi-storey plans take a few minutes the first time —
               it hasn&apos;t stalled, and the result is cached afterwards. You
-              can leave this page; we&apos;ll keep building.
+              can leave this page; we&apos;ll keep {show3d ? "building" : "going"}.
             </p>
           )}
           <div>
@@ -354,7 +400,8 @@ export function SystemPreviewPanel({
               </p>
               <p className="mt-1 text-red-700">{error}</p>
               <p className="mt-2 text-red-700">
-                MMC Build needs a readable plan it can reconstruct in 3D. Please
+                MMC Build needs a readable plan it can reconstruct the geometry
+                from. Please
                 fix the issue in your design and re-upload it — common causes are
                 a scanned/image-only PDF with no vector geometry, a plan set with
                 no floor-plan sheet, or a CAD export with the geometry in model
@@ -383,8 +430,11 @@ export function SystemPreviewPanel({
 
       {phase === "ready" && layout && (
         <div className="border-t p-4">
+          {/* With only one view left (3D off) the tab strip is a control with
+              nowhere to go — render the view directly instead. */}
+          {views.length > 1 && (
           <div role="tablist" aria-label="Preview view" className="flex flex-wrap gap-2">
-            {PREVIEW_VIEWS.map(({ key, label, Icon }) => {
+            {views.map(({ key, label, Icon }) => {
               const selected = key === view;
               return (
                 <button
@@ -405,11 +455,15 @@ export function SystemPreviewPanel({
               );
             })}
           </div>
-          <div className="mt-4">
-            {view === "build-sequence" ? (
-              <BuildSequence layout={layout} />
-            ) : view === "system-explorer" ? (
+          )}
+          <div className={views.length > 1 ? "mt-4" : ""}>
+            {/* Defensive: with 3D off the only reachable view is the system
+                explorer, but pin it here too so a stale `view` can never mount
+                a hidden 3D component. */}
+            {!show3d || view === "system-explorer" ? (
               <SystemExplorerView layout={layout} />
+            ) : view === "build-sequence" ? (
+              <BuildSequence layout={layout} />
             ) : (
               <PlanComparison3D layout={layout} suggestions={[]} />
             )}
