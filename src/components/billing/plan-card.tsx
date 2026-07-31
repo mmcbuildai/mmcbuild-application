@@ -2,6 +2,7 @@
 
 import { Check, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TAX_QUALIFIER } from "@/lib/stripe/plans";
 
 interface PlanCardProps {
   name: string;
@@ -49,7 +50,8 @@ export function PlanCard({
         {price !== null ? (
           <div className="mt-2">
             <span className="text-3xl font-bold text-slate-900">${price}</span>
-            <span className="text-sm text-slate-500">/month</span>
+            {/* Prices are quoted GST-exclusive — see TAX_QUALIFIER in plans.ts. */}
+            <span className="text-sm text-slate-500">/month {TAX_QUALIFIER}</span>
           </div>
         ) : (
           <div className="mt-2">

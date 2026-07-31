@@ -225,6 +225,25 @@ export const PLAN_TO_ORG_TIER: Record<string, OrgTier> = {
   enterprise: "enterprise",
 };
 
+/**
+ * GST qualifier for displayed prices.
+ *
+ * Every price in this product is quoted GST-EXCLUSIVE — confirmed by Karthik
+ * 2026-07-31: Stripe is configured tax-exclusive, so the $49 tier collects
+ * $53.90. An unqualified figure is read by a business buyer as the amount that
+ * will leave their account, which it is not, so every displayed price carries
+ * this suffix. Single-sourced so a new price surface can't quietly omit it.
+ *
+ * MMC Build sells in AUD to Australian buyers only. If that ever changes, the
+ * label has to follow the BUYER's jurisdiction — VAT in the UK/EU, sales tax in
+ * the US, GST/HST in Canada — and this becomes a lookup, not a constant.
+ */
+export const TAX_QUALIFIER = "+ GST";
+
+/** Page-level disclosure to sit alongside a set of prices. */
+export const TAX_DISCLOSURE =
+  "All prices are in AUD and exclude GST. GST is calculated and added at checkout.";
+
 export const TRIAL_RUN_LIMIT = 3;
 export const TRIAL_DAYS = 14;
 
