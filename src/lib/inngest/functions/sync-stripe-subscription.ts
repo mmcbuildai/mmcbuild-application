@@ -1,5 +1,6 @@
 import { inngest } from "../client";
 import { db } from "@/lib/supabase/db";
+import { PLAN_TO_ORG_TIER, type OrgTier } from "@/lib/stripe/plans";
 
 export const syncStripeSubscription = inngest.createFunction(
   { id: "sync-stripe-subscription", name: "Sync Stripe Subscription" },
@@ -64,18 +65,13 @@ export const syncStripeSubscription = inngest.createFunction(
 
       // Update org subscription tier. planId arrives as a current tier id
       // (essential/professional/enterprise); "basic" is a legacy alias.
-      const tierMap: Record<string, string> = {
-        basic: "essential",
-        essential: "essential",
-        professional: "professional",
-        enterprise: "enterprise",
-      };
-
-      const tier = status === "canceled"
+      // PLAN_TO_ORG_TIER is shared with the DB CHECK constraint — see the
+      // ORG_TIER_VALUES doc comment in plans.ts.
+      const tier: OrgTier = status === "canceled"
         ? "trial"
-        : tierMap[planId] || "essential";
+        : PLAN_TO_ORG_TIER[planId] ?? "essential";
 
-      await admin
+      const { error: orgError } = await admin
         .from("organisations")
         .update({
           subscription_tier: tier,
@@ -83,6 +79,15 @@ export const syncStripeSubscription = inngest.createFunction(
           updated_at: new Date().toISOString(),
         })
         .eq("id", resolvedOrgId);
+
+      // Never discard this. Until 2026-07-31 the result was dropped, so a
+      // CHECK-constraint rejection left the org on 'trial' after a successful
+      // payment with nothing logged and no retry.
+      if (orgError) {
+        throw new Error(
+          `Failed to set subscription_tier="${tier}" on org ${resolvedOrgId}: ${orgError.message}`,
+        );
+      }
     });
 
     return { synced: true, orgId, status, planId };
