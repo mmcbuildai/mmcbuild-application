@@ -2,6 +2,8 @@ import { Fragment } from "react";
 import type { Metadata } from "next";
 import { CheckCircle2, Users, Award, TrendingUp, Shield } from "lucide-react";
 import TradesSupplierForm from "@/components/marketing/trades-supplier-form";
+import { TAX_QUALIFIER, TAX_DISCLOSURE } from "@/lib/stripe/plans";
+import { isSupplierPricingEnabled } from "@/lib/pricing/supplier-pricing";
 
 export const metadata: Metadata = {
   title: "MMC Trades & Suppliers Directory — Join Australia's Leading MMC Network",
@@ -105,6 +107,9 @@ const stats = [
 ];
 
 export default function MMCSuppliersPage() {
+  // Supplier tiers are not sellable yet — see lib/pricing/supplier-pricing.ts.
+  const showPricing = isSupplierPricingEnabled();
+
   return (
     <div className="min-h-screen">
       <section className="relative bg-[#0f172a] text-white overflow-hidden py-16">
@@ -184,9 +189,16 @@ export default function MMCSuppliersPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-slate-900 mb-4">
-              MMC Trades &amp; Suppliers Directory Pricing
+              {showPricing
+                ? "MMC Trades & Suppliers Directory Pricing"
+                : "MMC Trades & Suppliers Directory Listings"}
             </h2>
-            <p className="text-lg text-slate-600">Choose the plan that best fits your business</p>
+            <p className="text-lg text-slate-600">
+              {showPricing
+                ? "Choose the plan that best fits your business"
+                : "Two levels of listing. Register your interest below and we'll be in touch with availability and pricing."}
+            </p>
+            {showPricing && <p className="mt-3 text-sm text-slate-600">{TAX_DISCLOSURE}</p>}
           </div>
 
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -204,13 +216,23 @@ export default function MMCSuppliersPage() {
                     Popular Choice
                   </div>
                 )}
+                {/* The price, the billing period and the free-months offer are
+                    all price CLAIMS, so they hide together — leaving a tier
+                    name and its feature list, which are true either way. */}
                 <div className="text-center mb-6">
                   <h3 className="text-2xl font-bold text-slate-900 mb-2">{plan.name}</h3>
-                  <div className="text-green-600 font-semibold mb-4">{plan.trial}</div>
-                  <div className="flex items-baseline justify-center">
-                    <span className="text-4xl font-bold text-slate-900">{plan.price}</span>
-                    <span className="text-slate-600 ml-1">{plan.period}</span>
-                  </div>
+                  {showPricing && (
+                    <>
+                      <div className="text-green-600 font-semibold mb-4">{plan.trial}</div>
+                      <div className="flex items-baseline justify-center">
+                        <span className="text-4xl font-bold text-slate-900">{plan.price}</span>
+                        {/* Prices are quoted GST-exclusive — see plans.ts. */}
+                        <span className="text-slate-600 ml-1">
+                          {plan.period} {TAX_QUALIFIER}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <ul className="space-y-3 mb-8">

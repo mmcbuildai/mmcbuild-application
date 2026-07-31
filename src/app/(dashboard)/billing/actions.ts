@@ -63,17 +63,49 @@ export async function createCheckoutSession(planId: PlanId) {
 
   const org = await getOrgWithStripeCustomer();
 
-  const session = await stripe.checkout.sessions.create({
-    customer: org.stripe_customer_id,
-    mode: "subscription",
-    line_items: [{ price: plan.stripePriceId, quantity: 1 }],
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?success=true`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?canceled=true`,
-    metadata: { org_id: org.id, plan_id: planId },
-    subscription_data: {
+  let session;
+  try {
+    session = await stripe.checkout.sessions.create({
+      customer: org.stripe_customer_id,
+      mode: "subscription",
+      line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?success=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?canceled=true`,
       metadata: { org_id: org.id, plan_id: planId },
-    },
-  });
+      subscription_data: {
+        metadata: { org_id: org.id, plan_id: planId },
+      },
+
+      // GST. Prices are quoted tax-EXCLUSIVE (see TAX_QUALIFIER in plans.ts),
+      // so the tax has to be added by the session — configuring the Stripe
+      // product as exclusive does nothing on its own. Without this the $49 tier
+      // charges a flat $49 with no GST line, while every price surface in the
+      // app says "+ GST".
+      automatic_tax: { enabled: true },
+      // Stripe Tax needs an address to determine the rate, and refuses the
+      // session if the customer has none. `address: "auto"` writes what the
+      // buyer enters at checkout back onto the customer record, so the second
+      // purchase doesn't ask again.
+      billing_address_collection: "required",
+      customer_update: { address: "auto", name: "auto" },
+      // AU business buyers expect to enter an ABN, and it appears on the
+      // tax invoice they'll claim the GST back against.
+      tax_id_collection: { enabled: true },
+    });
+  } catch (e) {
+    // Do not surface a bare Stripe error as a dead button. The likely cause is
+    // an account-side prerequisite, not a code fault: automatic_tax requires
+    // Stripe Tax to be enabled with an AU GST registration. Name it, so the
+    // failure is answerable instead of "something went wrong".
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("[billing] checkout session create failed", { planId, detail });
+    return {
+      error:
+        `Could not start checkout: ${detail}. ` +
+        `If this mentions tax, Stripe Tax needs to be enabled with an Australian ` +
+        `GST registration in the Stripe dashboard (Settings → Tax).`,
+    };
+  }
 
   return { clientSecret: session.client_secret, sessionId: session.id };
 }

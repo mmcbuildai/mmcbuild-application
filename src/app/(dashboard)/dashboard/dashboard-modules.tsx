@@ -15,7 +15,13 @@ import {
   GraduationCap,
   Lock,
 } from "lucide-react";
-import { MODULES, ALL_MODULE_IDS, type ModuleId } from "@/lib/stripe/plans";
+import {
+  MODULES,
+  PLANS,
+  ALL_MODULE_IDS,
+  TAX_QUALIFIER,
+  type ModuleId,
+} from "@/lib/stripe/plans";
 import type { SubscriptionStatus } from "@/lib/stripe/subscription";
 
 const WORKFLOW_STEPS = [
@@ -154,7 +160,9 @@ export function DashboardModules({
                 <h3 className="font-semibold text-red-900">Trial Expired</h3>
                 <p className="text-sm text-red-700 mt-1">
                   Subscribe to a plan to continue using MMC Build — Essential
-                  ($49/mo) or Professional ($199/mo), every module included.
+                  (${PLANS.essential.price}/mo {TAX_QUALIFIER}) or Professional
+                  (${PLANS.professional.price}/mo {TAX_QUALIFIER}), every module
+                  included.
                 </p>
               </div>
             </div>
@@ -281,7 +289,9 @@ export function DashboardModules({
         <div className="rounded-xl border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h3 className="font-semibold">Upgrade to Professional — $199/mo</h3>
+              <h3 className="font-semibold">
+                Upgrade to Professional — ${PLANS.professional.price}/mo {TAX_QUALIFIER}
+              </h3>
               <p className="text-sm text-muted-foreground mt-1">
                 30 combined runs/month (up from 10), 10 plan uploads, multi-user
                 collaboration, API access, and priority support.

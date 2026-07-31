@@ -4,6 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
+import { TAX_QUALIFIER, TAX_DISCLOSURE } from "@/lib/stripe/plans";
+import { isSupplierPricingEnabled } from "@/lib/pricing/supplier-pricing";
 
 type Plan = {
   name: string;
@@ -204,9 +206,12 @@ export function PricingClient() {
     return `$${price}`;
   };
 
+  // Prices are quoted GST-exclusive, so the period carries the qualifier —
+  // see TAX_QUALIFIER in lib/stripe/plans.ts. "Free" and "Custom" get none:
+  // there is no amount for GST to apply to, and Enterprise is quoted per deal.
   const getPeriod = (plan: Plan): string => {
     if (plan.monthlyPrice === 0 || plan.monthlyPrice === null) return "";
-    return "/month";
+    return `/month ${TAX_QUALIFIER}`;
   };
 
   return (
@@ -248,8 +253,12 @@ export function PricingClient() {
       <section className="py-12 bg-slate-50">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-6">
+            <p className="text-sm text-slate-600 mb-3">{TAX_DISCLOSURE}</p>
             <p className="text-slate-600 text-lg">
-              For Trades &amp; Suppliers pricing, please click{" "}
+              {/* Don't promise "pricing" on a page whose prices are hidden. */}
+              {isSupplierPricingEnabled()
+                ? "For Trades & Suppliers pricing, please click "
+                : "For Trades & Suppliers directory listings, please click "}
               <Link
                 href="/mmc-suppliers#pricing"
                 className="text-blue-600 hover:text-blue-700 font-semibold underline"
@@ -302,7 +311,8 @@ export function PricingClient() {
                         plan.popular ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
-                      Billed annually at ${Math.round(plan.monthlyPrice * 0.8 * 12)}
+                      Billed annually at ${Math.round(plan.monthlyPrice * 0.8 * 12)}{" "}
+                      {TAX_QUALIFIER}
                     </p>
                   )}
                   <p
