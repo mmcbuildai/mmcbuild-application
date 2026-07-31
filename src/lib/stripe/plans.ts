@@ -193,6 +193,38 @@ export function normalizePlanId(planId: string): string {
   return LEGACY_PLAN_ALIASES[planId] ?? planId;
 }
 
+/**
+ * The tier vocabulary `organisations.subscription_tier` accepts.
+ *
+ * This list is constrained in TWO places — here, and by a CHECK constraint in
+ * the database (migration `20260731090000_subscription_tier_essential.sql`).
+ * A value present in one and not the other fails the write, and because such a
+ * write is easy to leave unchecked it fails silently. That is exactly what
+ * happened after the 2026-07-04 tier rename: code wrote 'essential' while the
+ * CHECK still only allowed 'basic'. `tests/unit/billing/tier-vocabulary.test.ts`
+ * pins the two together so the pair can't drift again.
+ *
+ * 'basic' is legacy — never written by current code, but still valid for rows
+ * created before the rename (see LEGACY_PLAN_ALIASES).
+ */
+export const ORG_TIER_VALUES = [
+  "trial",
+  "basic",
+  "essential",
+  "professional",
+  "enterprise",
+] as const;
+
+export type OrgTier = (typeof ORG_TIER_VALUES)[number];
+
+/** Map a subscription `plan_id` to the org tier it grants. */
+export const PLAN_TO_ORG_TIER: Record<string, OrgTier> = {
+  basic: "essential",
+  essential: "essential",
+  professional: "professional",
+  enterprise: "enterprise",
+};
+
 export const TRIAL_RUN_LIMIT = 3;
 export const TRIAL_DAYS = 14;
 
