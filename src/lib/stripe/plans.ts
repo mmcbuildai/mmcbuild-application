@@ -107,6 +107,17 @@ export const ALL_MODULE_IDS: ModuleId[] = ["comply", "build", "quote", "direct",
 //
 // `uploadLimit` is defined here but NOT yet enforced (no per-period upload
 // counter exists today) — enforcement is a tracked follow-up.
+//
+// ENV VAR NAMES (SCRUM-332). Karthik configured Vercel with MONTHLY/ANNUAL
+// names rather than the EARLY/INTRO ones this file originally read, so the
+// launch price is read from his name first and falls back to the original.
+// Both are accepted deliberately: whichever is already set in an environment
+// keeps working, and neither of us has to redo the other's configuration.
+//
+// ⚠️ The VALUE must be a Stripe **price** id (`price_…`), not a **product** id
+// (`prod_…`). They look interchangeable in the dashboard and are not: checkout
+// takes a price. A product id here fails the session with "No such price:
+// 'prod_…'", which the billing action surfaces verbatim (see billing/actions.ts).
 export const PLANS = {
   essential: {
     id: "essential",
@@ -127,7 +138,10 @@ export const PLANS = {
       "10 combined runs/month · 5 plan uploads/month",
       "Single user · standard email support",
     ],
-    stripePriceId: process.env.STRIPE_ESSENTIAL_EARLY_PRICE_ID || "",
+    stripePriceId:
+      process.env.STRIPE_ESSENTIAL_MONTHLY_PRICE_ID ||
+      process.env.STRIPE_ESSENTIAL_EARLY_PRICE_ID ||
+      "",
     standardPriceId: process.env.STRIPE_ESSENTIAL_STD_PRICE_ID || "",
   },
   professional: {
@@ -149,7 +163,10 @@ export const PLANS = {
       "API access · integrations roadmap (BIM/SketchUp)",
       "Priority email support",
     ],
-    stripePriceId: process.env.STRIPE_PROFESSIONAL_INTRO_PRICE_ID || "",
+    stripePriceId:
+      process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID ||
+      process.env.STRIPE_PROFESSIONAL_INTRO_PRICE_ID ||
+      "",
     standardPriceId: process.env.STRIPE_PROFESSIONAL_STD_PRICE_ID || "",
     popular: true,
   },
