@@ -17,6 +17,11 @@ export function BillingContent() {
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
+  // The action returns a typed error for every failure it can name (plan not
+  // configured, Stripe Tax not enabled, a rejected price id). Those were being
+  // discarded, so a failed checkout looked identical to a button that did
+  // nothing — no message, no console entry, nothing to report. Surface it.
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     getBillingStatus().then((s) => {
@@ -40,13 +45,22 @@ export function BillingContent() {
   }
 
   const handleSelectPlan = (planId: string) => {
+    setCheckoutError(null);
     startTransition(async () => {
       const result = await createCheckoutSession(planId as PlanId);
-      if (result.clientSecret && result.sessionId) {
-        // Redirect to Stripe Checkout (embedded would need @stripe/react-stripe-js)
-        // For now, use hosted checkout via session URL
-        window.location.href = `https://checkout.stripe.com/c/pay/${result.sessionId}`;
+      if (result.url) {
+        // Stripe's own hosted-checkout URL. It carries a required fragment and
+        // cannot be rebuilt from the session id — the previous code guessed the
+        // URL and, worse, gated on `clientSecret`, which is always null for a
+        // hosted session. Net effect: a Stripe session was created on every
+        // click and the browser never went anywhere.
+        window.location.href = result.url;
+        return;
       }
+      setCheckoutError(
+        result.error ??
+          "Checkout could not be started. Please try again, or contact support if it keeps happening.",
+      );
     });
   };
 
@@ -129,6 +143,14 @@ export function BillingContent() {
             ? "Choose a Plan"
             : "Available Plans"}
         </h2>
+        {checkoutError && (
+          <div
+            role="alert"
+            className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          >
+            {checkoutError}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {Object.entries(PLANS).map(([id, plan]) => (
             <PlanCard
