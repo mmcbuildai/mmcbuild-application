@@ -107,7 +107,16 @@ export async function createCheckoutSession(planId: PlanId) {
     };
   }
 
-  return { clientSecret: session.client_secret, sessionId: session.id };
+  // Return the HOSTED checkout URL. `client_secret` is null on a hosted session
+  // (it is only populated for `ui_mode: 'embedded'`), and the caller previously
+  // gated its redirect on that null value — so the button created a real Stripe
+  // session on every click and then did nothing, silently. Proven against
+  // production 2026-08-01: four sessions in the Stripe account, all
+  // `ui_mode=hosted_page`, all `client_secret=null`, none ever opened.
+  //
+  // The URL must be Stripe's own `session.url` — it carries a required fragment
+  // and cannot be reconstructed from the session id.
+  return { url: session.url, sessionId: session.id };
 }
 
 export async function createPortalSession() {
