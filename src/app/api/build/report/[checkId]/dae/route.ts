@@ -2,12 +2,26 @@ import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { buildDaeFromLayout, type DaeSuggestion } from "@/lib/build/dae-exporter";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 import { NextResponse } from "next/server";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ checkId: string }> },
 ) {
+  // The geometry exports are hidden with the 3D render at Go Live 1 (Karen,
+  // 2026-08-01 — see @/lib/build/render-3d). Gated here as well as on the
+  // button, because this URL survives in browser history and download managers.
+  if (!is3dRenderingEnabled()) {
+    return NextResponse.json(
+      {
+        error:
+          "3D model export is temporarily unavailable while 3D rendering is switched off.",
+      },
+      { status: 404 },
+    );
+  }
+
   const { checkId } = await params;
 
   const supabase = await createClient();
