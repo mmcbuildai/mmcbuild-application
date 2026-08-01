@@ -6,6 +6,7 @@ import { DxfDownloadButton } from "./dxf-download-button";
 import { IfcDownloadButton } from "./ifc-download-button";
 import { ReportLegend } from "./report-legend";
 import { DecisionSummary } from "./decision-summary";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 import type { SuggestionDecision } from "@/app/(dashboard)/build/actions";
 import type { SuggestionComplianceFlag } from "@/lib/build/suggestion-compliance";
 import type { FeaturedProduct } from "@/lib/direct/featured-suppliers";
@@ -56,25 +57,33 @@ export function DesignReport({
   onDecisionChange,
 }: DesignReportProps) {
   const categories = [...new Set(suggestions.map((s) => s.technology_category))];
+  // The three geometry exports are built from the same spatial_layout as the
+  // hidden 3D, so they go with it (Karen, 2026-08-01 — see @/lib/build/render-3d).
+  // The PDF report below stays: it is the analysis, not the geometry.
+  const showGeometryExports = is3dRenderingEnabled();
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap justify-end gap-3">
-        <DxfDownloadButton
-          checkId={check.id}
-          fallbackFilename={`mmc-build-modified-${check.id.slice(0, 8)}.dxf`}
-          available={Boolean(check.spatial_layout)}
-        />
-        <DaeDownloadButton
-          checkId={check.id}
-          fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.dae`}
-          available={Boolean(check.spatial_layout)}
-        />
-        <IfcDownloadButton
-          checkId={check.id}
-          fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.ifc`}
-          available={Boolean(check.spatial_layout)}
-        />
+        {showGeometryExports && (
+          <>
+            <DxfDownloadButton
+              checkId={check.id}
+              fallbackFilename={`mmc-build-modified-${check.id.slice(0, 8)}.dxf`}
+              available={Boolean(check.spatial_layout)}
+            />
+            <DaeDownloadButton
+              checkId={check.id}
+              fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.dae`}
+              available={Boolean(check.spatial_layout)}
+            />
+            <IfcDownloadButton
+              checkId={check.id}
+              fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.ifc`}
+              available={Boolean(check.spatial_layout)}
+            />
+          </>
+        )}
         <ReportExportButton
           url={`/api/build/report/${check.id}`}
           fallbackFilename={`mmc-build-report-${check.id.slice(0, 8)}.pdf`}

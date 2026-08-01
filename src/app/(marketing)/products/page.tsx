@@ -10,6 +10,7 @@ import {
   Bot,
   CheckCircle2,
 } from "lucide-react";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 
 export const metadata: Metadata = {
   title: "Our Solutions — MMC Build Platform",
@@ -55,7 +56,12 @@ const products: Product[] = [
       "Identify MMC alternatives (prefab, panelised, modular systems)",
       "Compare traditional vs MMC build approaches",
       'Generate "what-if" constructability scenarios',
-      "Visualise recommended solutions in 3D (Revit-ready)",
+      // Claimed only while the feature is actually visible. With 3D switched
+      // off for Go Live 1 this line would sell a screen the visitor cannot
+      // reach — the same reason the in-app copy was reworded (SCRUM-361).
+      ...(is3dRenderingEnabled()
+        ? ["Visualise recommended solutions in 3D (Revit-ready)"]
+        : []),
     ],
     href: "/mmc-build",
     color: "text-brand-600",

@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase/db";
 import { getSubscriptionStatus } from "@/lib/stripe/subscription";
 import { buildDxfFromLayout, type DxfSuggestion } from "@/lib/build/dxf-exporter";
 import type { SpatialLayout } from "@/lib/build/spatial/types";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 import { NextResponse } from "next/server";
 
 /**
@@ -14,6 +15,20 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ checkId: string }> },
 ) {
+  // The modified-plan export is drawn from the same extracted geometry as the
+  // 3D render, so it is hidden with it at Go Live 1 (Karen, 2026-08-01 — see
+  // @/lib/build/render-3d). Gated here as well as on the button, because this
+  // URL survives in browser history and download managers.
+  if (!is3dRenderingEnabled()) {
+    return NextResponse.json(
+      {
+        error:
+          "Modified-plan export is temporarily unavailable while 3D rendering is switched off.",
+      },
+      { status: 404 },
+    );
+  }
+
   const { checkId } = await params;
 
   const supabase = await createClient();
