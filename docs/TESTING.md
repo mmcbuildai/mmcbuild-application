@@ -26,7 +26,7 @@ repeated as `beta`.
 |---|---|---|---|---|
 | **admin** | `mcmdennis+qa@gmail.com` | `owner` of its own org | org-admin surfaces, all modules | `QA_TEST_ADMIN_EMAIL` / `QA_TEST_ADMIN_PASSWORD` |
 | **beta** | `beta.demo@mmcbuild.com.au` | `beta` | what a real beta tester sees | `QA_TEST_BETA_EMAIL` / `QA_TEST_BETA_PASSWORD` |
-| **user** | *not yet provisioned* — see below | plain member | a non-owner invited into an existing org | `QA_TEST_USER_EMAIL` / `QA_TEST_USER_PASSWORD` |
+| **user** | `dennis+qauser@factory2key.com.au` | `builder` | a non-owner inside someone else's org | `QA_TEST_USER_EMAIL` / `QA_TEST_USER_PASSWORD` |
 
 Passwords live in Dennis's password manager (entries "MMC Build — QA admin" / "— QA beta" /
 "— QA user"). **Never committed, never pasted into a report or a committed file.**
@@ -43,13 +43,31 @@ is on that allowlist, which is deliberate: it keeps operator surfaces out of aut
 test an operator page, do it by hand as `dennis@corporateaisolutions.com` or
 `mcmdennis@gmail.com`.
 
-### Known gap: the `user` identity does not exist yet
+### The `user` identity (provisioned 2026-08-01, SCRUM-358)
 
-There is currently no non-owner, non-beta QA account. Provision one before the next full QA pass:
-invite a fresh address into the QA admin's org as `member` via Settings → Organisation, accept the
-invite, then record the credentials in the password manager and set `QA_TEST_USER_*`. Until then,
-report the `user` column of any test matrix as **not covered** rather than assuming the admin
-result generalises — that assumption is the exact mistake that produced the beta upload bug.
+`dennis+qauser@factory2key.com.au` is a **`builder`** inside the QA admin's organisation
+(`QA Test Org`) — a non-owner who did not create the org and cannot administer it. That is the
+identity a test matrix's `user` column means.
+
+**There is no `member` role.** Earlier revisions of this doc asked for one, which is a large part of
+why the account went un-provisioned for months: the request could not be satisfied. The `user_role`
+enum is `owner · admin · beta · project_manager · architect · builder · trade · viewer`
+(`src/lib/auth/roles.ts`). **`builder` is the right choice** — it is what a real self-service signup
+receives by default, so it reproduces an ordinary customer. `viewer` sits at the bottom of the
+hierarchy and is too restricted to walk normal flows.
+
+It was created through the **real invitation path**, not by writing rows: a pending
+`org_invitations` record (role `builder`, seat `internal`), then a confirmed auth user, then one
+authenticated request to `/dashboard` — because `provisionUser` runs in the dashboard layout
+(`src/app/(dashboard)/layout.tsx`), consumes the pending invite, and assigns the invited role.
+Verified afterwards: profile and membership both `builder` in the QA org, invitation `accepted`, and
+**no personal organisation created** for the user. Reproduce it the same way if it is ever lost.
+
+Password is in the password manager under "MMC Build — QA user".
+
+**Still report honestly:** if a run does not exercise this identity, mark the `user` column **not
+covered** rather than assuming the admin result generalises. That assumption is the exact mistake
+that produced the beta upload bug.
 
 ---
 
