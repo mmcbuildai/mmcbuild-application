@@ -36,6 +36,7 @@ import {
   planTooLargeMessage,
   isUnsplittableOversizePdf,
 } from "@/lib/plans/file-kind";
+import { singlePagePdfBase64 } from "@/lib/plans/pdf-page-split";
 import { detectAiProviderUnavailable } from "@/lib/ai/provider-errors";
 import type { SpatialLayout, RoofForm, Wall, Room, Point2D } from "./types";
 
@@ -259,39 +260,9 @@ async function classifyPagesRange(
   return out;
 }
 
-/**
- * Extract a single page from a multi-page PDF and return it as its own
- * base64-encoded PDF document. Used so per-page extractors only carry
- * the page they need (typically 200-500 KB vs 9-12 MB for the full set).
- *
- * Reuses a parsed source document across all calls in a run.
- */
-async function singlePagePdfBase64(
-  sourceDoc: PDFDocument,
-  pageNumber: number,
-): Promise<string | null> {
-  const totalPages = sourceDoc.getPageCount();
-  if (pageNumber < 1 || pageNumber > totalPages) return null;
-
-  // pdf-lib can throw on malformed page objects (CAD-exported PDFs sometimes
-  // ship pages with non-standard resource refs). Surfaces in production as
-  // the minified "Expected instance of b, but got instance of undefined"
-  // assertion. Treat as a soft failure so the orchestrator can skip the page
-  // and continue with whatever else is extractable.
-  try {
-    const out = await PDFDocument.create();
-    const [copied] = await out.copyPages(sourceDoc, [pageNumber - 1]);
-    out.addPage(copied);
-    const bytes = await out.save();
-    return Buffer.from(bytes).toString("base64");
-  } catch (err) {
-    console.error(
-      `[singlePagePdfBase64] failed to extract page ${pageNumber}:`,
-      err,
-    );
-    return null;
-  }
-}
+// `singlePagePdfBase64` now lives in `@/lib/plans/pdf-page-split` so the
+// attribute-extraction path (SCRUM-316) consumes the same splitter instead of
+// forking it. Imported above; behaviour is unchanged.
 
 export type DecomposerDiagnostic = {
   status:

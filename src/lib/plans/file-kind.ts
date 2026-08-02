@@ -60,7 +60,32 @@ export function isUnsplittableOversizePdf(
   return decodedBytes > ANTHROPIC_PDF_MAX_BYTES && pageCount <= 1;
 }
 
-/** Friendly, actionable message for an over-limit plan file. */
+/**
+ * Message for a file over the UPLOAD limit (SCRUM-316). Distinct from
+ * `planTooLargeMessage`, which is about the model's per-document ceiling: since
+ * the pipeline splits per page, a large multi-page set is processable and the
+ * only reason to refuse it at the door is the upload size itself. Telling that
+ * user to "compress to under 32 MB" would be wrong advice.
+ */
+export function planUploadTooLargeMessage(
+  bytes: number,
+  limitBytes: number,
+): string {
+  const mb = (bytes / 1024 / 1024).toFixed(1);
+  const limitMb = Math.round(limitBytes / 1024 / 1024);
+  return (
+    `This plan is ${mb} MB, over the ${limitMb} MB upload limit. Architect sets ` +
+    `are usually this large because of embedded high-resolution renders or ` +
+    `photos. Please compress / flatten the PDF, or upload just the sheets you ` +
+    `need, and try again.`
+  );
+}
+
+/**
+ * Message for a plan the MODEL cannot read — over the per-document ceiling with
+ * no way to split it smaller (a single oversized page). A large multi-page set
+ * does NOT get this message; it is split per page instead.
+ */
 export function planTooLargeMessage(bytes: number): string {
   const mb = (bytes / 1024 / 1024).toFixed(1);
   return (
