@@ -9,6 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { saveQuestionnaire, activateProject } from "@/app/(dashboard)/projects/actions";
 import { stepForQuestionnaireField } from "@/lib/comply/finding-questionnaire-map";
+import {
+  windClassOptionsForRegion,
+  windClassHelperText,
+} from "@/lib/comply/wind-class";
 import { toast } from "sonner";
 
 interface SiteIntelPrefill {
@@ -59,7 +63,8 @@ const BAL_RATINGS = ["N/A", "BAL-LOW", "BAL-12.5", "BAL-19", "BAL-29", "BAL-40",
 
 const SOIL_CLASSIFICATIONS = ["A", "S", "M", "M-D", "H1", "H2", "E", "P"];
 const FOOTING_TYPES = ["Strip footing", "Pad footing", "Raft slab", "Waffle slab", "Stiffened raft", "Stumps/Piers", "Screw piles"];
-const WIND_CLASSIFICATIONS = ["N1", "N2", "N3", "N4", "N5", "N6", "C1", "C2", "C3", "C4"];
+// AS 4055 classes now come from `@/lib/comply/wind-class`, which narrows them to
+// the family the site's wind region allows (SCRUM-317).
 const TERRAIN_CATEGORIES = ["TC1", "TC2", "TC2.5", "TC3"];
 
 const ROOF_MATERIALS = ["Concrete tile", "Terracotta tile", "Metal (Colorbond)", "Metal (Zincalume)", "Slate", "Asphalt shingle"];
@@ -430,7 +435,7 @@ export function QuestionnaireForm({
   const defaults = (existingResponses ?? {}) as Record<string, string>;
 
   // Design-extracted prefill applies ONLY to a fresh, never-saved questionnaire
-  // (same guard as autoClimate/autoBal/autoWind). On any saved questionnaire the
+  // (same guard as autoClimate/autoBal). On any saved questionnaire the
   // user's own answers win and no field is badged "extracted".
   const prefill = (!existingResponses ? designPrefill : null) ?? {};
   const extractedKeys = new Set(Object.keys(prefill));
@@ -441,8 +446,12 @@ export function QuestionnaireForm({
       : null;
   const autoBal =
     !existingResponses && siteIntel?.bal_rating ? siteIntel.bal_rating : null;
-  const autoWind =
-    !existingResponses && siteIntel?.wind_region ? siteIntel.wind_region : null;
+  // The wind REGION is a property of the site, not of the prefill, so unlike
+  // autoClimate/autoBal it is NOT gated on "fresh questionnaire": it drives
+  // which AS 4055 class family is selectable (SCRUM-317), and a cyclonic site
+  // must not be assignable an N class whether the form is fresh or being
+  // revised. It is a constraint on the choice, never a prefilled answer.
+  const siteWindRegion = siteIntel?.wind_region ?? null;
 
   const [responses, setResponses] = useState<Record<string, string>>({
     // design_stage / project_goals / submission_timeline are user-intent fields,
@@ -815,18 +824,17 @@ export function QuestionnaireForm({
               <SelectField
                 label="Wind Classification (AS 4055)"
                 value={responses.wind_classification}
-                options={WIND_CLASSIFICATIONS}
+                options={windClassOptionsForRegion(
+                  siteWindRegion,
+                  responses.wind_classification,
+                )}
                 onChange={(v) => update("wind_classification", v)}
                 source={
                   extractedKeys.has("wind_classification")
                     ? "extracted"
                     : "manual"
                 }
-                helper={
-                  autoWind
-                    ? `Site wind class (AS 4055) — assess from terrain, shielding and topography. It is NOT the same as the wind region. Your address's wind region (AS 1170.2) is ${autoWind} (regions A/B → N classes, C/D → cyclonic C classes).`
-                    : "Site wind class (AS 4055) — assess from terrain, shielding and topography for the site."
-                }
+                helper={windClassHelperText(siteWindRegion)}
               />
               <SelectField
                 label="Terrain Category"
