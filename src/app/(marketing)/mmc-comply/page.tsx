@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import WaitlistForm from "@/components/marketing/waitlist-form";
 import {
+  ctaHref,
+  ctaLabel,
+  showWaitlistSections,
+} from "@/lib/marketing/purchase-cta";
+import {
   ArrowRight,
   CheckCircle2,
   FileCheck,
@@ -76,8 +81,8 @@ export default function MMCComplyPage() {
                   size="lg"
                   className="bg-white text-blue-900 hover:bg-slate-100 rounded-full px-8"
                 >
-                  <a href="#waitlist">
-                    Join Waitlist <ArrowRight className="ml-2 h-5 w-5" />
+                  <a href={ctaHref("#waitlist")}>
+                    {ctaLabel()} <ArrowRight className="ml-2 h-5 w-5" />
                   </a>
                 </Button>
               </div>
@@ -164,35 +169,40 @@ export default function MMCComplyPage() {
         </div>
       </section>
 
+      {/* SCRUM-372: the waitlist section and its "early access" copy
+          are wrong the moment the product is buyable, so they go with the
+          buttons rather than being left behind. */}
+      {showWaitlistSections() && (
       <section id="waitlist" className="py-24 bg-slate-900">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div className="text-white">
-              <h2 className="text-3xl font-bold mb-6">Get Early Access to MMC Comply</h2>
-              <p className="text-lg text-slate-300 mb-8">
-                Be among the first to experience AI-powered compliance assessment. Join our
-                waitlist for exclusive early access.
-              </p>
-              <ul className="space-y-4">
-                {[
-                  "Priority access when we launch",
-                  "Exclusive beta features",
-                  "Direct feedback channel",
-                  "Special founding member pricing",
-                ].map((item) => (
-                  <li key={item} className="flex items-center text-slate-200">
-                    <CheckCircle2 className="h-5 w-5 text-blue-400 mr-3" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <WaitlistForm defaultInterest="comply" />
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+              <div className="text-white">
+                <h2 className="text-3xl font-bold mb-6">Get Early Access to MMC Comply</h2>
+                <p className="text-lg text-slate-300 mb-8">
+                  Be among the first to experience AI-powered compliance assessment. Join our
+                  waitlist for exclusive early access.
+                </p>
+                <ul className="space-y-4">
+                  {[
+                    "Priority access when we launch",
+                    "Exclusive beta features",
+                    "Direct feedback channel",
+                    "Special founding member pricing",
+                  ].map((item) => (
+                    <li key={item} className="flex items-center text-slate-200">
+                      <CheckCircle2 className="h-5 w-5 text-blue-400 mr-3" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <WaitlistForm defaultInterest="comply" />
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }

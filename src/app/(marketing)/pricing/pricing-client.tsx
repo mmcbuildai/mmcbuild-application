@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
 import { TAX_QUALIFIER, TAX_DISCLOSURE } from "@/lib/stripe/plans";
 import { isSupplierPricingEnabled } from "@/lib/pricing/supplier-pricing";
+import {
+  ctaHrefForPlan,
+  ctaLabelForPlan,
+  ctaSubtext,
+} from "@/lib/marketing/purchase-cta";
 
 type Plan = {
   name: string;
@@ -364,10 +369,22 @@ export function PricingClient() {
                       : "bg-slate-900 hover:bg-slate-800 text-white"
                   }`}
                 >
-                  <Link href="/contact">
-                    {plan.cta} <ArrowRight className="ml-2 h-4 w-4" />
+                  {/* SCRUM-372: label and destination switch together with
+                      NEXT_PUBLIC_PURCHASE_CTA_ENABLED. A custom-priced plan has
+                      no self-serve path, so it routes to contact rather than
+                      dropping an enterprise buyer into a $49 trial. */}
+                  <Link
+                    href={ctaHrefForPlan(plan.monthlyPrice === null, "/contact")}
+                  >
+                    {ctaLabelForPlan(plan.monthlyPrice === null)}{" "}
+                    <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
+                {plan.monthlyPrice !== null && ctaSubtext() && (
+                  <p className="mt-2 text-center text-xs text-slate-500">
+                    {ctaSubtext()}
+                  </p>
+                )}
               </div>
             ))}
           </div>

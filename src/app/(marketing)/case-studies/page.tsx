@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ctaHref, ctaLabel } from "@/lib/marketing/purchase-cta";
 import {
   Building2,
   Clock,
@@ -204,10 +205,10 @@ export default function CaseStudiesPage() {
             Join the construction revolution. Get early access to MMC Build&apos;s AI-powered platform.
           </p>
           <Link
-            href="/contact"
+            href={ctaHref("/contact")}
             className="inline-flex items-center rounded-full bg-blue-600 hover:bg-blue-500 text-white px-10 h-12 text-base font-medium transition-colors"
           >
-            Join Waitlist <ArrowRight className="ml-2 h-5 w-5" />
+            {ctaLabel()} <ArrowRight className="ml-2 h-5 w-5" />
           </Link>
         </div>
       </section>

@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import WaitlistForm from "@/components/marketing/waitlist-form";
 import {
+  ctaHref,
+  ctaLabel,
+  showWaitlistSections,
+} from "@/lib/marketing/purchase-cta";
+import {
   ArrowRight,
   CheckCircle2,
   Bot,
@@ -83,8 +88,8 @@ export default function MMCQuotePage() {
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button asChild size="lg" className="bg-white text-purple-900 hover:bg-slate-100 rounded-full px-8">
-                  <a href="#waitlist">
-                    Join Waitlist <ArrowRight className="ml-2 h-5 w-5" />
+                  <a href={ctaHref("#waitlist")}>
+                    {ctaLabel()} <ArrowRight className="ml-2 h-5 w-5" />
                   </a>
                 </Button>
               </div>
@@ -193,35 +198,40 @@ export default function MMCQuotePage() {
         </div>
       </section>
 
+      {/* SCRUM-372: the waitlist section and its "early access" copy
+          are wrong the moment the product is buyable, so they go with the
+          buttons rather than being left behind. */}
+      {showWaitlistSections() && (
       <section id="waitlist" className="py-24 bg-slate-900">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div className="text-white">
-              <h2 className="text-3xl font-bold mb-6">Get Early Access to MMC Quote</h2>
-              <p className="text-lg text-slate-300 mb-8">
-                Transform MMC recommendations into actionable cost insights. Join the waitlist
-                today.
-              </p>
-              <ul className="space-y-4">
-                {[
-                  "Instant cost estimates from MMC recommendations",
-                  "Compare multiple MMC system alternatives",
-                  "Export professional cost reports",
-                  "Early adopter pricing",
-                ].map((item) => (
-                  <li key={item} className="flex items-center text-slate-200">
-                    <CheckCircle2 className="h-5 w-5 text-purple-400 mr-3" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <WaitlistForm defaultInterest="quote" />
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="grid lg:grid-cols-2 gap-16 items-center">
+              <div className="text-white">
+                <h2 className="text-3xl font-bold mb-6">Get Early Access to MMC Quote</h2>
+                <p className="text-lg text-slate-300 mb-8">
+                  Transform MMC recommendations into actionable cost insights. Join the waitlist
+                  today.
+                </p>
+                <ul className="space-y-4">
+                  {[
+                    "Instant cost estimates from MMC recommendations",
+                    "Compare multiple MMC system alternatives",
+                    "Export professional cost reports",
+                    "Early adopter pricing",
+                  ].map((item) => (
+                    <li key={item} className="flex items-center text-slate-200">
+                      <CheckCircle2 className="h-5 w-5 text-purple-400 mr-3" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <WaitlistForm defaultInterest="quote" />
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }
