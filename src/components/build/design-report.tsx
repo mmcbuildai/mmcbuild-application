@@ -1,9 +1,6 @@
 import { SuggestionCard } from "./suggestion-card";
 import { getTechnologyLabel } from "@/lib/ai/types";
-import { ReportExportButton } from "@/components/shared/report-export-button";
-import { DaeDownloadButton } from "./dae-download-button";
-import { DxfDownloadButton } from "./dxf-download-button";
-import { IfcDownloadButton } from "./ifc-download-button";
+import { ExportPanel } from "./export-panel";
 import { ReportLegend } from "./report-legend";
 import { DecisionSummary } from "./decision-summary";
 import { is3dRenderingEnabled } from "@/lib/build/render-3d";
@@ -64,31 +61,11 @@ export function DesignReport({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-end gap-3">
-        {showGeometryExports && (
-          <>
-            <DxfDownloadButton
-              checkId={check.id}
-              fallbackFilename={`mmc-build-modified-${check.id.slice(0, 8)}.dxf`}
-              available={Boolean(check.spatial_layout)}
-            />
-            <DaeDownloadButton
-              checkId={check.id}
-              fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.dae`}
-              available={Boolean(check.spatial_layout)}
-            />
-            <IfcDownloadButton
-              checkId={check.id}
-              fallbackFilename={`mmc-build-${check.id.slice(0, 8)}.ifc`}
-              available={Boolean(check.spatial_layout)}
-            />
-          </>
-        )}
-        <ReportExportButton
-          url={`/api/build/report/${check.id}`}
-          fallbackFilename={`mmc-build-report-${check.id.slice(0, 8)}.pdf`}
-        />
-      </div>
+      <ExportPanel
+        checkId={check.id}
+        hasGeometry={Boolean(check.spatial_layout)}
+        showGeometryGroup={showGeometryExports}
+      />
 
       <DecisionSummary suggestions={suggestions} />
 
