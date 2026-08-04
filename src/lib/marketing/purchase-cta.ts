@@ -57,14 +57,20 @@ export function ctaHref(waitlistHref: string): string {
 /**
  * The label on a primary call-to-action.
  *
- * ⚠️ The purchase wording is Karen's decision (SCRUM-372) and is NOT yet
- * confirmed. "Start free trial" is the recommendation on the ticket: it is
- * accurate about the 14-day trial and about the card being captured up front,
- * where "Buy now" would overstate the commitment (nothing is charged for 14
- * days). It is single-sourced here so confirming the wording is a one-line
- * change rather than another sixteen-file sweep.
+ * Confirmed by Karthik on SCRUM-372, 2026-08-05: "Sign Up". His reasoning is
+ * that "Join Waitlist" only ever made sense while sign-up did not exist, and
+ * the application's sign-in/sign-up now works — so the button should say what
+ * it does and go to /signup.
+ *
+ * ⚠️ This wording says less about the commitment than the previous
+ * recommendation ("Start free trial") did. /signup captures a card and charges
+ * on day 15 unless cancelled, and "Sign Up" alone does not hint at that. The
+ * disclosure therefore rests entirely on `ctaSubtext()` below, which must stay
+ * adjacent to every button using this label — if a surface renders the label
+ * without the subtext, a card gets captured off a button that never mentioned
+ * one. Keep them together.
  */
-export const PURCHASE_CTA_LABEL = "Start free trial";
+export const PURCHASE_CTA_LABEL = "Sign Up";
 export const WAITLIST_CTA_LABEL = "Join Waitlist";
 
 export function ctaLabel(): string {

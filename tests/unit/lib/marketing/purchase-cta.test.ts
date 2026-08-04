@@ -104,4 +104,22 @@ describe("purchase mode", () => {
     // "Buy now" implies an immediate charge; nothing is charged for 14 days.
     expect(PURCHASE_CTA_LABEL).not.toMatch(/buy now|purchase now|pay now/i);
   });
+
+  it("discloses the card in the subtext whenever the label itself does not", () => {
+    // The label was changed from "Start free trial" to "Sign Up" (SCRUM-372,
+    // Karthik, 2026-08-05). "Start free trial" carried the offer in the button;
+    // "Sign Up" does not, so the ONLY place a visitor learns a card is required
+    // before day 15 is the subtext. That makes the subtext load-bearing rather
+    // than supporting copy, and this test is what keeps it that way: if someone
+    // later empties or softens it while the label stays silent, a card gets
+    // captured off a button that never mentioned one.
+    set("true");
+    const labelMentionsOffer = /trial|free|\$|month/i.test(PURCHASE_CTA_LABEL);
+    if (!labelMentionsOffer) {
+      const text = ctaSubtext();
+      expect(text).not.toBe("");
+      expect(text).toMatch(/card/i);
+      expect(text).toMatch(/charg|bill/i);
+    }
+  });
 });
