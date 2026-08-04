@@ -3,6 +3,7 @@ import { leadSchema, type LeadInput } from "@/lib/validators/lead";
 import { db } from "@/lib/supabase/db";
 import { submitToHubSpotForm } from "@/lib/hubspot/forms";
 import { notifyKarenOfNewLead } from "@/lib/email/leads";
+import { readCookie } from "@/lib/attribution/first-touch";
 
 export const runtime = "nodejs";
 
@@ -73,6 +74,16 @@ type LeadRow = {
   interest: string | null;
   message: string | null;
   source_page: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_term: string | null;
+  utm_content: string | null;
+  fbclid: string | null;
+  gclid: string | null;
+  landing_page: string | null;
+  referrer: string | null;
+  hubspot_utk: string | null;
 };
 
 function toRow(lead: LeadInput): LeadRow {
@@ -88,6 +99,16 @@ function toRow(lead: LeadInput): LeadRow {
     interest: lead.interest || null,
     message: lead.message || null,
     source_page: lead.sourcePage || null,
+    utm_source: lead.utmSource || null,
+    utm_medium: lead.utmMedium || null,
+    utm_campaign: lead.utmCampaign || null,
+    utm_term: lead.utmTerm || null,
+    utm_content: lead.utmContent || null,
+    fbclid: lead.fbclid || null,
+    gclid: lead.gclid || null,
+    landing_page: lead.landingPage || null,
+    referrer: lead.referrer || null,
+    hubspot_utk: lead.hutk || null,
   };
 }
 
@@ -106,7 +127,15 @@ async function handleLead(request: Request): Promise<NextResponse> {
       { status: 400 }
     );
   }
-  const lead = parsed.data;
+  // Same-origin fallback for the HubSpot visitor token. A cross-origin post from
+  // the marketing site cannot carry cookies, so that path sends `hutk` in the
+  // payload; a same-origin post from the app can, so read it here when the
+  // payload did not supply one. Payload wins — it is the submitting page's own
+  // cookie, and on the cross-origin path it is the only correct value.
+  const lead: LeadInput = {
+    ...parsed.data,
+    hutk: parsed.data.hutk || readCookie(request.headers.get("cookie"), "hubspotutk"),
+  };
 
   // 1. Persist to Supabase (source of truth). If this fails, 500 — never lose a lead.
   // Using db() helper since leads is not yet in generated Database types.
