@@ -3,15 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { InviteSessionRedirect } from "./invite-session-redirect";
-import {
-  ArrowRight,
-  CheckCircle2,
-  Hammer,
-  FileCheck,
-  Users,
-  GraduationCap,
-  Bot,
-} from "lucide-react";
+import { ArrowRight, Hammer, FileCheck, Users, GraduationCap, Bot } from "lucide-react";
 
 const organizationSchema = {
   "@context": "https://schema.org",
@@ -88,41 +80,6 @@ const solutions = [
     href: "/mmc-suppliers",
     color: "text-green-600",
     bgColor: "bg-green-50",
-  },
-];
-
-const partners = [
-  { name: "Lendlease", gradient: "from-blue-600 to-cyan-600", icon: "🏗️" },
-  { name: "Mirvac", gradient: "from-purple-600 to-pink-600", icon: "🏢" },
-  { name: "Stockland", gradient: "from-green-600 to-brandgreen-600", icon: "🌳" },
-  { name: "Multiplex", gradient: "from-orange-600 to-red-600", icon: "⚡" },
-  { name: "Metricon", gradient: "from-indigo-600 to-blue-600", icon: "🏠" },
-  { name: "Hutchinson", gradient: "from-brand-600 to-cyan-600", icon: "🔨" },
-  { name: "Simonds", gradient: "from-amber-600 to-yellow-600", icon: "✨" },
-  { name: "G.J. Gardner", gradient: "from-rose-600 to-pink-600", icon: "🎯" },
-];
-
-const testimonials = [
-  {
-    quote:
-      "MMC Build has completely revolutionized our workflow. The MMC Comply tool alone saved us weeks of regulatory back-and-forth.",
-    author: "Sarah Jenkins",
-    role: "Senior Architect",
-    company: "Urban Design Co.",
-  },
-  {
-    quote:
-      "The most comprehensive directory for modern construction I've found. Connected us with the right modular builder immediately.",
-    author: "Michael Chen",
-    role: "Lead Developer",
-    company: "Future Living",
-  },
-  {
-    quote:
-      "MMC Build's suggestions helped us reduce material costs by 15% while improving thermal performance significantly.",
-    author: "David Smith",
-    role: "Project Manager",
-    company: "Apex Constructions",
   },
 ];
 
@@ -269,113 +226,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Partners */}
-      <section className="py-24 bg-gradient-to-b from-slate-50 via-white to-slate-50 relative overflow-hidden">
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-500/10 blur-[120px] rounded-full pointer-events-none animate-pulse" />
-        <div
-          className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-brand-500/10 blur-[100px] rounded-full pointer-events-none animate-pulse"
-          style={{ animationDelay: "1s" }}
-        />
-
-        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-brand-50 border border-blue-200/50 rounded-full px-5 py-2 mb-6 shadow-sm">
-              <span className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" />
-              <span className="text-sm font-semibold text-blue-700">Trusted Partners</span>
-            </div>
-            <h3 className="text-4xl font-bold text-slate-900 mb-4 tracking-tight">
-              Leading the MMC Revolution
-            </h3>
-            <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-              Join Australia&apos;s most innovative construction companies transforming the industry
-              with modern methods
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
-            {partners.map((company) => (
-              <div
-                key={company.name}
-                className="group relative bg-white rounded-2xl p-6 border-2 border-slate-200 hover:border-transparent transition-all duration-500 flex flex-col items-center justify-center overflow-hidden hover:scale-105 hover:shadow-2xl"
-              >
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${company.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}
-                />
-                <div className="relative z-10">
-                  <div className="text-4xl mb-3 group-hover:scale-110 transition-transform duration-300">
-                    {company.icon}
-                  </div>
-                  <span className="text-lg font-bold text-slate-800 group-hover:text-white transition-colors duration-300">
-                    {company.name}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-8 pt-8 border-t border-slate-200">
-            {[
-              { metric: "100+", label: "Active Professionals", gradient: "from-blue-500 to-brand-500" },
-              { metric: "50+", label: "Projects Delivered", gradient: "from-purple-500 to-pink-500" },
-              { metric: "$2M+", label: "Cost Savings", gradient: "from-amber-500 to-orange-500" },
-            ].map((stat, idx) => (
-              <div key={stat.metric} className="flex items-center gap-3">
-                {idx > 0 && <div className="h-12 w-px bg-slate-300 hidden sm:block -ml-4 mr-4" />}
-                <div
-                  className={`h-12 w-12 rounded-full bg-gradient-to-br ${stat.gradient} flex items-center justify-center shadow-lg`}
-                >
-                  <CheckCircle2 className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-slate-900">{stat.metric}</p>
-                  <p className="text-sm text-slate-600">{stat.label}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="py-24 bg-gradient-to-b from-slate-900 to-slate-800">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-white sm:text-4xl mb-4">
-              Trusted by Modern Builders
-            </h2>
-            <p className="text-lg text-slate-400">
-              See how industry professionals are transforming their workflows
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((t) => (
-              <div
-                key={t.author}
-                className="bg-white/5 backdrop-blur-sm border border-white/10 p-8 rounded-2xl hover:bg-white/10 transition-all"
-              >
-                <div className="mb-6">
-                  <svg className="h-8 w-8 text-blue-400 opacity-50" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
-                  </svg>
-                </div>
-                <p className="text-slate-200 mb-6 leading-relaxed">{t.quote}</p>
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-brand-500 flex items-center justify-center text-white font-bold text-sm">
-                    {t.author[0]}
-                  </div>
-                  <div>
-                    <div className="text-white font-semibold text-sm">{t.author}</div>
-                    <div className="text-xs text-slate-400">
-                      {t.role}, {t.company}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
