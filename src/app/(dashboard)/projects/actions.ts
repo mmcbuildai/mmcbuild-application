@@ -201,8 +201,32 @@ export async function removeProjectMember(
   return { success: true };
 }
 
-export async function createProject(formData: FormData) {
-  const profile = await getProfile();
+/**
+ * Create a project.
+ *
+ * Returns `{ error }` rather than throwing (SCRUM-378). Next.js replaces the
+ * message of ANY error thrown out of a server action in a production build with
+ * "An error occurred in the Server Components render… the specific message is
+ * omitted", so every considered message below — including the duplicate-name
+ * one — was invisible to real users and only ever readable in local dev. Karen
+ * hit exactly that: a second attempt with the same project name produced a
+ * generic digest instead of "a project by that name already exists".
+ *
+ * The sibling actions in this file (`createProjectFromSample`, `copyProject`)
+ * already return `{ error }`, so this is the file's existing convention rather
+ * than a new one — this function was the outlier.
+ */
+export async function createProject(
+  formData: FormData,
+): Promise<{ projectId?: string; error?: string }> {
+  let profile: { id: string; org_id: string; role: string };
+  try {
+    profile = await getProfile();
+  } catch (e) {
+    // "Not authenticated" / "Profile not found". The second one is a real state
+    // a stranded new account can reach, and it must say so rather than 500.
+    return { error: e instanceof Error ? e.message : "Could not load your profile" };
+  }
   const admin = createAdminClient();
 
   const name = formData.get("name") as string;
@@ -213,7 +237,7 @@ export async function createProject(formData: FormData) {
   const postcode = (formData.get("postcode") as string) || null;
   const state = (formData.get("state") as string) || null;
 
-  if (!name?.trim()) throw new Error("Project name is required");
+  if (!name?.trim()) return { error: "Project name is required" };
 
   // Insert the project
   const { data: project, error } = await admin
@@ -236,11 +260,15 @@ export async function createProject(formData: FormData) {
       error?.code === "23505" ||
       error?.message?.includes("unique_project_name_per_org")
     ) {
-      throw new Error(
-        `A project named "${name.trim()}" already exists. Please choose a different name.`,
-      );
+      return {
+        error: `A project named "${name.trim()}" already exists. Please choose a different name.`,
+      };
     }
-    throw new Error(`Failed to create project: ${error?.message}`);
+    // Log the real cause server-side as well as returning it: the returned copy
+    // is what the user acts on, the log is what we diagnose from when they
+    // report it. Previously neither existed in production.
+    console.error("[createProject] insert failed:", error);
+    return { error: `Failed to create project: ${error?.message ?? "unknown error"}` };
   }
 
   // Derive site intel if we have geocoded coordinates

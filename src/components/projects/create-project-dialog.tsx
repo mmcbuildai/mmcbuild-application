@@ -76,11 +76,19 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
     setLoading(true);
     setSubmitError(null);
     try {
-      const { projectId } = await createProject(formData);
+      // createProject returns { error } rather than throwing (SCRUM-378) —
+      // a thrown message is replaced by Next with a generic digest in
+      // production, so the useful text never reached the user. Same shape as
+      // handleUseSample below.
+      const res = await createProject(formData);
+      if (res.error) {
+        setSubmitError(res.error);
+        return;
+      }
       setOpen(false);
       geocodedRef.current = null;
       property.reset();
-      router.push(`/projects/${projectId}?tab=documents`);
+      router.push(`/projects/${res.projectId}?tab=documents`);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to create project";
