@@ -22,6 +22,7 @@ export function BillingContent() {
   // discarded, so a failed checkout looked identical to a button that did
   // nothing — no message, no console entry, nothing to report. Surface it.
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [portalError, setPortalError] = useState<string | null>(null);
 
   useEffect(() => {
     getBillingStatus().then((s) => {
@@ -64,9 +65,23 @@ export function BillingContent() {
     });
   };
 
+  // Same defect the checkout button had: the action can return
+  // { error: "No active subscription" } and the result was discarded, so a
+  // failure was indistinguishable from a button that did nothing. That matters
+  // more here than anywhere else in the product — this is the path a customer
+  // uses to CANCEL, and a dead button on the cancel path is the one failure
+  // nobody should ever be able to say we shipped.
   const handleManageSubscription = () => {
+    setPortalError(null);
     startTransition(async () => {
-      await createPortalSession();
+      const result = await createPortalSession();
+      // On success this redirects and never returns. Anything returned is a
+      // failure worth showing.
+      if (result && "error" in result) {
+        setPortalError(
+          `${result.error}. If you are trying to cancel and this keeps happening, email support@mmcbuild.com.au and we will cancel it for you — you will not be charged again.`,
+        );
+      }
     });
   };
 
@@ -114,14 +129,41 @@ export function BillingContent() {
                   Payment failed — please update your payment method
                 </p>
               )}
-              <button
-                onClick={handleManageSubscription}
-                disabled={isPending}
-                className="mt-4 inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
-              >
-                <Settings className="w-4 h-4" />
-                Manage Subscription
-              </button>
+              {/*
+                Cancelling must be as easy to find as subscribing was. The
+                Terms of Use now say a subscription can be cancelled "at any
+                time, from the Billing page … no notice period, no cancellation
+                fee, and no need to contact us" — so this page has to actually
+                say the word "cancel", and mean it.
+
+                Previously the only affordance was a small grey "Manage
+                Subscription" text link. Nothing was hidden, but a customer
+                looking to cancel had to guess that "Manage" contained it, and
+                the page never used their word. That is friction on the one
+                journey that should have none.
+              */}
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  onClick={handleManageSubscription}
+                  disabled={isPending}
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
+                >
+                  <Settings className="w-4 h-4" />
+                  {isPending ? "Opening…" : "Manage subscription or cancel"}
+                </button>
+                <p className="text-xs text-slate-500">
+                  Cancel any time — no notice period and no cancellation fee. You
+                  keep access until the end of the period you have paid for.
+                </p>
+                {portalError && (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+                  >
+                    {portalError}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
