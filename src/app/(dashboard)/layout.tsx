@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { TermsGate } from "@/components/legal/terms-gate";
 import { isOperatorEmail } from "@/lib/auth/operator";
+import { needsTermsAcceptance } from "@/lib/legal/terms";
 import { provisionUser } from "@/lib/auth/provision";
 
 export default async function DashboardLayout({
@@ -81,11 +82,20 @@ export default async function DashboardLayout({
   if (!isOperator) {
     const { data: termsRow, error: termsErr } = await admin
       .from("profiles")
-      .select("terms_accepted_at")
+      .select("terms_accepted_at, terms_version")
       .eq("user_id", user.id)
       .single();
     if (!termsErr && termsRow) {
-      needsTerms = (termsRow as { terms_accepted_at: string | null }).terms_accepted_at == null;
+      // Compare the VERSION, not just whether they ever accepted. The version
+      // was already being written on acceptance but never read back, so a bump
+      // re-prompted nobody — which meant everyone who accepted the beta terms
+      // would have gone on using a paid product having agreed to a document
+      // with no auto-renewal or cancellation clause in it.
+      const row = termsRow as {
+        terms_accepted_at: string | null;
+        terms_version: string | null;
+      };
+      needsTerms = needsTermsAcceptance(row.terms_accepted_at, row.terms_version);
     }
   }
 

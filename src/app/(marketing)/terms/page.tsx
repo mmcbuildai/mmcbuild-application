@@ -60,13 +60,111 @@ export default function TermsPage() {
             </p>
 
             <h2>7. Payment and Subscription Terms</h2>
-            <p>For paid services:</p>
+            <p>
+              These terms apply to every paid subscription. Please read this section
+              before subscribing — it explains what you will be charged, when, and
+              how to stop.
+            </p>
+
+            <h3>7.1 Fees and GST</h3>
             <ul>
-              <li>All fees are in Australian Dollars (AUD) unless otherwise stated</li>
-              <li>Subscription fees are billed in advance on a monthly or annual basis</li>
-              <li>Free trial periods may be offered at our discretion</li>
-              <li>You are responsible for all taxes associated with your use of the services</li>
-              <li>Refunds are provided at our discretion and subject to our refund policy</li>
+              <li>All fees are in Australian Dollars (AUD).</li>
+              <li>
+                Prices shown are <strong>exclusive of GST</strong>. GST is added at
+                checkout and shown before you confirm.
+              </li>
+              <li>
+                Subscription fees are billed in advance — monthly subscriptions on
+                the same day each month, annual subscriptions on the same date each
+                year.
+              </li>
+            </ul>
+
+            <h3>7.2 Free trial and the first charge</h3>
+            <ul>
+              <li>
+                New subscriptions include a <strong>14-day free trial</strong>.
+              </li>
+              <li>
+                <strong>A valid payment card is required to start the trial.</strong>{" "}
+                You are not charged during the trial.
+              </li>
+              <li>
+                <strong>
+                  At the end of the 14 days your card is automatically charged for
+                  the first billing period, unless you cancel before then.
+                </strong>{" "}
+                Cancelling during the trial costs you nothing.
+              </li>
+            </ul>
+
+            <h3>7.3 Automatic renewal</h3>
+            <ul>
+              <li>
+                <strong>Subscriptions renew automatically</strong> at the end of each
+                billing period, and your card is charged for the next period, until
+                you cancel.
+              </li>
+              <li>
+                We will notify you by email before any change to the price you pay,
+                with enough notice for you to cancel first if you choose to.
+              </li>
+            </ul>
+
+            <h3>7.4 Cancelling</h3>
+            <ul>
+              <li>
+                <strong>You can cancel at any time</strong>, from the Billing page in
+                your account. No notice period, no cancellation fee, and no need to
+                contact us or explain why.
+              </li>
+              <li>
+                Cancelling stops the next charge. Your subscription stays active for
+                the remainder of the period you have already paid for, and you keep
+                access until it ends.
+              </li>
+              <li>
+                Your data remains available for the rest of the paid period. See
+                clause 11 for what happens to it afterwards.
+              </li>
+            </ul>
+
+            <h3>7.5 Refunds</h3>
+            <ul>
+              <li>
+                Because cancelling stops future charges rather than the current one,
+                part-period refunds are generally not provided.
+              </li>
+              <li>
+                <strong>
+                  Nothing in these terms limits your rights under the Australian
+                  Consumer Law
+                </strong>
+                , including remedies where a service is not supplied with due care
+                and skill or does not match its description. Those rights apply
+                regardless of anything stated here.
+              </li>
+              <li>
+                If you believe you have been charged in error, contact us and we will
+                deal with it promptly.
+              </li>
+            </ul>
+
+            <h3>7.6 Failed payments</h3>
+            <ul>
+              <li>
+                If a payment fails we will attempt it again and notify you. If it
+                remains unpaid, access to paid features may be suspended until the
+                account is brought up to date.
+              </li>
+            </ul>
+
+            <h3>7.7 Taxes</h3>
+            <ul>
+              <li>
+                You are responsible for any taxes arising from your use of the
+                services other than GST charged by us on our fees.
+              </li>
             </ul>
 
             <h2>8. Disclaimer of Warranties</h2>

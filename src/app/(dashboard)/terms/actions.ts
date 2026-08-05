@@ -2,10 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
-
-// Bump this when the T&C text materially changes to force re-acceptance.
-// NOT exported: a "use server" file may only export async functions.
-const TERMS_VERSION = "beta-2026-06";
+import { TERMS_VERSION } from "@/lib/legal/terms";
 
 /**
  * Record that the signed-in user accepted the current T&C. Called by the

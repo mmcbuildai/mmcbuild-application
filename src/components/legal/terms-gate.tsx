@@ -56,24 +56,37 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
           </div>
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">
-              Terms &amp; Conditions — Beta
+              Terms of Use
             </h2>
             <p className="mt-0.5 text-sm text-zinc-500">
-              Please read and accept before using MMC Build.
+              Updated — please read and accept before continuing.
             </p>
           </div>
         </div>
 
         <div className="space-y-3 overflow-y-auto p-6 text-sm leading-relaxed text-zinc-700">
-          {/* PLACEHOLDER — replace with the final approved wording. */}
           <p>
-            MMC Build is currently provided as a <strong>beta</strong> for
-            evaluation and feedback. By continuing you acknowledge and agree that:
+            Our Terms of Use have been updated to cover payment, renewal and
+            cancellation. By continuing you agree to them. In summary:
           </p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
-              The platform and its outputs are <strong>provided as-is</strong>{" "}
-              during beta and may contain errors or change without notice.
+              <strong>Paid subscriptions start with a 14-day free trial.</strong> A
+              payment card is required to begin it, and you are not charged during
+              the trial.
+            </li>
+            <li>
+              <strong>
+                At the end of the 14 days your card is charged automatically
+              </strong>{" "}
+              for the first period, and the subscription renews automatically after
+              that, until you cancel. Prices are shown excluding GST.
+            </li>
+            <li>
+              <strong>You can cancel at any time from the Billing page</strong> — no
+              notice period, no fee, no need to contact us. Cancelling stops the
+              next charge and you keep access until the period you have paid for
+              ends.
             </li>
             <li>
               Compliance findings, 3D reconstructions and cost estimates are{" "}
@@ -92,12 +105,22 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
             </li>
             <li>
               To the extent permitted by law, MMC Build and Global Buildtech
-              Australia accept no liability for loss arising from use of the beta.
+              Australia accept no liability for loss arising from use of the
+              platform. <strong>Nothing here limits your rights under the
+              Australian Consumer Law.</strong>
             </li>
           </ul>
           <p className="text-xs text-zinc-500">
-            This is placeholder beta wording and will be replaced with the final
-            Terms &amp; Conditions.
+            This is a summary. The{" "}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-zinc-700"
+            >
+              full Terms of Use
+            </a>{" "}
+            apply — clause 7 covers payment, renewal and cancellation in full.
           </p>
         </div>
 
