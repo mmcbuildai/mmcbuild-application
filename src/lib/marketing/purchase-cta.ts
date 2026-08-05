@@ -57,20 +57,21 @@ export function ctaHref(waitlistHref: string): string {
 /**
  * The label on a primary call-to-action.
  *
- * Confirmed by Karthik on SCRUM-372, 2026-08-05: "Sign Up". His reasoning is
- * that "Join Waitlist" only ever made sense while sign-up did not exist, and
- * the application's sign-in/sign-up now works — so the button should say what
- * it does and go to /signup.
+ * FINAL WORDING: "Get started" — Karen, 5 August, settling a genuine
+ * disagreement. She approved "Get started" on SCRUM-372 on 4 August; Karthik
+ * asked for "Sign Up" on 5 August and that shipped; Karen has now confirmed
+ * "Get started" is the final word. Recorded here because two people specified
+ * two different labels a day apart and the next person to read this deserves
+ * to know which one won and why.
  *
- * ⚠️ This wording says less about the commitment than the previous
- * recommendation ("Start free trial") did. /signup captures a card and charges
- * on day 15 unless cancelled, and "Sign Up" alone does not hint at that. The
- * disclosure therefore rests entirely on `ctaSubtext()` below, which must stay
- * adjacent to every button using this label — if a surface renders the label
- * without the subtext, a card gets captured off a button that never mentioned
- * one. Keep them together.
+ * ⚠️ Whatever the wording, it says less about the commitment than "Start free
+ * trial" did. /signup captures a card and charges on day 15 unless cancelled,
+ * and neither "Get started" nor "Sign Up" hints at that. The disclosure
+ * therefore rests entirely on `ctaSubtext()` below, which must stay adjacent to
+ * every button using this label — if a surface renders the label without the
+ * subtext, a card gets captured off a button that never mentioned one.
  */
-export const PURCHASE_CTA_LABEL = "Sign Up";
+export const PURCHASE_CTA_LABEL = "Get started";
 export const WAITLIST_CTA_LABEL = "Join Waitlist";
 
 export function ctaLabel(): string {
