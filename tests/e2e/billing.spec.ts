@@ -89,32 +89,47 @@ test.describe("Billing", () => {
 
     await page.goto("/dashboard");
 
-    // Sidebar should show upgrade link when runs exhausted
+    // Every assertion below was previously wrapped in `if (await x.isVisible())`,
+    // which made this test incapable of failing: the upgrade link was asserted
+    // visible only when it was ALREADY visible, and the one real assertion — that
+    // an exhausted trial is blocked — sat three conditionals deep, so a missing
+    // upgrade link, a missing project or a missing run button all short-circuited
+    // to a green pass having checked nothing. That is the exact defect this test
+    // exists to catch. The conditionals are gone; a missing precondition now fails
+    // loudly with a message saying which one, which is a fixture problem someone
+    // can fix, rather than a silence nobody can see.
+
+    // Sidebar shows the upgrade link once runs are exhausted.
     const sidebar = page.locator("nav");
     const upgradeLink = sidebar.getByText(/Upgrade|Pro/i);
+    await expect(
+      upgradeLink,
+      "exhausted trial should surface an Upgrade link in the sidebar",
+    ).toBeVisible({ timeout: 10_000 });
 
-    if (await upgradeLink.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await expect(upgradeLink).toBeVisible();
-    }
-
-    // Try to run an analysis — should be blocked
+    // Running an analysis must be blocked.
     await page.goto("/comply");
     const projectCard = page.locator('a[href*="/comply/"]').first();
-    if (await projectCard.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await projectCard.click();
+    await expect(
+      projectCard,
+      "fixture: the e2e builder org needs at least one project to open Comply with",
+    ).toBeVisible({ timeout: 10_000 });
+    await projectCard.click();
 
-      const runButton = page.getByRole("button", {
-        name: "Run Compliance Check",
-      });
-      if (await runButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await runButton.click();
+    const runButton = page.getByRole("button", {
+      name: "Run Compliance Check",
+    });
+    await expect(
+      runButton,
+      "fixture: the Comply page should offer a Run Compliance Check button",
+    ).toBeVisible({ timeout: 10_000 });
+    await runButton.click();
 
-        // Should show limit reached error
-        await expect(
-          page.getByText(/usage_limit|upgrade|limit reached/i)
-        ).toBeVisible({ timeout: 10_000 });
-      }
-    }
+    // The assertion this test is actually for.
+    await expect(
+      page.getByText(/usage_limit|upgrade|limit reached/i),
+      "an exhausted trial must be blocked and told to upgrade",
+    ).toBeVisible({ timeout: 10_000 });
 
     // Cleanup
     await setRunCount(orgId, 0);
