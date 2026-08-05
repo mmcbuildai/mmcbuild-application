@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,16 +8,36 @@ import { acceptTerms } from "@/app/(dashboard)/terms/actions";
 import { signOut } from "@/app/(auth)/actions";
 
 /**
- * First-login Terms & Conditions gate (SCRUM-281). Blocks the authenticated
- * app until the user accepts. "I accept" records acceptance and refreshes;
- * "Decline" signs them out. The copy below is GENERIC PLACEHOLDER text — swap
- * in the final wording when it's supplied (the gate is fully functional now so
- * acceptance is captured regardless).
+ * Terms of Use gate. Blocks the authenticated app until the user accepts.
+ * "I accept" records acceptance; "Decline" signs them out.
+ *
+ * WHY THE BLOCKING IS MADE OBVIOUS
+ *
+ * Karen reported that on the trades-directory registration form she "tried to
+ * click on other states and the click didn't work". The checkboxes were fine.
+ * This gate was up, and its `fixed inset-0` overlay swallows every click on the
+ * page — as designed.
+ *
+ * The problem was that it did not LOOK like it. The dialog occupies the middle
+ * of the screen; the form behind it stayed legible at 60% opacity, and the page
+ * still scrolled. So a user could read the exact control they wanted, click it,
+ * and get nothing back — no movement, no message, no hint that anything was
+ * blocking them. It reads as a broken product rather than a modal.
+ *
+ * Three changes, none of which alter what the gate DOES:
+ *   - the background is blurred as well as dimmed, so it reads as unavailable;
+ *   - the body is scroll-locked, because a page that scrolls looks usable;
+ *   - clicking the blocked area pulses the dialog and says why, instead of
+ *     silently eating the click.
+ *
+ * This matters more than it did: the version bump re-prompts every existing
+ * user, so this is the first thing they will see on their next visit.
  */
 export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nudging, setNudging] = useState(false);
   // Dismiss the gate locally the instant the server confirms acceptance, rather
   // than waiting for router.refresh() to re-render the parent layout and flip
   // needsTerms — that round-trip didn't reliably close the modal in production
@@ -25,7 +45,27 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
   // persisted by acceptTerms() before we set this, so hiding is safe.
   const [accepted, setAccepted] = useState(false);
 
-  if (!needsTerms || accepted) return null;
+  const blocking = needsTerms && !accepted;
+
+  // A page that still scrolls looks like a page you can use. Lock it while the
+  // gate is up, and restore whatever the document had before — not a hardcoded
+  // "", which would clobber an overflow set elsewhere.
+  useEffect(() => {
+    if (!blocking) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [blocking]);
+
+  if (!blocking) return null;
+
+  // Clicking the blocked page used to do nothing at all. Say why.
+  function handleBackdropClick() {
+    setNudging(true);
+    window.setTimeout(() => setNudging(false), 820);
+  }
 
   async function handleAccept() {
     setBusy(true);
@@ -48,18 +88,37 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
-      <div className="flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+    <div
+      onClick={handleBackdropClick}
+      role="presentation"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+    >
+      <div
+        // Stop a click INSIDE the dialog bubbling to the backdrop and firing
+        // the nudge — reading the terms is not a blocked action.
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="terms-gate-title"
+        className={`flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl transition-transform ${
+          nudging ? "animate-pulse scale-[1.02]" : ""
+        }`}
+      >
         <div className="flex items-start gap-3 border-b p-6">
           <div className="rounded-full bg-brand-100 p-2">
             <ShieldCheck className="h-5 w-5 text-brand-600" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-zinc-900">
+            <h2
+              id="terms-gate-title"
+              className="text-lg font-semibold text-zinc-900"
+            >
               Terms of Use
             </h2>
             <p className="mt-0.5 text-sm text-zinc-500">
-              Updated — please read and accept before continuing.
+              {nudging
+                ? "The rest of the page is unavailable until you accept or decline."
+                : "Updated — please read and accept before continuing."}
             </p>
           </div>
         </div>
