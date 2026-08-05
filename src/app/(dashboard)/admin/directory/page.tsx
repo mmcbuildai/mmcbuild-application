@@ -1,22 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { isOperatorEmail } from "@/lib/auth/operator";
 import { getDirectoryListings } from "./actions";
 import { DirectoryAdminQueue } from "@/components/admin/directory-admin-queue";
 
 export default async function AdminDirectoryPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("user_id", user.id)
-    .single();
-
-  if (!profile || (profile.role !== "owner" && profile.role !== "admin")) {
-    redirect("/dashboard");
-  }
+  // This is the GLOBAL directory moderation queue — every organisation's
+  // listings, with approve and reject. It was gated on
+  // `role !== "owner" && role !== "admin"`, which passes for every signed-up
+  // user, because a self-signup owns their own personal org. So any account
+  // could moderate the directory. Operator identity is an email allowlist.
+  if (!isOperatorEmail(user.email)) redirect("/dashboard");
 
   const listings = await getDirectoryListings();
 
