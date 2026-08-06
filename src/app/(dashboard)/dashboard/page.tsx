@@ -4,6 +4,7 @@ import { getSubscriptionStatus } from "@/lib/stripe/subscription";
 import { DashboardShell } from "./dashboard-shell";
 import { redirect } from "next/navigation";
 import { isBetaTestingEnabled } from "@/lib/beta/enabled";
+import { isOperatorEmail } from "@/lib/auth/operator";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -64,12 +65,27 @@ export default async function DashboardPage() {
     })(),
   ]);
 
-  const isAdmin = ["owner", "admin"].includes(profile.role);
+  // Platform operator = EMAIL allowlist, never org role. This read
+  //
+  //     ["owner", "admin"].includes(profile.role)
+  //
+  // which is true for EVERY user who has ever signed up, because a self-signup
+  // is made the owner of their own personal org — lib/auth/operator.ts opens by
+  // saying exactly that. So every customer saw an "Admin View" toggle and a
+  // menu of platform administration. Karen reported it from a brand-new account
+  // on 5 August; c8e6b03 fixed the /admin/* pages it linked to, but the toggle
+  // that advertised them was never touched.
+  //
+  // The destination pages are org-scoped or already operator-gated, so nothing
+  // leaked — but a customer should not be shown a door, least of all one that
+  // bounces them back to /dashboard. Named isOperator, not isAdmin, because the
+  // word "admin" meaning two different things is what caused this.
+  const isOperator = isOperatorEmail(user.email);
 
   return (
     <DashboardShell
       status={status}
-      isAdmin={isAdmin}
+      isOperator={isOperator}
       hasProjects={projectCount > 0}
     />
   );
