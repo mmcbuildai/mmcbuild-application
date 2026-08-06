@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import Chatbot from "@/components/marketing/chatbot";
 import { MobileMarketingNav } from "@/components/marketing/mobile-nav";
+import { showCaseStudiesLinks } from "@/lib/marketing/case-studies";
 
 const solutions = [
   { name: "MMC Comply", href: "/mmc-comply", description: "AI-powered NCC compliance" },
@@ -17,9 +18,19 @@ const primaryLinks = [
   { name: "Trades & Suppliers", href: "/mmc-suppliers" },
   { name: "Blog", href: "/blog" },
   { name: "About", href: "/about" },
-  { name: "Case Studies", href: "/case-studies" },
+  // Hidden until the two published projects and their figures are confirmed
+  // (see lib/marketing/case-studies.ts). Filtered below, not deleted, so the
+  // switch restores it in the right position.
+  { name: "Case Studies", href: "/case-studies", gated: true },
   { name: "Contact", href: "/contact" },
 ];
+
+// Derive ONCE and use for both the desktop and mobile navs. Filtering at the
+// desktop call site alone leaves the mobile nav rendering the hidden entry —
+// and it is serialised into the page payload, so it is still published.
+const visibleLinks = primaryLinks.filter(
+  (l) => !l.gated || showCaseStudiesLinks(),
+);
 
 export default function MarketingLayout({
   children,
@@ -68,7 +79,7 @@ export default function MarketingLayout({
                 </div>
               </div>
             </div>
-            {primaryLinks.map((link) => (
+            {visibleLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -91,7 +102,7 @@ export default function MarketingLayout({
             >
               Get Started
             </Link>
-            <MobileMarketingNav solutions={solutions} links={primaryLinks} />
+            <MobileMarketingNav solutions={solutions} links={visibleLinks} />
           </div>
         </div>
       </nav>
@@ -146,11 +157,13 @@ export default function MarketingLayout({
                     Blog
                   </Link>
                 </li>
-                <li>
-                  <Link href="/case-studies" className="hover:text-white transition-colors">
-                    Case Studies
-                  </Link>
-                </li>
+                {showCaseStudiesLinks() && (
+                  <li>
+                    <Link href="/case-studies" className="hover:text-white transition-colors">
+                      Case Studies
+                    </Link>
+                  </li>
+                )}
                 <li>
                   <Link href="/about" className="hover:text-white transition-colors">
                     About

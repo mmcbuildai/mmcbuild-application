@@ -12,11 +12,18 @@ import {
   Quote,
   Star,
 } from "lucide-react";
+import { caseStudiesNoIndex } from "@/lib/marketing/case-studies";
 
+// While the case studies are switched off, ask search engines not to index
+// the page. Hiding the navigation links alone would leave these claims live
+// and findable — quieter, but just as published.
 export const metadata: Metadata = {
   title: "Case Studies & Success Stories — MMC Build",
   description:
     "Real projects, real results. See how MMC Build is transforming construction across Australia — Morpeth Gardens Country Club, 44 Hugh Street Residence, and more.",
+  ...(caseStudiesNoIndex()
+    ? { robots: { index: false, follow: false } }
+    : {}),
 };
 
 const projects = [
