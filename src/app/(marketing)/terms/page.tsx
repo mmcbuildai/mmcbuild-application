@@ -80,21 +80,30 @@ export default function TermsPage() {
               </li>
             </ul>
 
-            <h3>7.2 Free trial and the first charge</h3>
+            <h3>7.2 Free trial</h3>
             <ul>
               <li>
-                New subscriptions include a <strong>14-day free trial</strong>.
+                New accounts include a <strong>14-day free trial</strong>.
               </li>
               <li>
-                <strong>A valid payment card is required to start the trial.</strong>{" "}
-                You are not charged during the trial.
+                <strong>No payment card is required to start the trial</strong>, and
+                you are not charged during it.
+              </li>
+              <li>
+                The trial ends after 14 days, or once you have used{" "}
+                <strong>3 compliance runs</strong>, whichever comes first.
               </li>
               <li>
                 <strong>
-                  At the end of the 14 days your card is automatically charged for
-                  the first billing period, unless you cancel before then.
+                  We will never charge you automatically at the end of the trial.
                 </strong>{" "}
-                Cancelling during the trial costs you nothing.
+                When the trial ends, paid features stop until you choose to
+                subscribe. You are only ever charged after you select a plan and
+                enter your payment details yourself.
+              </li>
+              <li>
+                Your account and your data remain in place when a trial ends — see
+                clause 11.
               </li>
             </ul>
 
@@ -153,9 +162,18 @@ export default function TermsPage() {
             <h3>7.6 Failed payments</h3>
             <ul>
               <li>
-                If a payment fails we will attempt it again and notify you. If it
-                remains unpaid, access to paid features may be suspended until the
-                account is brought up to date.
+                If a renewal payment fails, we will notify you and{" "}
+                <strong>attempt it up to two more times</strong>.
+              </li>
+              <li>
+                If it is still unpaid after those attempts, you have a{" "}
+                <strong>7-day grace period</strong> in which your access continues
+                and you can update your payment details. After that, access to paid
+                features is paused until the account is brought up to date.
+              </li>
+              <li>
+                Pausing access does not delete anything. Your data remains available
+                as set out in clause 11.
               </li>
             </ul>
 
