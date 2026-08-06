@@ -15,6 +15,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { inngest } from "@/lib/inngest/client";
+import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 import type { Test3DResult } from "@/lib/build/test-3d-types";
 
 // NOTE: "use server" files in Next.js can only export async functions at
@@ -37,6 +38,15 @@ export type EnqueueTest3DResult =
 export async function enqueueTest3D(
   input: EnqueueTest3DInput,
 ): Promise<EnqueueTest3DResult> {
+  // The page 404s when 3D is off, but a 404 only hides the UI — a Server Action
+  // is a POST endpoint that stays callable by any signed-in user who has the
+  // action id (a cached page, or a replayed request). This harness deliberately
+  // "skips project, paywall, and Inngest quota" and can spend up to eight Sonnet
+  // calls with extended thinking per submission, so an unguarded action is
+  // unmetered, unpaywalled AI spend rather than merely a stray dev tool.
+  // Guarding the action, not just the route, is what actually closes SCRUM-365.
+  if (!is3dRenderingEnabled()) return { error: "Not available" };
+
   const supabase = await createClient();
   const {
     data: { user },
