@@ -3,7 +3,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { stripe } from "@/lib/stripe/client";
-import { PLANS, type PlanId } from "@/lib/stripe/plans";
+import {
+  PLANS,
+  priceIdFor,
+  type BillingInterval,
+  type PlanId,
+} from "@/lib/stripe/plans";
 import { getSubscriptionStatus } from "@/lib/stripe/subscription";
 import { redirect } from "next/navigation";
 
@@ -51,14 +56,26 @@ async function getOrgWithStripeCustomer() {
   return org;
 }
 
-export async function createCheckoutSession(planId: PlanId) {
+export async function createCheckoutSession(
+  planId: PlanId,
+  interval: BillingInterval = "month",
+) {
   const plan = PLANS[planId];
   if (!plan || ("isCustom" in plan && plan.isCustom)) {
     return { error: "Invalid plan" };
   }
 
-  if (!plan.stripePriceId) {
-    return { error: "Plan not configured in Stripe" };
+  // Annual is only sellable where a live annual price exists. An unset env var
+  // would otherwise reach Stripe as an empty price and fail at the checkout
+  // page, in front of a customer who has already chosen to pay.
+  const priceId = priceIdFor(planId, interval);
+  if (!priceId) {
+    return {
+      error:
+        interval === "year"
+          ? "Annual billing is not available for this plan yet. Please choose monthly, or contact us."
+          : "Plan not configured in Stripe",
+    };
   }
 
   const org = await getOrgWithStripeCustomer();
@@ -68,12 +85,12 @@ export async function createCheckoutSession(planId: PlanId) {
     session = await stripe.checkout.sessions.create({
       customer: org.stripe_customer_id,
       mode: "subscription",
-      line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?success=true`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?canceled=true`,
-      metadata: { org_id: org.id, plan_id: planId },
+      metadata: { org_id: org.id, plan_id: planId, interval },
       subscription_data: {
-        metadata: { org_id: org.id, plan_id: planId },
+        metadata: { org_id: org.id, plan_id: planId, interval },
       },
 
       // GST. Prices are quoted tax-EXCLUSIVE (see TAX_QUALIFIER in plans.ts),

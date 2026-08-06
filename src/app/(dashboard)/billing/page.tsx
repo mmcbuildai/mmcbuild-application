@@ -2,8 +2,14 @@ import { Suspense } from "react";
 import { ExplainerVideo } from "@/components/shared/explainer-video";
 import { ModuleIntro } from "@/components/shared/module-intro";
 import { BillingContent } from "./billing-content";
+import { annualBillingAvailable } from "@/lib/stripe/plans";
 
 export default function BillingPage() {
+  // Resolved on the server: the annual price ids are secrets, not NEXT_PUBLIC_,
+  // so the browser cannot tell whether annual billing is configured. Passing the
+  // answer down keeps the decision with the only side that can make it.
+  const annualAvailable = annualBillingAvailable();
+
   return (
     <div className="space-y-6">
       <ModuleIntro
@@ -24,7 +30,7 @@ export default function BillingPage() {
           </div>
         }
       >
-        <BillingContent />
+        <BillingContent annualAvailable={annualAvailable} />
       </Suspense>
     </div>
   );

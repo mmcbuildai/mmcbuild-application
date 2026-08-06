@@ -4,17 +4,29 @@ import { useEffect, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { Settings } from "lucide-react";
 import { getBillingStatus, createCheckoutSession, createPortalSession } from "./actions";
-import { PLANS, type PlanId } from "@/lib/stripe/plans";
+import {
+  PLANS,
+  annualSavingMonths,
+  displayPriceFor,
+  type BillingInterval,
+  type PlanId,
+} from "@/lib/stripe/plans";
 import { UsageRing } from "@/components/billing/usage-ring";
 import { PlanCard } from "@/components/billing/plan-card";
 import { PaymentSuccess } from "@/components/billing/payment-success";
 import { TrialBanner } from "@/components/billing/trial-banner";
 import type { SubscriptionStatus } from "@/lib/stripe/subscription";
 
-export function BillingContent() {
+export function BillingContent({
+  annualAvailable = false,
+}: {
+  /** Whether Stripe has annual prices configured — resolved server-side. */
+  annualAvailable?: boolean;
+}) {
   const searchParams = useSearchParams();
   const showSuccess = searchParams.get("success") === "true";
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
+  const [interval, setInterval] = useState<BillingInterval>("month");
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   // The action returns a typed error for every failure it can name (plan not
@@ -48,7 +60,7 @@ export function BillingContent() {
   const handleSelectPlan = (planId: string) => {
     setCheckoutError(null);
     startTransition(async () => {
-      const result = await createCheckoutSession(planId as PlanId);
+      const result = await createCheckoutSession(planId as PlanId, interval);
       if (result.url) {
         // Stripe's own hosted-checkout URL. It carries a required fragment and
         // cannot be rebuilt from the session id — the previous code guessed the
@@ -193,12 +205,43 @@ export function BillingContent() {
             {checkoutError}
           </div>
         )}
+        {/*
+          Monthly / annual switch. Rendered only when Stripe actually has annual
+          prices configured — offering annual with no price id behind it would
+          fail at the checkout page, in front of someone who has already decided
+          to pay. Degrade, don't fake.
+        */}
+        {annualAvailable && (
+          <div className="mb-5 flex justify-center">
+            <div
+              role="radiogroup"
+              aria-label="Billing period"
+              className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1"
+            >
+              {(["month", "year"] as const).map((option) => (
+                <button
+                  key={option}
+                  role="radio"
+                  aria-checked={interval === option}
+                  onClick={() => setInterval(option)}
+                  className={`inline-flex min-h-[44px] items-center rounded-md px-4 text-sm font-medium transition-colors ${
+                    interval === option
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  {option === "month" ? "Monthly" : "Annual"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {Object.entries(PLANS).map(([id, plan]) => (
             <PlanCard
               key={id}
               name={plan.name}
-              price={plan.price}
+              price={displayPriceFor(id as PlanId, interval)}
               features={plan.features}
               runLimit={plan.runLimit}
               isCurrent={status.tier === id}
@@ -206,6 +249,8 @@ export function BillingContent() {
               isCustom={"isCustom" in plan && plan.isCustom === true}
               onSelect={() => handleSelectPlan(id)}
               disabled={isPending}
+              interval={interval}
+              savingMonths={annualSavingMonths(id as PlanId)}
             />
           ))}
         </div>

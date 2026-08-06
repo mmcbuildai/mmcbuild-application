@@ -2,7 +2,7 @@
 
 import { Check, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TAX_QUALIFIER } from "@/lib/stripe/plans";
+import { TAX_QUALIFIER, type BillingInterval } from "@/lib/stripe/plans";
 
 interface PlanCardProps {
   name: string;
@@ -14,6 +14,10 @@ interface PlanCardProps {
   isCustom?: boolean;
   onSelect?: () => void;
   disabled?: boolean;
+  /** Which billing period `price` refers to. Defaults to monthly. */
+  interval?: BillingInterval;
+  /** Whole months saved by paying annually, when there is a saving to state. */
+  savingMonths?: number | null;
 }
 
 export function PlanCard({
@@ -26,6 +30,8 @@ export function PlanCard({
   isCustom,
   onSelect,
   disabled,
+  interval = "month",
+  savingMonths,
 }: PlanCardProps) {
   return (
     <div
@@ -51,7 +57,15 @@ export function PlanCard({
           <div className="mt-2">
             <span className="text-3xl font-bold text-slate-900">${price}</span>
             {/* Prices are quoted GST-exclusive — see TAX_QUALIFIER in plans.ts. */}
-            <span className="text-sm text-slate-500">/month {TAX_QUALIFIER}</span>
+            <span className="text-sm text-slate-500">
+              /{interval === "year" ? "year" : "month"} {TAX_QUALIFIER}
+            </span>
+            {interval === "year" && savingMonths ? (
+              <p className="mt-1 text-sm font-medium text-brandgreen-600">
+                {savingMonths} {savingMonths === 1 ? "month" : "months"} free
+                compared with paying monthly
+              </p>
+            ) : null}
           </div>
         ) : (
           <div className="mt-2">

@@ -143,6 +143,8 @@ export const PLANS = {
       process.env.STRIPE_ESSENTIAL_EARLY_PRICE_ID ||
       "",
     standardPriceId: process.env.STRIPE_ESSENTIAL_STD_PRICE_ID || "",
+    annualPrice: 470,
+    annualPriceId: process.env.STRIPE_ESSENTIAL_ANNUAL_PRICE_ID || "",
   },
   professional: {
     id: "professional",
@@ -168,6 +170,8 @@ export const PLANS = {
       process.env.STRIPE_PROFESSIONAL_INTRO_PRICE_ID ||
       "",
     standardPriceId: process.env.STRIPE_PROFESSIONAL_STD_PRICE_ID || "",
+    annualPrice: 1910,
+    annualPriceId: process.env.STRIPE_PROFESSIONAL_ANNUAL_PRICE_ID || "",
     popular: true,
   },
   enterprise: {
@@ -190,11 +194,85 @@ export const PLANS = {
     ],
     stripePriceId: "",
     standardPriceId: "",
+    annualPrice: null,
+    annualPriceId: "",
     isCustom: true,
   },
 } as const;
 
 export type PlanId = keyof typeof PLANS;
+
+/** How often a subscription is billed. */
+export type BillingInterval = "month" | "year";
+
+/**
+ * Annual billing.
+ *
+ * Stripe has had live annual prices since 5 August ($470 Essential, $1,910
+ * Professional) and the app had no way to sell them — the website advertised
+ * annual billing that nothing could take money for. This closes that.
+ *
+ * ⚠️ `annualPriceId` is read from env and may legitimately be EMPTY. Rather
+ * than showing an annual option whose checkout would fail with "No such price",
+ * the UI asks `annualBillingAvailable()` and simply does not offer annual when
+ * it is not configured. Degrade, don't fake — a missing price id is an operator
+ * configuration gap, not something a customer should discover at checkout.
+ *
+ * The displayed `annualPrice` is a fallback for rendering only. Stripe remains
+ * the authority on what is actually charged: the amounts here must match the
+ * live prices, and `tests/unit/billing/annual-pricing.test.ts` pins the
+ * relationship (annual < 12 × monthly) so a typo that makes annual the more
+ * expensive option cannot ship silently.
+ */
+export function annualPriceIdFor(planId: PlanId): string {
+  const plan = PLANS[planId];
+  return "annualPriceId" in plan ? plan.annualPriceId : "";
+}
+
+/** True when every sellable tier has an annual price configured in Stripe. */
+export function annualBillingAvailable(): boolean {
+  return SELLABLE_PLAN_IDS.every((id) => annualPriceIdFor(id) !== "");
+}
+
+/** Tiers a customer can actually buy self-serve (Enterprise is contact-us). */
+export const SELLABLE_PLAN_IDS = ["essential", "professional"] as const;
+
+/**
+ * The Stripe price id to charge for a tier on a given interval.
+ * Returns "" when that combination is not configured — callers must treat that
+ * as "not for sale" rather than passing an empty string to Stripe.
+ */
+export function priceIdFor(planId: PlanId, interval: BillingInterval): string {
+  const plan = PLANS[planId];
+  if (interval === "year") return annualPriceIdFor(planId);
+  return plan.stripePriceId;
+}
+
+/** The displayed amount for a tier on a given interval. */
+export function displayPriceFor(
+  planId: PlanId,
+  interval: BillingInterval,
+): number | null {
+  const plan = PLANS[planId];
+  if (interval === "year") {
+    return "annualPrice" in plan ? plan.annualPrice : null;
+  }
+  return plan.price;
+}
+
+/**
+ * Whole months saved by paying annually, e.g. 2 for $470 against $49/month.
+ * Returns null when either price is missing, so the UI can omit the claim
+ * rather than print "save 0 months".
+ */
+export function annualSavingMonths(planId: PlanId): number | null {
+  const monthly = displayPriceFor(planId, "month");
+  const annual = displayPriceFor(planId, "year");
+  if (!monthly || !annual) return null;
+  const saved = monthly * 12 - annual;
+  if (saved <= 0) return null;
+  return Math.round(saved / monthly);
+}
 
 /**
  * Legacy `subscriptions.plan_id` values from before the tier migration
@@ -264,12 +342,21 @@ export const TAX_DISCLOSURE =
 export const TRIAL_RUN_LIMIT = 3;
 export const TRIAL_DAYS = 14;
 
+/**
+ * Resolve a Stripe price id back to the tier it grants.
+ *
+ * Must match EVERY price a tier can be bought at — launch, standard and annual.
+ * A price the webhook cannot resolve means a real customer pays and the
+ * subscription lands with no tier, so they get nothing for their money. Adding
+ * annual prices without adding them here would have done exactly that.
+ */
 export function getPlanByPriceId(priceId: string) {
   if (!priceId) return undefined;
   return Object.values(PLANS).find(
     (p) =>
       (p.stripePriceId && p.stripePriceId === priceId) ||
-      ("standardPriceId" in p && p.standardPriceId && p.standardPriceId === priceId),
+      ("standardPriceId" in p && p.standardPriceId && p.standardPriceId === priceId) ||
+      ("annualPriceId" in p && p.annualPriceId && p.annualPriceId === priceId),
   );
 }
 
