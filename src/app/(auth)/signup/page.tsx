@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { signUp } from "../actions";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { SignedInNotice } from "@/components/auth/signed-in-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -58,6 +59,11 @@ function SignupForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Renders only when the visitor is already signed in. Middleware used
+            to redirect them to /dashboard instead, which read as the product
+            refusing to let them create an account. */}
+        <SignedInNotice />
+
         {error && (
           <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
             {decodeURIComponent(error)}

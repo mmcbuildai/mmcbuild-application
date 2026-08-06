@@ -14,7 +14,29 @@ const PROTECTED_ROUTES = [
   "/beta",
 ];
 
-const AUTH_ROUTES = ["/login", "/signup"];
+/**
+ * Auth pages an already-signed-in user is bounced away from.
+ *
+ * /signup is deliberately NOT here. Bouncing a signed-in visitor off /login is
+ * right — they asked to log in and they already are. Bouncing them off /signup
+ * is not: they asked to create an ACCOUNT, and being silently redirected to
+ * someone else's dashboard looks like the product refusing to let them.
+ *
+ * Karen hit exactly this — "trying to create a new account with a different
+ * name email address but it is not allowing me. Do I need to clear my cache?"
+ * Nothing was broken; she was signed in, so /signup 307'd to /dashboard and she
+ * never saw the form. The cache instinct is the tell: an invisible redirect
+ * feels like stale state.
+ *
+ * It gets worse the moment the public CTA switches to purchase (SCRUM-372),
+ * because those buttons point at /signup — so any signed-in visitor clicking
+ * "Get started" from the marketing site would land on a dashboard with no
+ * explanation.
+ *
+ * /signup now renders, and tells them who they are signed in as with a way to
+ * sign out (see the signed-in notice on the signup page).
+ */
+const AUTH_ROUTES = ["/login"];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
