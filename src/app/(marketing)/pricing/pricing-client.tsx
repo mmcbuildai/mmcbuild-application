@@ -197,7 +197,12 @@ const faqs = [
   },
   {
     q: "Do you offer discounts for annual billing?",
-    a: "Yes! Annual billing saves you 20% compared to monthly billing on Professional and Enterprise plans.",
+    // Named the wrong tiers until 7 August: it offered annual on Enterprise,
+    // which is custom-priced and has no annual price to sell, and omitted
+    // Essential, which does. Someone on Essential was told annual was not
+    // available to them, and an Enterprise buyer was quoted a discount nothing
+    // could apply.
+    a: "Yes — annual billing saves you about 20% compared with paying monthly, on both the Essential and Professional plans. That works out to roughly two months free. Enterprise is custom-priced, so annual terms are agreed as part of your quote.",
   },
 ];
 
