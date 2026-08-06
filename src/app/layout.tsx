@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "@/components/ui/sonner";
+import HubSpotTracking from "@/components/analytics/hubspot-tracking";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,6 +36,10 @@ export default function RootLayout({
         {/* Vercel Web Analytics — privacy-friendly, cookieless page/route metrics.
             No-op outside Vercel; collects no PII (REGULATED posture). */}
         <Analytics />
+        {/* HubSpot visitor tracking + first-touch campaign capture. Renders
+            nothing until NEXT_PUBLIC_HUBSPOT_PORTAL_ID is set — see the
+            component for why that gate exists. */}
+        <HubSpotTracking />
       </body>
     </html>
   );
