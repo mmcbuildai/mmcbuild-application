@@ -11,7 +11,10 @@ import {
   type PlanId,
 } from "@/lib/stripe/plans";
 import { getSubscriptionStatus } from "@/lib/stripe/subscription";
-import { reconcileSubscriptionFromStripe } from "@/lib/stripe/reconcile";
+import {
+  reconcileSubscriptionFromStripe,
+  countLiveStripeSubscriptions,
+} from "@/lib/stripe/reconcile";
 import { redirect } from "next/navigation";
 
 async function getOrgWithStripeCustomer() {
@@ -356,5 +359,10 @@ export async function reconcileBilling() {
     return { status: "failed" as const, detail: "Profile / org not found" };
   }
 
-  return reconcileSubscriptionFromStripe(profile.org_id);
+  // Ask Stripe how many live subscriptions there really are, WITHOUT the
+  // "are we missing a row?" precondition. getBillingStatus has already
+  // reconciled by the time this runs, so a check gated on a missing row would
+  // find one present and report nothing — which is exactly what happened: two
+  // live subscriptions, and the banner built to catch that stayed silent.
+  return countLiveStripeSubscriptions(profile.org_id);
 }
