@@ -58,6 +58,14 @@ export function BillingContent({
     );
   }
 
+  // "Has something to manage" — a real Stripe subscription, including one still
+  // in its trial. A legacy trial held on the organisation row is NOT this: there
+  // is no card and no subscription, so there is nothing to cancel and no billing
+  // portal to open. Copy on this page has to tell those two apart or it promises
+  // controls that do not exist for the reader.
+  const hasSubscription =
+    status.tier !== "trial" && status.tier !== "expired";
+
   const handleSelectPlan = (planId: string) => {
     setCheckoutError(null);
     startTransition(async () => {
@@ -193,6 +201,18 @@ export function BillingContent({
                   <Settings className="w-4 h-4" />
                   {isPending ? "Opening…" : "Manage subscription or cancel"}
                 </button>
+                {/*
+                  Say what is behind the button. The comment above complains
+                  that a customer "had to guess that Manage contained it" —
+                  which was true of cancelling, and is equally true of the card
+                  on file, the invoices and the plan change. All four live in
+                  the Stripe portal and none of them were named anywhere.
+                */}
+                <p className="text-xs text-slate-500">
+                  Opens your billing portal, where you can{" "}
+                  <strong>cancel</strong>, change plan, update the card on file,
+                  and download past invoices and receipts.
+                </p>
                 <p className="text-xs text-slate-500">
                   Cancel any time — no notice period and no cancellation fee. You
                   keep access until the end of the period you have paid for.
@@ -294,7 +314,9 @@ export function BillingContent({
           than a link they do not click.
         */}
         <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          <p className="font-medium text-slate-900">Before you subscribe</p>
+          <p className="font-medium text-slate-900">
+            {hasSubscription ? "Your subscription terms" : "Before you subscribe"}
+          </p>
           <ul className="mt-2 space-y-1.5">
             <li>
               Every plan starts with a <strong>14-day free trial</strong>. A card
@@ -304,9 +326,30 @@ export function BillingContent({
               At the end of the 14 days your card is charged automatically for
               the first period, unless you cancel before then.
             </li>
+            {/*
+              This line was written in the present tense for everybody, which
+              made it FALSE for the people most likely to read it: someone on a
+              trial with no card has no cancel control on this page, because
+              there is nothing to cancel. Telling them they can cancel here, and
+              then showing them nothing that cancels, is worse than saying
+              nothing at all — it reads as a control that is broken or hidden.
+            */}
             <li>
-              <strong>You can cancel at any time from this page</strong> — no
-              notice period, no cancellation fee, and no need to contact us.
+              {hasSubscription ? (
+                <>
+                  <strong>You can cancel at any time from this page</strong> —
+                  use the button in Current Plan above. No notice period, no
+                  cancellation fee, and no need to contact us.
+                </>
+              ) : (
+                <>
+                  <strong>
+                    Once you subscribe you can cancel at any time from this page
+                  </strong>{" "}
+                  — no notice period, no cancellation fee, and no need to contact
+                  us.
+                </>
+              )}
             </li>
             <li>All prices exclude GST, which is added at checkout.</li>
           </ul>
