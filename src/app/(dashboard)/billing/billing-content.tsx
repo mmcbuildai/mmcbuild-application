@@ -11,6 +11,7 @@ import {
   type BillingInterval,
   type PlanId,
 } from "@/lib/stripe/plans";
+import { grossAmountFor } from "@/lib/billing/trial-reminders";
 import { UsageRing } from "@/components/billing/usage-ring";
 import { PlanCard } from "@/components/billing/plan-card";
 import { PaymentSuccess } from "@/components/billing/payment-success";
@@ -125,16 +126,45 @@ export function BillingContent({
           ) : (
             <div>
               <p className="text-2xl font-bold text-slate-900 capitalize">
-                {status.tier}
+                {status.status === "trialing"
+                  ? `${PLANS[status.tier as PlanId]?.name ?? status.tier} — free trial`
+                  : status.tier}
               </p>
               <p className="text-sm text-slate-500 mt-1">
                 ${PLANS[status.tier as PlanId]?.price ?? "—"}/month
                 {status.cancelAtPeriodEnd && " · Cancels at period end"}
               </p>
-              {status.periodEnd && (
-                <p className="text-sm text-slate-500">
-                  Renews {new Date(status.periodEnd).toLocaleDateString("en-AU")}
+              {/*
+                A subscription in its trial reaches this branch too, and it used
+                to read "Essential · $49/month · Renews 21 August" — which says
+                nothing about being in a free trial, calls the FIRST charge a
+                renewal, and quotes $49 when $53.90 leaves the account.
+                Under Option A the customer has already handed over a card, so
+                this panel is the one place they check before deciding whether
+                to let it run. It has to name the real amount and the real date.
+              */}
+              {status.status === "trialing" && status.trialEndsAt ? (
+                <p className="mt-2 text-sm font-medium text-slate-900">
+                  First charge{" "}
+                  {(() => {
+                    const amounts = grossAmountFor(status.tier as PlanId);
+                    return amounts ? `$${amounts.gross.toFixed(2)}` : "";
+                  })()}{" "}
+                  on{" "}
+                  {new Date(status.trialEndsAt).toLocaleDateString("en-AU", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                  . Cancel before then and you pay nothing.
                 </p>
+              ) : (
+                status.periodEnd && (
+                  <p className="text-sm text-slate-500">
+                    Renews{" "}
+                    {new Date(status.periodEnd).toLocaleDateString("en-AU")}
+                  </p>
+                )
               )}
               {status.status === "past_due" && (
                 <p className="text-sm text-red-500 font-medium mt-2">
@@ -253,6 +283,42 @@ export function BillingContent({
               savingMonths={annualSavingMonths(id as PlanId)}
             />
           ))}
+        </div>
+
+        {/*
+          The terms were reachable from the footer and nowhere near the point of
+          purchase. This is the screen where someone hands over a card, so the
+          document describing what they are agreeing to belongs here — stated,
+          not buried. Everything below is already in section 7 of the terms; it
+          is repeated because a summary someone actually reads is worth more
+          than a link they do not click.
+        */}
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <p className="font-medium text-slate-900">Before you subscribe</p>
+          <ul className="mt-2 space-y-1.5">
+            <li>
+              Every plan starts with a <strong>14-day free trial</strong>. A card
+              is required to begin it, and you are not charged during the trial.
+            </li>
+            <li>
+              At the end of the 14 days your card is charged automatically for
+              the first period, unless you cancel before then.
+            </li>
+            <li>
+              <strong>You can cancel at any time from this page</strong> — no
+              notice period, no cancellation fee, and no need to contact us.
+            </li>
+            <li>All prices exclude GST, which is added at checkout.</li>
+          </ul>
+          <p className="mt-3">
+            <a
+              href="/terms"
+              className="font-medium text-brand-600 underline hover:text-brand-700"
+            >
+              Read the full Terms of Use
+            </a>{" "}
+            — payment, renewal and cancellation are in section 7.
+          </p>
         </div>
       </div>
     </div>
