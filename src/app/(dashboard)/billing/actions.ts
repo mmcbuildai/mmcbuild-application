@@ -11,6 +11,7 @@ import {
   type PlanId,
 } from "@/lib/stripe/plans";
 import { getSubscriptionStatus } from "@/lib/stripe/subscription";
+import { reconcileSubscriptionFromStripe } from "@/lib/stripe/reconcile";
 import { redirect } from "next/navigation";
 
 async function getOrgWithStripeCustomer() {
@@ -313,5 +314,47 @@ export async function getBillingStatus() {
 
   if (!profile) return null;
 
+  // Ask Stripe before answering, IF the organisation looks stranded — it has a
+  // Stripe customer but we have no live subscription recorded for it.
+  //
+  // That combination means one of two things: they abandoned checkout (fine,
+  // nothing to find), or they paid and we were never told (SCRUM-389 — the
+  // worst failure this product has, because the customer is charged, locked
+  // out, and cannot even cancel since we do not believe there is anything to
+  // cancel).
+  //
+  // Reconciling here turns a missed webhook into a delay of one page load. It
+  // returns immediately in the common case, and once it recovers a row the
+  // condition stops being true, so it stops running.
+  await reconcileSubscriptionFromStripe(profile.org_id);
+
   return getSubscriptionStatus(profile.org_id);
+}
+
+/**
+ * Ask Stripe directly and report what was found, for the Billing page to show.
+ *
+ * Separate from getBillingStatus so the page can tell the customer something
+ * true when reconciliation finds a problem it cannot fix on its own — in
+ * particular, more than one live subscription on the same customer, which means
+ * they are being billed twice and needs a person.
+ */
+export async function reconcileBilling() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { status: "failed" as const, detail: "Unauthorised" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile?.org_id) {
+    return { status: "failed" as const, detail: "Profile / org not found" };
+  }
+
+  return reconcileSubscriptionFromStripe(profile.org_id);
 }

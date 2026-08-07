@@ -8,6 +8,7 @@ import {
   createCheckoutSession,
   createPortalSession,
   cancelSubscription,
+  reconcileBilling,
 } from "./actions";
 import {
   PLANS,
@@ -41,11 +42,26 @@ export function BillingContent({
   // nothing — no message, no console entry, nothing to report. Surface it.
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [portalError, setPortalError] = useState<string | null>(null);
+  // More than one live subscription on the same Stripe customer. Held in its own
+  // state because it is not an error the customer caused and cannot fix — it is
+  // something we owe them an explanation and a refund for.
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    count: number;
+    kept: string;
+    others: string[];
+  } | null>(null);
 
   useEffect(() => {
     getBillingStatus().then((s) => {
       setStatus(s);
       setLoading(false);
+    });
+    // Ask Stripe what is really there. getBillingStatus already reconciles
+    // silently; this second call is only to learn whether it found something a
+    // customer must be TOLD about — specifically more than one live
+    // subscription, which means they are being billed twice.
+    reconcileBilling().then((r) => {
+      if (r.status === "duplicates") setDuplicateWarning(r);
     });
   }, []);
 
@@ -160,6 +176,42 @@ export function BillingContent({
           usageCount={status.usageCount}
           usageLimit={status.usageLimit}
         />
+      )}
+
+      {/*
+        Two live subscriptions on one customer. This happens when a checkout is
+        retried because the first one appeared not to work — which is exactly
+        what a missed webhook makes people do. Telling them plainly is the only
+        decent option: they can see the charges on their statement whether or
+        not we mention it, and finding it themselves after we stayed quiet is
+        the version that costs trust.
+      */}
+      {duplicateWarning && (
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+        >
+          <p className="font-semibold">
+            We have found {duplicateWarning.count} active subscriptions on your
+            account
+          </p>
+          <p className="mt-1.5">
+            You should only ever have one. This usually happens when a payment
+            appears to fail and is tried again. You may have been charged more
+            than once, or be due to be.
+          </p>
+          <p className="mt-1.5">
+            <strong>
+              You do not need to do anything and you will not be left out of
+              pocket.
+            </strong>{" "}
+            Please email{" "}
+            <a href="mailto:info@mmcbuild.com.au" className="underline">
+              info@mmcbuild.com.au
+            </a>{" "}
+            and we will cancel the extra one and refund anything charged twice.
+          </p>
+        </div>
       )}
 
       {/* Current plan + Usage */}
