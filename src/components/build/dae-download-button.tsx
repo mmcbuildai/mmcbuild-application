@@ -9,12 +9,19 @@ interface DaeDownloadButtonProps {
   fallbackFilename: string;
   /** Hide entirely if no spatial layout was extracted */
   available: boolean;
+  /**
+   * Render the button's own one-line helper. The export panel (SCRUM-354)
+   * renders richer, single-sourced guidance from lib/build/export-formats, so
+   * it opts out to avoid saying the same thing twice.
+   */
+  showHelper?: boolean;
 }
 
 export function DaeDownloadButton({
   checkId,
   fallbackFilename,
   available,
+  showHelper = true,
 }: DaeDownloadButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,10 +71,12 @@ export function DaeDownloadButton({
         )}
         Export 3D model (.dae)
       </Button>
-      <span className="text-[11px] text-muted-foreground">
+      {showHelper && (
+        <span className="text-[11px] text-muted-foreground">
         Downloads a .dae file to open in SketchUp / Revit / Rhino — not viewable
         in the browser
       </span>
+      )}
       {error && <span className="text-[11px] text-red-600">{error}</span>}
     </div>
   );
