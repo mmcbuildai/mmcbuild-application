@@ -3,7 +3,12 @@
 import { useEffect, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { Settings } from "lucide-react";
-import { getBillingStatus, createCheckoutSession, createPortalSession } from "./actions";
+import {
+  getBillingStatus,
+  createCheckoutSession,
+  createPortalSession,
+  cancelSubscription,
+} from "./actions";
 import {
   PLANS,
   annualSavingMonths,
@@ -92,6 +97,46 @@ export function BillingContent({
   // more here than anywhere else in the product — this is the path a customer
   // uses to CANCEL, and a dead button on the cancel path is the one failure
   // nobody should ever be able to say we shipped.
+  /**
+   * Cancel, with the consequence stated before the click.
+   *
+   * PRODUCT_STANDARDS §9: an irreversible or money-affecting action names what
+   * will happen before it happens. Here that cuts both ways — someone cancelling
+   * a trial needs to know they will NOT be charged, and someone cancelling a paid
+   * plan needs to know they keep what they paid for. Both are reassuring, and
+   * both are the reason people hesitate on this button.
+   */
+  const handleCancel = () => {
+    setPortalError(null);
+    const trialing = status?.status === "trialing";
+    const endDate = status?.trialEndsAt ?? status?.periodEnd;
+    const when = endDate
+      ? new Date(endDate).toLocaleDateString("en-AU", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : "the end of your current period";
+
+    const message = trialing
+      ? `Cancel your free trial?\n\nYou will NOT be charged, now or on ${when}.\n\nYou keep access until ${when}, then the paid features stop. You can subscribe again at any time.`
+      : `Cancel your subscription?\n\nYou will not be charged again.\n\nYou keep full access until ${when}, which you have already paid for. You can subscribe again at any time.`;
+
+    if (!window.confirm(message)) return;
+
+    startTransition(async () => {
+      const result = await cancelSubscription();
+      if (result.error) {
+        setPortalError(result.error);
+        return;
+      }
+      // Re-read rather than guessing at the new state — the page then shows the
+      // confirmed position, not an optimistic one that might not have landed.
+      const refreshed = await getBillingStatus();
+      if (refreshed) setStatus(refreshed);
+    });
+  };
+
   const handleManageSubscription = () => {
     setPortalError(null);
     startTransition(async () => {
@@ -193,13 +238,45 @@ export function BillingContent({
                 journey that should have none.
               */}
               <div className="mt-4 flex flex-col gap-2">
+                {/*
+                  Cancelling gets its own button, not a trip through the Stripe
+                  portal. The portal needs a configuration saved in the Stripe
+                  dashboard per mode, and if that has not been done in live mode
+                  the portal button simply throws — leaving someone unable to
+                  cancel on the one journey the terms promise needs no help from
+                  us. This path talks to the subscription directly and cannot be
+                  blocked by a setting nobody remembered to save.
+                */}
+                {!status.cancelAtPeriodEnd && (
+                  <button
+                    onClick={handleCancel}
+                    disabled={isPending}
+                    className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-red-300 px-4 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {isPending ? "Working…" : "Cancel subscription"}
+                  </button>
+                )}
+                {status.cancelAtPeriodEnd && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    <strong>Cancelled.</strong> You will not be charged again.
+                    You keep access until{" "}
+                    {status.periodEnd
+                      ? new Date(status.periodEnd).toLocaleDateString("en-AU", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })
+                      : "the end of the current period"}
+                    . To restart, choose a plan below.
+                  </div>
+                )}
                 <button
                   onClick={handleManageSubscription}
                   disabled={isPending}
                   className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
                 >
                   <Settings className="w-4 h-4" />
-                  {isPending ? "Opening…" : "Manage subscription or cancel"}
+                  {isPending ? "Opening…" : "Payment details and invoices"}
                 </button>
                 {/*
                   Say what is behind the button. The comment above complains
@@ -209,13 +286,13 @@ export function BillingContent({
                   the Stripe portal and none of them were named anywhere.
                 */}
                 <p className="text-xs text-slate-500">
-                  Opens your billing portal, where you can{" "}
-                  <strong>cancel</strong>, change plan, update the card on file,
-                  and download past invoices and receipts.
+                  Opens your billing portal, where you can change plan, update
+                  the card on file, and download past invoices and receipts.
                 </p>
                 <p className="text-xs text-slate-500">
                   Cancel any time — no notice period and no cancellation fee. You
-                  keep access until the end of the period you have paid for.
+                  keep access until the end of the period you have paid for, and
+                  during a free trial you are never charged at all.
                 </p>
                 {portalError && (
                   <div

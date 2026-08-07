@@ -158,12 +158,143 @@ export async function createPortalSession() {
     return { error: "No active subscription" };
   }
 
-  const session = await stripe.billingPortal.sessions.create({
-    customer: org.stripe_customer_id,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing`,
-  });
+  let session;
+  try {
+    session = await stripe.billingPortal.sessions.create({
+      customer: org.stripe_customer_id,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing`,
+    });
+  } catch (e) {
+    // This call had no error handling at all, which mattered more here than
+    // anywhere else in the file: it is the path a customer takes to STOP being
+    // charged.
+    //
+    // The likely cause is not a code fault. Stripe's customer portal needs a
+    // configuration saved in the dashboard, PER MODE — and a portal configured
+    // in test mode does nothing for live. Without one, this throws
+    // "No configuration provided and your live mode default configuration has
+    // not been created", the action rejects, and the customer sees a button
+    // that does nothing on the one journey the terms promise will be easy.
+    //
+    // cancelSubscription() below exists so that failure can no longer strand
+    // anyone, but naming the cause here is what makes it fixable in a minute
+    // rather than debugged for an hour.
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("[billing] portal session create failed", { detail });
+    return {
+      error:
+        `Could not open the billing portal: ${detail}. ` +
+        `If this mentions a missing configuration, the Stripe customer portal ` +
+        `needs to be saved in the dashboard for THIS mode (Settings → Billing → ` +
+        `Customer portal). You can still cancel using the Cancel button on this page.`,
+    };
+  }
 
   redirect(session.url);
+}
+
+/**
+ * Cancel the current subscription, without depending on the Stripe portal.
+ *
+ * WHY THIS EXISTS SEPARATELY
+ * The terms say: "You can cancel at any time, from the Billing page in your
+ * account. No notice period, no cancellation fee, and no need to contact us."
+ *
+ * Until now the only way to honour that was the Stripe customer portal, which
+ * needs a configuration saved in the dashboard per mode. If that has not been
+ * done in live mode — and as of 5 August it had not — the portal button throws
+ * and the customer cannot cancel at all. They would have to contact us, which
+ * is the one thing the terms promise they will not have to do, and they would
+ * be charged in the meantime.
+ *
+ * This path talks to the subscription directly and needs no dashboard setup, so
+ * cancelling cannot be blocked by a configuration nobody remembered to save.
+ *
+ * `cancel_at_period_end` rather than an immediate cancellation, deliberately:
+ *   - during a TRIAL, the period ends on day 14, so they keep the access they
+ *     still have and are never charged — exactly what the terms describe.
+ *   - once PAID, they keep what they have already paid for, which is also what
+ *     the terms describe ("you keep access until the end of the period you have
+ *     paid for").
+ * An immediate cancellation would take away access someone had paid for, and
+ * would be the wrong kind of surprise on a screen that exists to remove them.
+ */
+export async function cancelSubscription() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorised" };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!profile?.org_id) return { error: "Profile / org not found" };
+
+  // Only an owner or admin may cancel — a `builder` or `viewer` inside someone
+  // else's organisation must not be able to end the subscription paying for it.
+  const { data: role } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("org_id", profile.org_id)
+    .single();
+
+  if (!role || (role.role !== "owner" && role.role !== "admin")) {
+    return {
+      error:
+        "Only an organisation owner or admin can cancel the subscription. " +
+        "Please ask them to do it from the Billing page.",
+    };
+  }
+
+  const { data: sub } = await db()
+    .from("subscriptions")
+    .select("stripe_subscription_id, status")
+    .eq("org_id", profile.org_id)
+    .in("status", ["active", "past_due", "trialing"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!sub?.stripe_subscription_id) {
+    return { error: "There is no active subscription on this account to cancel." };
+  }
+
+  try {
+    const updated = await stripe.subscriptions.update(sub.stripe_subscription_id, {
+      cancel_at_period_end: true,
+    });
+
+    // Reflect it immediately rather than waiting for the webhook. The webhook is
+    // still the source of truth and will confirm this, but a customer who has
+    // just cancelled must see it acknowledged on the page — otherwise they click
+    // again, or worse, assume it did not work and email us.
+    await db()
+      .from("subscriptions")
+      .update({ cancel_at_period_end: true, updated_at: new Date().toISOString() })
+      .eq("stripe_subscription_id", sub.stripe_subscription_id);
+
+    return {
+      ok: true,
+      wasTrialing: sub.status === "trialing",
+      endsAt: updated.cancel_at
+        ? new Date(updated.cancel_at * 1000).toISOString()
+        : null,
+    };
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("[billing] cancel failed", { detail });
+    return {
+      error:
+        `Could not cancel the subscription: ${detail}. ` +
+        `Please contact us at info@mmcbuild.com.au and we will cancel it for you ` +
+        `— you will not be charged in the meantime.`,
+    };
+  }
 }
 
 export async function getBillingStatus() {
