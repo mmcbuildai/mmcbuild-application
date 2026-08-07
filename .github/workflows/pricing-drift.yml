@@ -1,0 +1,52 @@
+name: Pricing drift (marketing site vs app)
+
+# Does mmcbuild.com.au advertise prices this app can actually charge?
+#
+# There are two pricing pages in two repositories, and they have already drifted
+# once: on 7 August the marketing FAQ offered annual billing on "Professional and
+# Enterprise" — Enterprise has no annual price at all, and Essential, which does,
+# was omitted. A visitor read one thing and the product did another.
+#
+# WHY NOT ON PULL REQUESTS
+# This judges the LIVE marketing site, which no pull request in this repo can
+# change. Running it on PRs would block unrelated work whenever mmcbuild.com.au
+# had a blip, and would tell you nothing about the branch being reviewed.
+#
+# The app-side half of the guard DOES run on every PR: the unit test
+# tests/unit/billing/pricing-drift.test.ts pins this app's annual prices to the
+# formula the marketing site uses, deterministically and with no network. Between
+# them: that one catches a change made HERE, this one catches a change made THERE.
+#
+# The daily schedule matters because the marketing repo can be deployed without
+# anything happening in this one — which is exactly how the two came apart.
+
+on:
+  schedule:
+    - cron: "0 22 * * *" # daily, 22:00 UTC ≈ 08:00 Brisbane
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/stripe/plans.ts"
+      - "scripts/check-pricing-drift.mjs"
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Live marketing site agrees with app pricing
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Compare mmcbuild.com.au against this app's prices
+        # Exits 1 on a real mismatch AND on an unreachable site. An unreachable
+        # site is deliberately not a pass — a check that quietly does nothing is
+        # indistinguishable from one that succeeded, which is the failure this
+        # whole workflow exists to prevent.
+        run: node scripts/check-pricing-drift.mjs
