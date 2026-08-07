@@ -18,6 +18,7 @@ import {
   FlaskConical,
   HelpCircle,
   MessageSquarePlus,
+  CreditCard,
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { OrgSwitcher } from "./org-switcher";
@@ -50,9 +51,24 @@ const topNav = [
   { name: "Beta Testing", href: "/beta", icon: FlaskConical },
 ];
 
-// Knowledge and Billing now live inside the Settings page (SCRUM-43) rather than
-// the sidebar — keep the sidebar to the primary surfaces plus Settings/Support.
+// Knowledge lives inside the Settings page (SCRUM-43) rather than the sidebar.
+//
+// BILLING IS BACK IN THE SIDEBAR, and the reason the SCRUM-43 decision no longer
+// holds is worth stating. When Billing was folded into Settings, nobody could be
+// charged without actively choosing to be — so a subscription page two clicks
+// deep was a reasonable tidy-up.
+//
+// Option A (SCRUM-366, 7 August) reversed that: we now take a card at sign-up and
+// charge it automatically on day 14 unless the customer cancels. Cancelling
+// stopped being housekeeping and became the thing standing between someone and a
+// charge they did not want.
+//
+// The terms say it plainly — "You can cancel at any time, from the Billing page
+// in your account. No notice period, no cancellation fee, and no need to contact
+// us." A promise like that should not be answered with "it is inside Settings".
+// Someone hunting for it is, by definition, already unhappy.
 const bottomNav = [
+  { name: "Billing", href: "/billing", icon: CreditCard },
   { name: "Settings", href: "/settings", icon: Settings },
   { name: "Support", href: "/support", icon: HelpCircle },
 ];
