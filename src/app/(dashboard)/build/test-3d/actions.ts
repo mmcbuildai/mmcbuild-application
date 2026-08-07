@@ -13,6 +13,7 @@
 // row says status='done' or 'error'.
 
 import { createClient } from "@/lib/supabase/server";
+import { isOperatorEmail } from "@/lib/auth/operator";
 import { db } from "@/lib/supabase/db";
 import { inngest } from "@/lib/inngest/client";
 import { is3dRenderingEnabled } from "@/lib/build/render-3d";
@@ -52,6 +53,12 @@ export async function enqueueTest3D(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorised" };
+
+  // SCRUM-365: operator-only, enforced HERE as well as on the page. A page
+  // guard is a UX redirect — the server action is the correctness boundary, and
+  // an action reachable without its own check is reachable regardless of what
+  // the page did (same two-layer rule the paywall follows).
+  if (!isOperatorEmail(user.email)) return { error: "Unauthorised" };
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -114,6 +121,12 @@ export async function getTest3DStatus(jobId: string): Promise<Test3DStatus> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { status: "unauthorised" };
+  // NOT operator-gated, deliberately (SCRUM-365). Despite living under
+  // test-3d/, this poller is consumed by the CUSTOMER-facing System Preview
+  // panel (components/build/system-preview-panel.tsx), which runs the same
+  // extraction for a user's own project. Restricting it to operators would
+  // break the normal build flow. Access is bounded by the row's own
+  // `user_id !== user.id` check below — a caller only ever reads their own job.
 
   const { data, error } = await db()
     .from("test_3d_jobs")

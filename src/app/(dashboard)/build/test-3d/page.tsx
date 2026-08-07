@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { Test3DHarness } from "@/components/build/test-3d-harness";
 import { is3dRenderingEnabled } from "@/lib/build/render-3d";
+import { createClient } from "@/lib/supabase/server";
+import { isOperatorEmail } from "@/lib/auth/operator";
 
 export const metadata = {
   title: "3D Extractor Test Harness",
@@ -12,12 +14,30 @@ export const metadata = {
 // time out before all pages are extracted.
 export const maxDuration = 300;
 
-export default function Test3DPage() {
-  // This harness renders the raw extractor output in 3D and carries no operator
-  // gate of its own — any signed-in user who guesses the URL reaches it. With 3D
-  // switched off for Go Live 1, that is exactly the render we are hiding, so the
-  // route 404s rather than leaving a back door to it.
+export default async function Test3DPage() {
+  // SCRUM-365: this harness is an internal diagnostic that renders the raw
+  // extractor output. It must be operator-only.
+  //
+  // The 3D flag alone is NOT the gate. PR #134 made this route 404 while
+  // NEXT_PUBLIC_3D_RENDERING_ENABLED is false, which closes it for Go Live 1 —
+  // but only as a side effect of the toggle. The whole point of shipping a
+  // toggle rather than deleting the feature is that 3D gets switched back on,
+  // and on that day the route would silently become reachable by every
+  // signed-in customer again. So gate on the operator allowlist as well, and
+  // keep both checks: the flag hides the feature, the allowlist restricts the
+  // diagnostic.
   if (!is3dRenderingEnabled()) notFound();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // 404 rather than redirect: a non-operator should not learn the route exists.
+  // Operator identity is an EMAIL allowlist, never an org role — every
+  // self-signup owns their own org, so "owner" would let every customer in
+  // (see lib/auth/operator.ts).
+  if (!isOperatorEmail(user?.email)) notFound();
 
   return (
     <div className="max-w-5xl space-y-6">

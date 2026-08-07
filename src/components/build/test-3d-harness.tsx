@@ -16,16 +16,21 @@ import {
   detectPlanKind,
   contentTypeForKind,
   ACCEPTED_PLAN_ACCEPT_ATTR,
-  ANTHROPIC_PDF_MAX_BYTES,
-  planTooLargeMessage,
+  planUploadTooLargeMessage,
 } from "@/lib/plans/file-kind";
 
 type Phase = "idle" | "uploading" | "extracting";
 type ViewMode = "system-explorer" | "build-sequence" | "standard";
 
-// 32 MB, matching Anthropic's document ceiling. The old 50 MB cap let through
-// files the extractor could never process (the Gladesville 36 MB plan).
-const MAX_BYTES = ANTHROPIC_PDF_MAX_BYTES;
+// SCRUM-316: the client cap is now an UPLOAD limit, not a model limit. It was
+// pinned to Anthropic's 32 MB document ceiling on the assumption that anything
+// larger could never be processed — but the pipeline splits per page and only
+// ever sends the model page-sized slices, so a big multi-page set (the ~37 MB
+// Gladesville case) is perfectly processable. Rejecting it here meant the
+// server never got the chance. Matches the 50 MB project dropzone so the two
+// upload paths agree; a genuinely unprocessable file (a single page over the
+// ceiling) is caught server-side, where the page count is actually known.
+const MAX_BYTES = 50 * 1024 * 1024;
 
 export function Test3DHarness() {
   const [file, setFile] = useState<File | null>(null);
@@ -50,7 +55,7 @@ export function Test3DHarness() {
     if (file.size > MAX_BYTES) {
       setResult({
         layout: null,
-        error: planTooLargeMessage(file.size),
+        error: planUploadTooLargeMessage(file.size, MAX_BYTES),
       });
       return;
     }

@@ -24,6 +24,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { callVisionModel } from "@/lib/build/spatial/vision-call";
 import { extractJson } from "@/lib/ai/extract-json";
 import { preparePdfBufferForVision } from "@/lib/plans/pdf-vision-prep";
+import { buildVisionSubsetPdf } from "@/lib/plans/pdf-page-split";
 import type { DesignAttributes } from "@/lib/comply/questionnaire-prefill";
 import type { PlanFileKind } from "@/lib/plans/file-kind";
 import { contentTypeForKind, MIN_READABLE_PLAN_BYTES } from "@/lib/plans/file-kind";
@@ -231,16 +232,31 @@ export const extractDesignAttributes = inngest.createFunction(
       // only; images don't hit the document ceiling.
       if (kind === "pdf") {
         const prep = await preparePdfBufferForVision(buffer);
-        if (!prep.withinCeiling) {
-          // Still over the ceiling after optimise — skip cleanly rather than
-          // send an oversized doc. design_attributes stays null and the
-          // questionnaire falls back to manual entry (best-effort contract).
-          console.error(
-            `[extractDesignAttributes] PDF still over the document ceiling after optimise — skipping attribute extraction`,
-          );
-          return null;
-        }
         buffer = prep.buffer;
+
+        if (!prep.withinCeiling) {
+          // SCRUM-316: still over the ceiling after optimise. Previously this
+          // returned null and NO attributes were ever extracted from a large
+          // set (the ~37MB Gladesville case) — the document's total size was
+          // treated as a hard wall even though the model is only ever sent what
+          // we choose to send. Split per page FIRST and assemble a subset that
+          // fits, so size stops being a wall; only a single page that is itself
+          // over budget is genuinely unprocessable.
+          const subset = await buildVisionSubsetPdf(buffer);
+          if (!subset) {
+            // Degrade honestly (CLAUDE.md): design_attributes stays null and
+            // the questionnaire falls back to manual entry. Never send an
+            // oversized document, and never claim a read we did not do.
+            console.error(
+              `[extractDesignAttributes] plan ${plan.id}: over the document ceiling after optimise and not splittable into a usable subset — skipping attribute extraction`,
+            );
+            return null;
+          }
+          console.warn(
+            `[extractDesignAttributes] plan ${plan.id}: oversize set reduced to pages ${subset.pageNumbers.join(",")} of ${subset.totalPages} (${subset.buffer.byteLength} bytes) for attribute extraction`,
+          );
+          buffer = subset.buffer;
+        }
       }
 
       const result =
