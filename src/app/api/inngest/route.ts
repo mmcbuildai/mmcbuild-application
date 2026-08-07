@@ -31,10 +31,11 @@ import { notifyNewProfessional } from "@/lib/inngest/functions/notify-new-profes
 import { reapStuckJobs } from "@/lib/inngest/functions/reap-stuck-jobs";
 import { purgeSupersededPlans } from "@/lib/inngest/functions/purge-superseded-plans";
 import { remindComplianceExpiry } from "@/lib/inngest/functions/remind-compliance-expiry";
+import { remindTrialEnding } from "@/lib/inngest/functions/remind-trial-ending";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [testFunction, processPlan, extractDesignAttributes, runComplianceCheck, processKbDocument, classifyRdCommit, processCertification, sendRemediationEmail, notifyRemediationResponse, runDesignOptimisation, runCostEstimation, runSupplierComparison, ingestCostRates, sendEnquiryNotification, sendReviewNotification, generateTrainingContent, issueTrainingCertificate, syncStripeSubscription, syncHubspotListing, runTest3DExtractionFn, notifyNewProfessional, reapStuckJobs, purgeSupersededPlans, remindComplianceExpiry],
+  functions: [testFunction, processPlan, extractDesignAttributes, runComplianceCheck, processKbDocument, classifyRdCommit, processCertification, sendRemediationEmail, notifyRemediationResponse, runDesignOptimisation, runCostEstimation, runSupplierComparison, ingestCostRates, sendEnquiryNotification, sendReviewNotification, generateTrainingContent, issueTrainingCertificate, syncStripeSubscription, syncHubspotListing, runTest3DExtractionFn, notifyNewProfessional, reapStuckJobs, purgeSupersededPlans, remindComplianceExpiry, remindTrialEnding],
   // Force Inngest to call back to the production URL instead of the
   // deployment-specific URL which is behind Vercel Deployment Protection.
   serveHost: process.env.NEXT_PUBLIC_APP_URL || undefined,
