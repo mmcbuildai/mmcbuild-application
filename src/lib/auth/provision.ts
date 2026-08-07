@@ -1,5 +1,6 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { ensureMembership } from "./membership";
+import { recordSignupLead } from "@/lib/hubspot/signup";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -157,6 +158,25 @@ export async function provisionUser(
     .single();
   await ensureMembership(admin, userId, orgId, "owner", "internal", {
     setActive: true,
+  });
+
+  // A brand-new self-signup is a LEAD — record it and push it to HubSpot, so the
+  // social-ad CTA can point at /signup without CRM capture silently dropping to
+  // zero (client call 2026-07-29; see @/lib/hubspot/signup for the full why).
+  //
+  // Only this branch fires it. An `invited` user joined an existing customer's
+  // org from an org invitation, not a marketing funnel, so they are not a new
+  // lead; `existing` and `joined_additional_org` are repeat logins. This branch
+  // runs exactly once per user — on the request that creates their profile.
+  //
+  // Awaited deliberately: on Vercel, work left running after the response is not
+  // guaranteed to complete, so fire-and-forget would drop leads under load. It
+  // adds one HTTP round-trip to first login only, and recordSignupLead never
+  // throws, so provisioning cannot fail because of it.
+  await recordSignupLead({
+    email,
+    fullName,
+    orgName: user.orgNameFallback ?? null,
   });
 
   return {
