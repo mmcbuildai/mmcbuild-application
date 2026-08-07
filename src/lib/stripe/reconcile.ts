@@ -161,16 +161,22 @@ export async function reconcileSubscriptionFromStripe(
     // No customer means they have never reached checkout. Nothing to ask about.
     if (!org?.stripe_customer_id) return { status: "not-needed" };
 
-    const { data: existing } = await admin
-      .from("subscriptions")
-      .select("id")
-      .eq("org_id", orgId)
-      .in("status", ["active", "past_due", "trialing"])
-      .limit(1);
-
-    // We already know about a live subscription — the webhook did its job.
-    if (existing && existing.length > 0) return { status: "not-needed" };
-
+    // NOTE: this deliberately does NOT skip when a row already exists.
+    //
+    // The first version returned early in that case — "we know about it, the
+    // webhook did its job" — and that was wrong twice over while the webhook is
+    // down. It meant a row could never be CORRECTED, only created:
+    //
+    //   - Dennis's row carried a period_end of 7 August, thirteen days early,
+    //     written by the date bug fixed alongside this. It would have stayed
+    //     wrong forever, because a row existed.
+    //   - He then cancelled a subscription in the Stripe portal. Nothing told
+    //     us, so the page kept offering to cancel something already cancelled.
+    //
+    // A record that can be created from Stripe but never corrected from Stripe
+    // is only half a safety net. Refreshing costs one list call on a page a
+    // customer opens rarely, and it is what keeps the page honest about money
+    // while the webhook is unreliable.
     const list = await stripe.subscriptions.list({
       customer: org.stripe_customer_id,
       status: "all",
