@@ -36,6 +36,104 @@ export type ReconcileResult =
 interface SubWithPeriod {
   current_period_start?: number;
   current_period_end?: number;
+  items?: {
+    data?: Array<{ current_period_start?: number; current_period_end?: number }>;
+  };
+}
+
+/**
+ * When this subscription's current period ends, in seconds.
+ *
+ * THREE SOURCES, IN THIS ORDER, AND THE ORDER IS THE POINT.
+ *
+ * 1. `trial_end` when the subscription is trialing. This is the date the
+ *    customer is told they will be charged, and it is the one they will check
+ *    against their calendar. Take it from the field that means exactly that.
+ * 2. `current_period_end` on the ITEM. Stripe moved it there in the 2025-03 API
+ *    version; on newer versions the subscription-level field is simply absent.
+ * 3. `current_period_end` on the subscription, for older API versions.
+ *
+ * Getting this wrong is not cosmetic. The first version of this file read only
+ * source 3, found nothing, and fell back to "now" — so the Billing page told
+ * Dennis his card would be charged on 8 August when Stripe had the trial ending
+ * on the 21st. A date that is thirteen days early on a page about taking money
+ * is the kind of thing a customer disputes, and they would be right to.
+ */
+function periodEndSeconds(sub: SubWithPeriod & { trial_end?: number | null; status?: string }): number | null {
+  if (sub.status === "trialing" && sub.trial_end) return sub.trial_end;
+  const item = sub.items?.data?.[0];
+  return item?.current_period_end ?? sub.current_period_end ?? null;
+}
+
+/** Matching start, same three-source rule. */
+function periodStartSeconds(sub: SubWithPeriod): number | null {
+  const item = sub.items?.data?.[0];
+  return item?.current_period_start ?? sub.current_period_start ?? null;
+}
+
+/**
+ * Exported for tests only. These two functions decide the charge date shown to
+ * a customer and emailed to them, and the bug they fix produced a date thirteen
+ * days early with nothing failing — so they are worth pinning directly rather
+ * than only through the code that calls them.
+ */
+export const __testing = { periodEndSeconds, periodStartSeconds };
+
+/**
+ * How many live subscriptions this customer has, asked without the
+ * "are we missing a row?" precondition.
+ *
+ * Separate from reconcileSubscriptionFromStripe because of a race that made the
+ * duplicate warning useless: the page called reconcile (which wrote the missing
+ * row) and then called it again to ask about duplicates — by which point a row
+ * existed, so the second call returned "not-needed" and said nothing. Dennis
+ * had two live subscriptions and the banner built to catch that stayed silent.
+ *
+ * Double billing has to be detectable whether or not our records happen to be
+ * up to date, so this asks Stripe every time it is called.
+ */
+export async function countLiveStripeSubscriptions(
+  orgId: string,
+): Promise<ReconcileResult> {
+  try {
+    const admin = db();
+    const { data: org } = await admin
+      .from("organisations")
+      .select("stripe_customer_id")
+      .eq("id", orgId)
+      .single();
+
+    if (!org?.stripe_customer_id) return { status: "not-needed" };
+
+    const list = await stripe.subscriptions.list({
+      customer: org.stripe_customer_id,
+      status: "all",
+      limit: 20,
+    });
+    const live = list.data.filter((s) =>
+      ["active", "trialing", "past_due"].includes(s.status),
+    );
+
+    if (live.length === 0) return { status: "nothing-in-stripe" };
+    if (live.length === 1) return { status: "not-needed" };
+
+    live.sort((a, b) => b.created - a.created);
+    const others = live.slice(1).map((s) => s.id);
+    console.error(
+      `[reconcile] org ${orgId} has ${live.length} live Stripe subscriptions — ` +
+        `possible double billing. Newest ${live[0].id}; also live: ${others.join(", ")}`,
+    );
+    return {
+      status: "duplicates",
+      count: live.length,
+      kept: live[0].id,
+      others,
+    };
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("[reconcile] duplicate check failed", { orgId, detail });
+    return { status: "failed", detail };
+  }
 }
 
 /**
@@ -63,16 +161,22 @@ export async function reconcileSubscriptionFromStripe(
     // No customer means they have never reached checkout. Nothing to ask about.
     if (!org?.stripe_customer_id) return { status: "not-needed" };
 
-    const { data: existing } = await admin
-      .from("subscriptions")
-      .select("id")
-      .eq("org_id", orgId)
-      .in("status", ["active", "past_due", "trialing"])
-      .limit(1);
-
-    // We already know about a live subscription — the webhook did its job.
-    if (existing && existing.length > 0) return { status: "not-needed" };
-
+    // NOTE: this deliberately does NOT skip when a row already exists.
+    //
+    // The first version returned early in that case — "we know about it, the
+    // webhook did its job" — and that was wrong twice over while the webhook is
+    // down. It meant a row could never be CORRECTED, only created:
+    //
+    //   - Dennis's row carried a period_end of 7 August, thirteen days early,
+    //     written by the date bug fixed alongside this. It would have stayed
+    //     wrong forever, because a row existed.
+    //   - He then cancelled a subscription in the Stripe portal. Nothing told
+    //     us, so the page kept offering to cancel something already cancelled.
+    //
+    // A record that can be created from Stripe but never corrected from Stripe
+    // is only half a safety net. Refreshing costs one list call on a page a
+    // customer opens rarely, and it is what keeps the page honest about money
+    // while the webhook is unreliable.
     const list = await stripe.subscriptions.list({
       customer: org.stripe_customer_id,
       status: "all",
@@ -156,6 +260,11 @@ async function writeSubscription(
       : plan.runLimit
     : 10;
 
+  const endSeconds = periodEndSeconds(
+    withPeriod as SubWithPeriod & { trial_end?: number | null; status?: string },
+  );
+  const startSeconds = periodStartSeconds(withPeriod);
+
   const { error } = await admin.from("subscriptions").upsert(
     {
       org_id: orgId,
@@ -163,11 +272,15 @@ async function writeSubscription(
       stripe_customer_id: customerId,
       plan_id: planId,
       status: sub.status,
-      current_period_start: withPeriod.current_period_start
-        ? new Date(withPeriod.current_period_start * 1000).toISOString()
+      current_period_start: startSeconds
+        ? new Date(startSeconds * 1000).toISOString()
         : now,
-      current_period_end: withPeriod.current_period_end
-        ? new Date(withPeriod.current_period_end * 1000).toISOString()
+      // Falling back to `now` here is what produced a charge date thirteen days
+      // early. It is kept only as a last resort — periodEndSeconds tries the
+      // trial end, then the item, then the subscription, so reaching this means
+      // Stripe returned a subscription with no period information at all.
+      current_period_end: endSeconds
+        ? new Date(endSeconds * 1000).toISOString()
         : now,
       cancel_at_period_end: sub.cancel_at_period_end,
       usage_limit: usageLimit,

@@ -7,11 +7,15 @@ import {
   PLANS,
   TRIAL_DAYS,
   priceIdFor,
+  getPlanByPriceId,
   type BillingInterval,
   type PlanId,
 } from "@/lib/stripe/plans";
 import { getSubscriptionStatus } from "@/lib/stripe/subscription";
-import { reconcileSubscriptionFromStripe } from "@/lib/stripe/reconcile";
+import {
+  reconcileSubscriptionFromStripe,
+  countLiveStripeSubscriptions,
+} from "@/lib/stripe/reconcile";
 import { redirect } from "next/navigation";
 
 async function getOrgWithStripeCustomer() {
@@ -81,6 +85,63 @@ export async function createCheckoutSession(
   }
 
   const org = await getOrgWithStripeCustomer();
+
+  // REFUSE A SECOND SUBSCRIPTION.
+  //
+  // Nothing stopped this until 8 August, and Dennis ended up with two live
+  // Professional subscriptions on one customer — two trials, two future charges
+  // of $218.90 — simply by clicking Select Plan again when the first attempt
+  // appeared not to have worked.
+  //
+  // That is not unusual behaviour to design around; it is the FIRST thing
+  // anyone does when a purchase looks like it failed. And a missed webhook
+  // makes every purchase look like it failed, so the two faults compound: the
+  // customer is told nothing happened, tries again, and is billed twice.
+  //
+  // ⚠️ THIS ASKS STRIPE, NOT OUR DATABASE, and that is the whole point. A guard
+  // reading our own `subscriptions` table would have waved Dennis straight
+  // through, because the missed webhook meant the table was empty — the exact
+  // circumstance in which the guard is most needed is the one in which our
+  // records are least trustworthy. Stripe is the only authority on whether
+  // money is already being taken.
+  try {
+    const existing = await stripe.subscriptions.list({
+      customer: org.stripe_customer_id,
+      status: "all",
+      limit: 20,
+    });
+    const live = existing.data.filter((s) =>
+      ["active", "trialing", "past_due"].includes(s.status),
+    );
+
+    if (live.length > 0) {
+      const current = live[0];
+      const currentPlan = getPlanByPriceId(
+        current.items.data[0]?.price?.id ?? "",
+      );
+      const samePlan = currentPlan?.id === planId;
+
+      return {
+        error: samePlan
+          ? `You are already subscribed to ${currentPlan?.name ?? "this plan"}. ` +
+            `There is nothing more to buy — use "Payment details and invoices" ` +
+            `to change or cancel it.`
+          : `You already have an active ${currentPlan?.name ?? "subscription"}. ` +
+            `To move to ${PLANS[planId].name}, use "Payment details and invoices" ` +
+            `and change your plan there — that way you are not charged twice and ` +
+            `the difference is worked out for you.`,
+      };
+    }
+  } catch (e) {
+    // Do not block a genuine purchase because the check itself failed. Someone
+    // with no subscription must still be able to buy one if Stripe's list call
+    // has a bad moment — refusing everyone on a transient error would be a
+    // worse outcome than the duplicate this prevents, which is at least visible
+    // and refundable.
+    console.error("[billing] duplicate-subscription pre-check failed", {
+      detail: e instanceof Error ? e.message : String(e),
+    });
+  }
 
   let session;
   try {
@@ -356,5 +417,10 @@ export async function reconcileBilling() {
     return { status: "failed" as const, detail: "Profile / org not found" };
   }
 
-  return reconcileSubscriptionFromStripe(profile.org_id);
+  // Ask Stripe how many live subscriptions there really are, WITHOUT the
+  // "are we missing a row?" precondition. getBillingStatus has already
+  // reconciled by the time this runs, so a check gated on a missing row would
+  // find one present and report nothing — which is exactly what happened: two
+  // live subscriptions, and the banner built to catch that stayed silent.
+  return countLiveStripeSubscriptions(profile.org_id);
 }
