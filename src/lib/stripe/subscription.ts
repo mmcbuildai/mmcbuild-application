@@ -75,18 +75,40 @@ export async function getSubscriptionStatus(orgId: string): Promise<Subscription
 
       if (sub.cancel_at_period_end) cancelAtPeriodEnd = true;
       if (sub.status === "past_due") overallStatus = "past_due";
+      // A Stripe trial is a real subscription with status "trialing". Before
+      // Option A this branch could only ever be reached by a PAID subscription,
+      // so it reported "active" for everything and the trial state was invisible
+      // here. Now that the trial lives in Stripe, it has to be surfaced —
+      // otherwise someone on a free trial is told they are an active subscriber
+      // and never sees a countdown or a prompt to confirm their plan.
+      // past_due wins if both are present: it is the one that needs acting on.
+      if (sub.status === "trialing" && overallStatus !== "past_due") {
+        overallStatus = "trialing";
+      }
     }
 
     // Default usage limit if no module sets one
     if (totalUsageLimit === 0) totalUsageLimit = 10;
+
+    const isTrialing = overallStatus === "trialing";
 
     return {
       tier,
       status: overallStatus,
       usageCount: totalUsageCount,
       usageLimit: totalUsageLimit,
-      canRunCheck: overallStatus === "active" && totalUsageCount < totalUsageLimit,
-      trialEndsAt: null,
+      // Someone on a Stripe trial must still be able to use the product — that
+      // is what they gave a card for. Before Option A only "active" could reach
+      // this line, so adding the trial to Stripe without this would have locked
+      // out every new customer the moment they paid to get in.
+      canRunCheck:
+        (overallStatus === "active" || isTrialing) &&
+        totalUsageCount < totalUsageLimit,
+      // During a Stripe trial, current_period_end IS the trial end date — the
+      // first period starts when the trial finishes. Reading it from there
+      // avoids a schema change, and keeps the trial banner working now that the
+      // trial is no longer held on the organisation row.
+      trialEndsAt: isTrialing ? latestPeriodEnd : null,
       periodEnd: latestPeriodEnd,
       cancelAtPeriodEnd,
       daysRemaining: latestPeriodEnd

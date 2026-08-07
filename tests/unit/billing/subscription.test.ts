@@ -123,7 +123,8 @@ describe("getSubscriptionStatus", () => {
     expect(status.tier).toBe("trial");
     expect(status.status).toBe("trialing");
     expect(status.usageCount).toBe(1);
-    expect(status.usageLimit).toBe(3);
+    // The trial allowance is the Essential allowance (SCRUM-366 D1, 7 August).
+    expect(status.usageLimit).toBe(10);
     expect(status.canRunCheck).toBe(true);
   });
 
@@ -132,7 +133,8 @@ describe("getSubscriptionStatus", () => {
     const orgQuery = mockChain({
       trial_started_at: new Date().toISOString(),
       trial_ends_at: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
-      trial_usage_count: 3,
+      // Exhausted now means the Essential allowance, not 3 (SCRUM-366 D1).
+      trial_usage_count: 10,
     });
 
     mockFrom.mockReturnValueOnce(subsQuery).mockReturnValueOnce(orgQuery);

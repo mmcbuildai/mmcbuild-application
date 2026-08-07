@@ -44,7 +44,10 @@ describe("Plans configuration", () => {
   });
 
   it("trial constants are correct", () => {
-    expect(TRIAL_RUN_LIMIT).toBe(3);
+    // Was 3 until 7 August. Karen's SCRUM-366 D1 gave the trial the Essential
+    // allowance instead, because a card is now taken up front and charged at
+    // day 14 — see tests/unit/billing/trial-allowance.test.ts.
+    expect(TRIAL_RUN_LIMIT).toBe(10);
     expect(TRIAL_DAYS).toBe(14);
   });
 });

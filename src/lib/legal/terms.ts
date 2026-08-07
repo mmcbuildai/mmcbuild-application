@@ -25,19 +25,21 @@
  * a visible act.
  *
  * HISTORY
- *   2026-08-payment      — added payment, renewal and cancellation terms.
- *   2026-08-trial-no-card — corrected the trial: the previous version said a card
- *     was required to start it and that we would charge automatically at day 14.
- *     The software has never done either, and the decision (7 August) was to keep
- *     it that way, so the document now matches: no card, no automatic charge, and
- *     the 3-run cap stated rather than left to be discovered.
+ *   2026-08-payment       — added payment, renewal and cancellation terms.
+ *   2026-08-trial-no-card — briefly described a no-card trial, matching what the
+ *     software did at the time. Superseded within hours by Karen's decision
+ *     below; live for one morning.
+ *   2026-08-trial-card    — the current model, and the one Karen chose
+ *     (SCRUM-366, 7 August): a card IS required to start the trial and IS
+ *     charged automatically at day 14 unless cancelled. Also states the trial
+ *     allowance — 10 runs and 5 uploads — which no version had stated before.
  *
- * Two bumps in one week is not ideal, and the alternative was quietly editing a
- * document people had already accepted — which is not an alternative. This
- * version asks LESS of a user than the one it replaces, so nobody is worse off
- * for having accepted the earlier one.
+ * Three versions in one week, which is not a record to be proud of. The
+ * alternative each time was quietly editing a document people had already
+ * accepted, and that is not an alternative. Every user is re-prompted on their
+ * next page load; it is one click.
  */
-export const TERMS_VERSION = "2026-08-trial-no-card";
+export const TERMS_VERSION = "2026-08-trial-card";
 
 /**
  * Does this user need to accept (or re-accept) the terms?

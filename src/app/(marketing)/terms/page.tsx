@@ -80,30 +80,28 @@ export default function TermsPage() {
               </li>
             </ul>
 
-            <h3>7.2 Free trial</h3>
+            <h3>7.2 Free trial and the first charge</h3>
             <ul>
               <li>
-                New accounts include a <strong>14-day free trial</strong>.
+                New subscriptions include a <strong>14-day free trial</strong>, which
+                includes <strong>10 compliance runs and 5 plan uploads</strong> — the
+                same allowance as a paid Essential subscription.
               </li>
               <li>
-                <strong>No payment card is required to start the trial</strong>, and
-                you are not charged during it.
-              </li>
-              <li>
-                The trial ends after 14 days, or once you have used{" "}
-                <strong>3 compliance runs</strong>, whichever comes first.
+                <strong>A valid payment card is required to start the trial.</strong>{" "}
+                You are not charged during the trial.
               </li>
               <li>
                 <strong>
-                  We will never charge you automatically at the end of the trial.
+                  At the end of the 14 days your card is automatically charged for
+                  the first billing period, unless you cancel before then.
                 </strong>{" "}
-                When the trial ends, paid features stop until you choose to
-                subscribe. You are only ever charged after you select a plan and
-                enter your payment details yourself.
+                The amount and the date are shown to you before you enter your card,
+                and we email you before the charge is taken.
               </li>
               <li>
-                Your account and your data remain in place when a trial ends — see
-                clause 11.
+                <strong>Cancelling during the trial costs you nothing.</strong> You
+                can cancel at any time from the Billing page — see clause 7.4.
               </li>
             </ul>
 

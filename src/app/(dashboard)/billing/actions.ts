@@ -5,6 +5,7 @@ import { db } from "@/lib/supabase/db";
 import { stripe } from "@/lib/stripe/client";
 import {
   PLANS,
+  TRIAL_DAYS,
   priceIdFor,
   type BillingInterval,
   type PlanId,
@@ -91,7 +92,21 @@ export async function createCheckoutSession(
       metadata: { org_id: org.id, plan_id: planId, interval },
       subscription_data: {
         metadata: { org_id: org.id, plan_id: planId, interval },
+        // 14 days free, then Stripe charges the stored card automatically.
+        // Karen's decision (SCRUM-366, 7 August): "I would like to go with
+        // option A. Based on my experience with the market who are time poor
+        // and will forget to make the decision after 14 days."
+        trial_period_days: TRIAL_DAYS,
       },
+
+      // ⚠️ MANDATORY with a trial, and the single most dangerous default in
+      // this file. Stripe's default is `if_required`, and with a trial present
+      // NOTHING is required at checkout — so Stripe creates the subscription
+      // with NO CARD ON FILE. It looks perfectly healthy for fourteen days and
+      // then the first charge fails, silently, with nothing to alert anyone.
+      // The whole point of Option A is that the card is captured up front, so
+      // `always` is what makes this model work at all.
+      payment_method_collection: "always",
 
       // GST. Prices are quoted tax-EXCLUSIVE (see TAX_QUALIFIER in plans.ts),
       // so the tax has to be added by the session — configuring the Stripe

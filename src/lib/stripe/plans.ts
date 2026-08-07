@@ -339,7 +339,27 @@ export const TAX_QUALIFIER = "+ GST";
 export const TAX_DISCLOSURE =
   "All prices are in AUD and exclude GST. GST is calculated and added at checkout.";
 
-export const TRIAL_RUN_LIMIT = 3;
+/**
+ * What a 14-day trial includes.
+ *
+ * Karen's decision, SCRUM-366 D1 (4 August, restated 7 August): the trial gets
+ * the **Essential allowance** rather than the old 3-run cap.
+ *
+ *   "give the trial the Essential allowance — 10 runs and 5 uploads for the
+ *    14 days"
+ *
+ * The 3-run cap and a "free for 14 days" promise were different promises:
+ * someone who used three runs on day two had twelve days of a product that did
+ * nothing, and — under the card-at-signup model — was then charged $49. That is
+ * a chargeback, not a customer. Matching the trial to the Essential allowance
+ * means the trial IS the product, which is the point of taking a card up front.
+ *
+ * Deliberately equal to PLANS.essential.runLimit / uploadLimit. If those change,
+ * these should follow — `tests/unit/billing/trial-allowance.test.ts` pins them
+ * together so the pair cannot drift.
+ */
+export const TRIAL_RUN_LIMIT = 10;
+export const TRIAL_UPLOAD_LIMIT = 5;
 export const TRIAL_DAYS = 14;
 
 /**

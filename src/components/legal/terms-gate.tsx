@@ -130,15 +130,17 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
           </p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
-              <strong>New accounts start with a 14-day free trial.</strong> No
-              payment card is needed, and the trial ends after 14 days or 3
-              compliance runs, whichever comes first.
+              <strong>Subscriptions start with a 14-day free trial</strong>, which
+              includes 10 compliance runs and 5 plan uploads. A payment card is
+              required to begin it, and you are not charged during the trial.
             </li>
             <li>
-              <strong>You are never charged automatically at the end of a trial.</strong>{" "}
-              Paid features simply stop until you choose to subscribe. Once you do
-              subscribe, that subscription renews automatically until you cancel.
-              Prices are shown excluding GST.
+              <strong>
+                At the end of the 14 days your card is charged automatically
+              </strong>{" "}
+              for the first period, unless you cancel before then, and the
+              subscription renews automatically after that until you cancel. We
+              email you before the first charge. Prices are shown excluding GST.
             </li>
             <li>
               <strong>You can cancel at any time from the Billing page</strong> — no
