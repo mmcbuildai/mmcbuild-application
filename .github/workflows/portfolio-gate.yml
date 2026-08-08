@@ -85,7 +85,20 @@ jobs:
           token: ${{ secrets.GH_PACKAGES_TOKEN }}
           path: mmcbuild-marketing
 
+      # `package_json_file` is required HERE and not in the job above, and the
+      # difference is the whole reason this failed on its first run: this job
+      # checks out the application into a SUBDIRECTORY so the marketing repo can
+      # sit beside it, which leaves no package.json at the workspace root — and
+      # pnpm/action-setup reads the pnpm version from `packageManager` there.
+      #
+      # Pointing it at the file rather than pinning `version:` keeps this repo's
+      # existing convention (see the note in ci.yml): the version comes from
+      # package.json, so it cannot drift out of step with what everything else
+      # installs.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: mmcbuild-application/package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
