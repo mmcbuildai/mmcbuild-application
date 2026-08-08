@@ -92,12 +92,27 @@ describe("purchase mode", () => {
   });
 
   it("discloses the trial terms next to the button", () => {
-    // The card is captured at sign-up. That must not be a surprise.
+    // ⚠️ This test previously asserted /cancel/i because it encoded the belief
+    // that a card is captured at sign-up. It is not — /signup takes no card —
+    // so the test was pinning a false statement in place rather than catching
+    // it. Corrected 2026-08-09 along with the copy.
     set("true");
     const text = ctaSubtext();
     expect(text).toMatch(/14 days free/i);
     expect(text).toMatch(/card/i);
-    expect(text).toMatch(/cancel/i);
+    // Says WHEN a card is taken, which is the part a visitor needs.
+    expect(text).toMatch(/subscrib/i);
+  });
+
+  it("never claims a card is required at sign-up, because none is", () => {
+    // Regression guard for the real defect: this exact claim shipped next to
+    // every "Get started" button on both sites, while the signup page one click
+    // later said "No credit card required". Two contradictory statements about
+    // the visitor's card, on a product taking real ones.
+    set("true");
+    const text = ctaSubtext();
+    expect(text).not.toMatch(/card required at sign-?up/i);
+    expect(text).toMatch(/no card needed/i);
   });
 
   it("does not use wording that overstates the commitment", () => {
@@ -113,13 +128,19 @@ describe("purchase mode", () => {
     // than supporting copy, and this test is what keeps it that way: if someone
     // later empties or softens it while the label stays silent, a card gets
     // captured off a button that never mentioned one.
+    //
+    // ⚠️ The /charg|bill/ assertion was dropped on 2026-08-09. It only made
+    // sense under the mistaken belief that sign-up charges a card; the honest
+    // disclosure at this point in the journey is that no card is taken yet and
+    // when one will be. The intent of the test is unchanged and still enforced:
+    // the subtext stays load-bearing whenever the label itself is silent.
     set("true");
     const labelMentionsOffer = /trial|free|\$|month/i.test(PURCHASE_CTA_LABEL);
     if (!labelMentionsOffer) {
       const text = ctaSubtext();
       expect(text).not.toBe("");
       expect(text).toMatch(/card/i);
-      expect(text).toMatch(/charg|bill/i);
+      expect(text).toMatch(/subscrib/i);
     }
   });
 });

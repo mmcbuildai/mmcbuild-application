@@ -64,12 +64,16 @@ export function ctaHref(waitlistHref: string): string {
  * two different labels a day apart and the next person to read this deserves
  * to know which one won and why.
  *
- * ⚠️ Whatever the wording, it says less about the commitment than "Start free
- * trial" did. /signup captures a card and charges on day 15 unless cancelled,
- * and neither "Get started" nor "Sign Up" hints at that. The disclosure
- * therefore rests entirely on `ctaSubtext()` below, which must stay adjacent to
- * every button using this label — if a surface renders the label without the
- * subtext, a card gets captured off a button that never mentioned one.
+ * ⚠️ CORRECTED 2026-08-09. This note previously said "/signup captures a card
+ * and charges on day 15 unless cancelled". That is not what the code does, and
+ * the belief produced a false claim on every public page — see `ctaSubtext()`.
+ *
+ * What actually happens: /signup captures NO card. It creates an organisation
+ * with a 14-day trial (migration 00027) and all modules unlocked. A card is
+ * captured later, at Stripe Checkout, which is a separate deliberate step —
+ * `payment_method_collection: "always"` in billing/actions.ts is what forces it
+ * there. So the subtext still belongs next to the button, but as an accurate
+ * description of a free start, not a warning about a card nobody is taking yet.
  */
 export const PURCHASE_CTA_LABEL = "Get started";
 export const WAITLIST_CTA_LABEL = "Join Waitlist";
@@ -102,14 +106,31 @@ export function ctaHrefForPlan(
 /**
  * Supporting copy under a primary call-to-action.
  *
- * In purchase mode the trial terms must sit next to the button: the card is
- * captured at sign-up and charged on day 15 unless cancelled, and a captured
- * card must never be a surprise. Empty in waitlist mode, where there is nothing
- * to disclose.
+ * ⚠️ THE PREVIOUS WORDING WAS FALSE, and it was false next to every "Get
+ * started" button on both websites: "14 days free. Card required at sign-up,
+ * charged when the trial ends unless you cancel."
+ *
+ * No card is required at sign-up. The signup page itself said so one click
+ * later — "No credit card required" — so a visitor met two contradictory
+ * statements about their card in the space of a single click, on a product
+ * that had just started charging real ones.
+ *
+ * The wording below states only what is certain today and stays true whichever
+ * way the open trial-model question is decided (SCRUM-391): the trial is 14
+ * days, all modules are unlocked, no card is needed to begin, and a card is
+ * taken when the customer subscribes.
+ *
+ * ⚠️ Deliberately NOT stated: the 10-run cap (TRIAL_RUN_LIMIT), which no
+ * pre-signup surface currently discloses, and the fact that subscribing today
+ * grants a FURTHER 14-day Stripe trial on top of this one. Both are real, both
+ * are Karen's decisions on SCRUM-391, and neither is something to resolve by
+ * inventing copy. Update this the moment she answers.
+ *
+ * Empty in waitlist mode, where there is nothing to disclose.
  */
 export function ctaSubtext(): string {
   return isPurchaseCtaEnabled()
-    ? "14 days free. Card required at sign-up, charged when the trial ends unless you cancel."
+    ? "14 days free, all modules unlocked. No card needed to start — you add one when you subscribe."
     : "";
 }
 
