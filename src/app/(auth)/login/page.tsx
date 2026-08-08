@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { signIn, signInWithMagicLink } from "../actions";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { isGoogleSignInEnabled } from "@/lib/auth/google-signin-enabled";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -70,18 +71,34 @@ function LoginForm() {
           </div>
         )}
 
-        <GoogleSignInButton redirectTo={redirectTo ?? undefined} />
+        {/*
+          SCRUM-240 — hidden until the Google provider is configured in Supabase.
+          The button works; the account-side setup was never done, so clicking it
+          returns "Unsupported provider" to someone trying to reach the product
+          for the first time.
 
-        <div className="relative my-4">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-card px-2 text-muted-foreground">
-              or continue with email
-            </span>
-          </div>
-        </div>
+          The DIVIDER is inside the flag too. Hiding the button alone would leave
+          "or continue with email" sitting above the form with nothing to be an
+          alternative to — a small thing, but it is the same mistake made three
+          times this week: fix the control, leave the words around it saying
+          something that is no longer true.
+        */}
+        {isGoogleSignInEnabled() && (
+          <>
+            <GoogleSignInButton redirectTo={redirectTo ?? undefined} />
+
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  or continue with email
+                </span>
+              </div>
+            </div>
+          </>
+        )}
 
         <Tabs defaultValue="password">
           <TabsList className="grid w-full grid-cols-2">
