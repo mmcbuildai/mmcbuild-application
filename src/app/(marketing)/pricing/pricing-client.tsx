@@ -63,6 +63,11 @@ const plans: Plan[] = [
   {
     name: "Enterprise",
     monthlyPrice: null,
+    // @social-proof-ok: no social proof on this page. The audit matches "Tier 1 & 2 builders"
+    // below as a headline metric — its pattern is <number> followed by "builders" — but this
+    // is the market segment the tier is FOR, not a claim about how many builders use the
+    // product. Checked line by line by Dennis, 2026-08-09; no customer count, testimonial or
+    // partner claim appears anywhere in this file.
     description: "Tier 1 & 2 builders, large architectural, consulting & supplier firms",
     features: [
       "Unlimited* MMC Build + MMC Comply runs",

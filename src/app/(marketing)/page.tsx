@@ -233,7 +233,11 @@ export default async function HomePage() {
       </section>
 
       {/* Partners + testimonials. Renders nothing until real, consented
-          content exists AND the switch is on — see lib/marketing/social-proof.ts. */}
+          content exists AND the switch is on — see lib/marketing/social-proof.ts.
+
+          @social-proof-ok: the only social-proof surface on this page is <SocialProof />,
+          which publishes nothing today (both lists empty, switch off). No testimonial,
+          partner or metric claim is made from this file. Recorded by Dennis, 2026-08-09. */}
       <SocialProof />
 
     </div>
