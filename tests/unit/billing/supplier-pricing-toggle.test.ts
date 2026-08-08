@@ -20,20 +20,32 @@ afterEach(() => {
 });
 
 describe("isSupplierPricingEnabled", () => {
-  it("defaults to enabled when unset, so merging changes nothing", () => {
-    delete process.env.NEXT_PUBLIC_SUPPLIER_PRICING_ENABLED;
-    expect(isSupplierPricingEnabled()).toBe(true);
-  });
+  // ⚠️ INVERTED 2026-08-09. These three tests previously pinned the opposite
+  // default — enabled-unless-"false" — which was correct at merge time (merging
+  // the gate had to change nothing) and wrong to leave standing. This flag
+  // wrongly ON publishes prices nobody can pay, and it only took the ABSENCE of
+  // a variable: a preview environment or a tidied env list would have quoted
+  // "$99 Basic Directory" to the public with nothing erroring.
+  //
+  // No production change: both Vercel projects already set "false", and "false"
+  // is still not "true".
 
-  it("hides pricing only on the literal string 'false'", () => {
-    process.env.NEXT_PUBLIC_SUPPLIER_PRICING_ENABLED = "false";
+  it("defaults to DISABLED when unset — the safe state is not quoting a price", () => {
+    delete process.env.NEXT_PUBLIC_SUPPLIER_PRICING_ENABLED;
     expect(isSupplierPricingEnabled()).toBe(false);
   });
 
-  it("stays enabled for any other value, including 'true' and typos", () => {
-    for (const v of ["true", "FALSE", "0", "no", ""]) {
+  it("shows pricing only on the literal string 'true'", () => {
+    process.env.NEXT_PUBLIC_SUPPLIER_PRICING_ENABLED = "true";
+    expect(isSupplierPricingEnabled()).toBe(true);
+  });
+
+  it("stays hidden for every other value, including 'false' and typos", () => {
+    // Matches isPurchaseCtaEnabled: a commercial door must not open on a typo,
+    // an empty string, or a case variant.
+    for (const v of ["false", "TRUE", "True", "1", "yes", "", " true"]) {
       process.env.NEXT_PUBLIC_SUPPLIER_PRICING_ENABLED = v;
-      expect(isSupplierPricingEnabled(), `value "${v}" should not hide pricing`).toBe(true);
+      expect(isSupplierPricingEnabled(), `value "${v}" must not show pricing`).toBe(false);
     }
   });
 });
