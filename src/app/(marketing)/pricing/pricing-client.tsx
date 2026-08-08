@@ -27,7 +27,19 @@ const plans: Plan[] = [
     name: "Essential",
     monthlyPrice: 49,
     description: "Individual builders, architects, designers, early adopters",
-    freeNote: "Early-adopter price · free for 1 month",
+    // Was: "Early-adopter price · free for 1 month". The free-month half was
+    // removed on 2026-08-09 because NOTHING implements it: a new organisation
+    // gets 14 days (migration 00027), and subscribing grants a further 14-day
+    // Stripe trial — never a month on Essential. It was a live offer claim on
+    // the plan card of a page that takes payment, and it contradicted the FAQ
+    // directly below it once that was corrected.
+    //
+    // "Early-adopter price" is kept because it is true — $49 is the price
+    // actually charged, and the live Stripe price object matches.
+    //
+    // ⚠️ If a one-month Essential offer WAS intended, it needs building, not
+    // re-labelling. That question is on SCRUM-393 with the wider trial model.
+    freeNote: "Early-adopter price",
     features: [
       "10 combined runs / month (MMC Build + MMC Comply)",
       "5 plan uploads per month",
