@@ -41,14 +41,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+        run: pnpm install --frozen-lockfile
 
       - name: Detect a half-flipped flag on the live site
+        # Now CONSUMES the shared check rather than keeping a private copy of it.
+        # It was written here first, against a real half-flip, then promoted into
+        # @caistech/portfolio-gate v0.16.0 so every product gets it. Keeping a
+        # local fork alongside the package is exactly what the @caistech-first
+        # rule exists to prevent — the fork stops receiving fixes the moment the
+        # shared one improves, and nobody notices because both look fine.
+        #
+        # `flag-coherence.config.json` is unchanged: the package reads the same
+        # filename and the same shape, because the shape came from here.
+        #
         # Exits 1 on a half-flip, on a page that cannot be read, and on a config
-        # whose markers no longer appear anywhere. That last one matters most:
-        # an assertion that has drifted out of alignment with the thing it
-        # guards reads as green forever, which is worse than having no check.
-        run: node scripts/check-flag-coherence.mjs
+        # whose markers no longer appear anywhere. That last one matters most: an
+        # assertion that has drifted out of alignment with the thing it guards
+        # reads as green forever, which is worse than having no check.
+        run: pnpm exec portfolio-gate-audit-flag-coherence
