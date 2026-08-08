@@ -1,0 +1,56 @@
+{
+  "_comment": [
+    "Things that must be true in BOTH MMC repositories at once.",
+    "",
+    "MMC Build is two Next.js deployments from two repositories — the application",
+    "(app.mmcbuild.com.au) and the marketing site (www.mmcbuild.com.au). Almost every",
+    "silent failure this project has had came from that split: a change made in one",
+    "and assumed in the other.",
+    "",
+    "  - 8 Aug: a feature flag switched eight surfaces and not the ninth.",
+    "  - 8 Aug: Vercel Analytics was toggled on for both projects, and the marketing",
+    "    repo had no analytics component at all — toggle on, dashboard agreeing, and",
+    "    the site with nothing to send.",
+    "  - Earlier: the two pricing pages drifted apart before anyone noticed.",
+    "",
+    "None were carelessness. In each case a setting and the code it depends on lived",
+    "in different places, and only one was visible from where the person stood."
+  ],
+  "siblings": [
+    {
+      "name": "MMC application ↔ marketing site",
+      "_repos_comment": [
+        "Paths are relative to the directory the audit is run from. Locally that is",
+        "the parent of both clones (--root ~/PycharmProjects). In CI both repos must",
+        "be checked out side by side, or the file/dependency half SKIPS with a",
+        "warning and only the live checks run — which the audit says out loud rather",
+        "than passing quietly."
+      ],
+      "repos": [
+        { "name": "app", "path": "mmcbuild-application" },
+        { "name": "marketing", "path": "mmcbuild-marketing" }
+      ],
+      "_identicalFiles_comment": [
+        "purchase-cta.ts is byte-identical BY DESIGN — it is what keeps the two sites",
+        "from selling and waitlisting at the same time. That was verified by hand with",
+        "`diff` when it was written (PR #149/#3), which works exactly once."
+      ],
+      "identicalFiles": ["src/lib/marketing/purchase-cta.ts"],
+      "_sharedDependencies_comment": [
+        "@vercel/analytics is the 8 August incident precisely: present in the app,",
+        "absent from marketing, analytics toggled on for both. Silent if NEITHER has",
+        "a package — that is a choice, not a drift."
+      ],
+      "sharedDependencies": ["@vercel/analytics"],
+      "sites": [
+        { "name": "app", "baseUrl": "https://app.mmcbuild.com.au" },
+        { "name": "marketing", "baseUrl": "https://www.mmcbuild.com.au" }
+      ],
+      "_parityPaths_comment": [
+        "The analytics beacon answered 200 on the app and 404 on the marketing site",
+        "for a day and nothing said so. This is the assertion that would have."
+      ],
+      "parityPaths": ["/_vercel/insights/script.js"]
+    }
+  ]
+}

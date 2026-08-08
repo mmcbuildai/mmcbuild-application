@@ -1,0 +1,105 @@
+name: Portfolio gate (social proof · sibling parity)
+
+# The shared checks from @caistech/portfolio-gate, run here rather than admired
+# from a distance.
+#
+# This portfolio has already paid twice for a guard that existed and never ran:
+# `probeMemoryLoop` shipped in convai 0.7.0 and ran in ZERO repos while the bug it
+# guarded reached production twice, and ExecutorAI served a month-old production
+# build because nothing asserted the deployed SHA. Writing the check is the cheap
+# half; this file is the half that makes it real.
+#
+# The package is a devDependency rather than an `npx` fetch, so the version is
+# pinned in the lockfile and comes down with the normal install. `npx` was tried
+# first and is the wrong shape here: it re-downloads the package on every run
+# (2-7 minutes), and `npx <pkg> <bin>` silently looks for a binary NAMED AFTER
+# THE PACKAGE — with differently-named bins it fails "could not determine
+# executable to run", which is what the first version of this workflow would
+# have done on its first firing.
+
+on:
+  schedule:
+    - cron: "0 23 * * *" # daily, 23:00 UTC ≈ 09:00 Brisbane
+  workflow_dispatch:
+
+jobs:
+  social-proof:
+    name: No fabricated or unattested social proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+        run: pnpm install --frozen-lockfile
+
+      # A REGULATED-tier client's live site carried eight real ASX-listed builders
+      # as "Trusted Partners" — none of whom were partners — plus three invented
+      # testimonials and "100+ professionals / $2M saved", for months. Nothing
+      # looked for it.
+      #
+      # ⚠️ NOT ON PULL REQUESTS YET, AND THIS IS THE ONLY REASON WHY:
+      # as of 9 August it reports 9 findings here — unattested testimonial blocks,
+      # a partners block and a headline metric. Every one needs a person to say
+      # "yes, this is real, and here is the source". That is not a judgement an
+      # engineer or a script can make on the client's behalf; it is the entire
+      # premise of the check.
+      #
+      # So it runs daily and reports, rather than blocking work it cannot resolve.
+      # It moves to `pull_request` the day the count reaches zero — and the number
+      # above is the measure of whether that is happening, rather than a promise
+      # that quietly expires.
+      - name: Audit social proof
+        run: pnpm exec portfolio-gate-audit-social-proof
+        continue-on-error: true
+
+  sibling-parity:
+    name: The two MMC repos agree with each other
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout the application
+        uses: actions/checkout@v4
+        with:
+          path: mmcbuild-application
+
+      # Both repos side by side, so the file and dependency comparison actually
+      # runs. Without this the audit still works but SKIPS that half with a
+      # warning — honest, and half as useful.
+      #
+      # Needs a token with read access to the sibling repository. If this step
+      # 404s, that is the fix, and it fails loudly here rather than degrading
+      # quietly — a comparison that silently compared one repo to itself would
+      # pass forever.
+      - name: Checkout the marketing site
+        uses: actions/checkout@v4
+        with:
+          repository: mmcbuildai/mmcbuild-marketing
+          token: ${{ secrets.GH_PACKAGES_TOKEN }}
+          path: mmcbuild-marketing
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        working-directory: mmcbuild-application
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+        run: pnpm install --frozen-lockfile
+
+      # Run from the PARENT of both clones, with the config from this repo, so
+      # the sibling paths in it resolve.
+      - name: Audit sibling parity
+        run: >
+          ./mmcbuild-application/node_modules/.bin/portfolio-gate-audit-sibling-parity
+          --root .
+          --config mmcbuild-application/sibling-parity.config.json

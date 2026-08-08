@@ -13,8 +13,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:report": "playwright test && playwright show-report",
-    "check:flag-coherence": "node scripts/check-flag-coherence.mjs"
+    "test:e2e:report": "playwright test && playwright show-report"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -60,6 +59,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@caistech/portfolio-gate": "^0.16.0",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@types/canvas-confetti": "^1.9.0",
