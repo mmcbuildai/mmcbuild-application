@@ -53,25 +53,49 @@ describe("isSupplierPricingEnabled", () => {
 describe("what the toggle covers on /mmc-suppliers", () => {
   const page = read("src", "app", "(marketing)", "mmc-suppliers", "page.tsx");
 
+  // The gate expression gained a second condition on 2026-08-09 (see below), so
+  // these anchor on the prefix rather than the exact string.
+  const GATE = "{showPricing && plan.price && (";
+
   it("gates the price, the period and the free-months offer together", () => {
     // All three are price claims. Hiding the dollar figure while leaving
     // "First 2 months free" on screen still quotes an offer we can't honour.
-    const gated = page.slice(page.indexOf("{showPricing && ("));
+    const gated = page.slice(page.indexOf(GATE));
     expect(gated).toContain("plan.trial");
     expect(gated).toContain("plan.price");
     expect(gated).toContain("plan.period");
   });
 
+  it("needs a REAL figure as well as the flag — the switch alone cannot resurrect one", () => {
+    // The figures themselves are gone, not merely hidden. Hiding them behind a
+    // flag was the wrong stopping point: "$99" and "First 2 months free" matched
+    // neither the confirmed $199/$299 model nor anything purchasable, and behind
+    // a switch they sat one variable from being live, for someone who would have
+    // no way of knowing they were never real. Same reasoning as the partner
+    // logos on SCRUM-376.
+    //
+    // ⚠️ These assert FIELD ASSIGNMENTS, not bare phrases. The first version
+    // checked for the offer phrase anywhere in the file and failed on the
+    // comment that explains why the offer was removed — the third time in one
+    // day that an honest note about a deleted claim tripped a check looking for
+    // it. A test that punishes the explanation teaches people to delete the
+    // explanation, so it asserts the DECLARATION is gone instead.
+    expect(page).toContain(GATE);
+    expect(page).not.toContain('price: "$');
+    expect(page).not.toContain('trial: "');
+    expect(page).not.toContain('period: "');
+  });
+
   it("keeps the tier name outside the gate", () => {
     // The listing levels are real; only their prices are not.
-    const beforeGate = page.slice(0, page.indexOf("{showPricing && ("));
+    const beforeGate = page.slice(0, page.indexOf(GATE));
     expect(beforeGate).toContain("{plan.name}");
   });
 
   it("keeps the supplier join form ungated — it produces real leads", () => {
     expect(page).toContain("<TradesSupplierForm />");
     const formIdx = page.indexOf("<TradesSupplierForm />");
-    const gateIdx = page.indexOf("{showPricing && (");
+    const gateIdx = page.indexOf(GATE);
     expect(formIdx).toBeGreaterThan(gateIdx);
     // The form sits in its own section, not inside the pricing gate.
     expect(page.slice(gateIdx, formIdx)).toContain("</section>");
