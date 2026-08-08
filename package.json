@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:report": "playwright test && playwright show-report"
+    "test:e2e:report": "playwright test && playwright show-report",
+    "check:flag-coherence": "node scripts/check-flag-coherence.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
