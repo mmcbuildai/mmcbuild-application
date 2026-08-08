@@ -26,11 +26,37 @@ const targetAudience = [
   "Consultants experienced in MMC delivery",
 ];
 
+/**
+ * ⚠️ THE PRICE FIELDS ARE OPTIONAL AND CURRENTLY EMPTY, DELIBERATELY.
+ *
+ * These tiers used to carry "$99" / "$499" and "First 2 months free". Those
+ * figures matched NOTHING: not the confirmed model ($199 Verified Supplier /
+ * $299 Growth Partner, which is what the marketing site shows and what exists
+ * in Stripe), and not anything purchasable, since `plans.ts` reads no supplier
+ * price ID at all. They were removed on 2026-08-09.
+ *
+ * They were hidden behind a flag first, which was the wrong stopping point.
+ * Keeping the STRUCTURE is sensible; keeping the false FIGURES behind a switch
+ * is not — they sit one variable away from being live, and whoever flips that
+ * switch in a year has no way of knowing they were never real. That is the same
+ * reasoning Karen accepted for the partner logos and testimonials on SCRUM-376,
+ * and it applies identically to a price.
+ *
+ * So this is the empty shell: tier names, feature lists, the comparison table
+ * and the join form all stay and keep doing their job (the form produces real
+ * supplier leads — SCRUM-294). Only the claims about money are gone.
+ *
+ * TO TURN PRICING ON, BOTH are required:
+ *   1. Put REAL figures below — ones that match Stripe and can actually be paid.
+ *   2. Set NEXT_PUBLIC_SUPPLIER_PRICING_ENABLED=true in both Vercel projects.
+ * An empty `price` renders nothing even with the flag on, so switching it early
+ * cannot resurrect a figure that is not here.
+ */
 type Plan = {
   name: string;
-  price: string;
-  period: string;
-  trial: string;
+  price?: string;
+  period?: string;
+  trial?: string;
   features: string[];
   popular?: boolean;
 };
@@ -38,9 +64,6 @@ type Plan = {
 const plans: Plan[] = [
   {
     name: "Basic Directory",
-    price: "$99",
-    period: "/month",
-    trial: "First 2 months free",
     features: [
       "Basic directory listing",
       "Company profile page",
@@ -51,9 +74,6 @@ const plans: Plan[] = [
   },
   {
     name: "Professional Directory",
-    price: "$499",
-    period: "/month",
-    trial: "First 2 months free",
     popular: true,
     features: [
       "Featured directory placement",
@@ -218,10 +238,16 @@ export default function MMCSuppliersPage() {
                 )}
                 {/* The price, the billing period and the free-months offer are
                     all price CLAIMS, so they hide together — leaving a tier
-                    name and its feature list, which are true either way. */}
+                    name and its feature list, which are true either way.
+
+                    BOTH conditions are required, mirroring showPartners() in
+                    lib/marketing/social-proof.ts: the flag must be on AND there
+                    must be a real figure to show. An empty price renders nothing
+                    even when the flag is flipped, so the switch alone can never
+                    resurrect a number that is not in the file. */}
                 <div className="text-center mb-6">
                   <h3 className="text-2xl font-bold text-slate-900 mb-2">{plan.name}</h3>
-                  {showPricing && (
+                  {showPricing && plan.price && (
                     <>
                       <div className="text-green-600 font-semibold mb-4">{plan.trial}</div>
                       <div className="flex items-baseline justify-center">
