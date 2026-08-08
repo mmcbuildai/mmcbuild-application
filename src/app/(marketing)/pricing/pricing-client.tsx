@@ -194,7 +194,17 @@ const faqs = [
   },
   {
     q: "Is there a free trial?",
-    a: "Yes! Our Essential plan is available free for 1 month so you can explore all the essential features.",
+    // Was: "Our Essential plan is available free for 1 month". Wrong on both
+    // counts and contradicted three other live surfaces. The trial is 14 days
+    // (migration 00027 sets organisations.trial_ends_at to now() + 14 days),
+    // it is not limited to Essential, and "1 month" appears to be a conflation
+    // with the separate "1 month free registration" SUPPLIER offer, which is a
+    // real and unrelated thing.
+    //
+    // ⚠️ There is also a 10-run cap on the trial (TRIAL_RUN_LIMIT) that no
+    // pre-signup surface mentions. Whether to disclose it here is Karen's call
+    // and is on SCRUM-391 — deliberately not answered by inventing copy.
+    a: "Yes — every new account starts with a 14-day free trial with all modules unlocked, and you don't need a credit card to start.",
   },
   {
     q: "What payment methods do you accept?",
