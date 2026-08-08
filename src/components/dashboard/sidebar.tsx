@@ -11,7 +11,6 @@ import {
   Truck,
   GraduationCap,
   Settings,
-  Tag,
   LayoutDashboard,
   FolderOpen,
   ArrowUpRight,
@@ -255,14 +254,6 @@ export function Sidebar({ isOpen, tier, runCount, role, isOperator = false }: Si
           <form action={signOut}>
             <SignOutButton />
           </form>
-        </div>
-
-        {/* UAT design banner */}
-        <div className="px-4 py-2 border-t border-white/10">
-          <span className="flex items-center gap-1.5 text-xs text-slate-500">
-            <Tag className="w-3 h-3" />
-            Design v0.1 &middot; Karen Burns
-          </span>
         </div>
       </div>
     </aside>
