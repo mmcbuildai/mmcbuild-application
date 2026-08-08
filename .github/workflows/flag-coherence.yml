@@ -1,0 +1,54 @@
+name: Flag coherence (is the live site half-flipped?)
+
+# A feature flag can only switch the surfaces somebody remembered to wire to it,
+# and there is no error for the one they forgot.
+#
+# On 8 August the purchase CTAs were switched on by setting one environment
+# variable. Eight surfaces changed. Two had never been attached to the flag —
+# including the homepage hero, the largest button on the site, which went on
+# saying "Join the Waitlist" and pointing at a contact form on a site that had
+# just started selling. Build green, deploy fine, flag set correctly, every page
+# 200. Nothing anywhere reported a problem.
+#
+# WHY NOT ON PULL REQUESTS
+# This judges the DEPLOYED site, which no pull request can change. Running it on
+# PRs would block unrelated reviews whenever the public site had a blip, and
+# would say nothing about the branch under review. The per-surface logic is
+# covered deterministically and offline by tests/unit/flag-coherence.test.ts,
+# which DOES run on every PR and is pinned to the real half-flipped homepage.
+#
+# The schedule matters because the marketing site deploys from a different
+# repository. A surface can stop being coherent here without a single commit
+# landing in this one — which is exactly how it happened.
+
+on:
+  schedule:
+    - cron: "30 22 * * *" # daily, 22:30 UTC ≈ 08:30 Brisbane, just after pricing-drift
+  push:
+    branches: [main]
+    paths:
+      - "flag-coherence.config.json"
+      - "scripts/check-flag-coherence.mjs"
+      - "src/lib/marketing/purchase-cta.ts"
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Every flag is all-or-nothing across the live site
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Detect a half-flipped flag on the live site
+        # Exits 1 on a half-flip, on a page that cannot be read, and on a config
+        # whose markers no longer appear anywhere. That last one matters most:
+        # an assertion that has drifted out of alignment with the thing it
+        # guards reads as green forever, which is worse than having no check.
+        run: node scripts/check-flag-coherence.mjs

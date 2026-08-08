@@ -57,13 +57,34 @@ jobs:
       - name: Cross-tenant guard check
         run: pnpm check:cross-tenant
 
-      # Soft — allow pre-existing errors from the in-flight @caistech/*
-      # migration to not block CI. Tighten to a hard fail once migration
-      # completes (SCRUM follow-up).
+      # HARD GATE as of 8 August 2026.
+      #
+      # This was `continue-on-error: true`, justified by "pre-existing errors
+      # from the in-flight @caistech/* migration". That migration has finished
+      # and the tree is clean (`tsc --noEmit` exits 0), so the exemption was
+      # outliving its reason — which is the dangerous state for a soft gate:
+      # it runs, it goes red, and nothing happens, so nobody reads it.
+      #
+      # A week of production faults that unit tests did not catch is the
+      # argument for this. A check that cannot fail the build is not a check,
+      # it is a log line.
       - name: Typecheck
         run: pnpm exec tsc --noEmit
-        continue-on-error: true
 
+      # STILL SOFT, and this comment exists so that stays visible rather than
+      # becoming permanent by neglect.
+      #
+      # 8 August: 46 errors, of which 31 were in `tmp/` — a gitignored scratch
+      # directory eslint was walking because this repo overrides the default
+      # ignores. That is now excluded (eslint.config.mjs), leaving 15 genuine
+      # errors in src/ and tests/.
+      #
+      # Those 15 are not swept up here on purpose. Four are
+      # react-hooks/rules-of-hooks and set-state-in-effect, which flag real
+      # behavioural risk — silencing them quickly to turn a gate green is how
+      # a bug gets shipped in the name of tidiness. They need reading one at a
+      # time. Tracked in Jira; this line becomes a hard gate when the count is
+      # zero, and the number above is the measure of whether that is happening.
       - name: Lint
         run: pnpm lint
         continue-on-error: true

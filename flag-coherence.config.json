@@ -1,0 +1,59 @@
+{
+  "_comment": [
+    "Which user-visible flags must be all-or-nothing across the live sites.",
+    "",
+    "RULE FOR `forbidden`: use the SHORTEST distinguishing token, never a phrase.",
+    "On 8 August a grep for 'join waitlist' returned zero while 'Join THE Waitlist'",
+    "sat on the homepage hero. A phrase proves only that one wording is absent;",
+    "the bare token 'waitlist' cannot be evaded by a rewording.",
+    "",
+    "RULE FOR `markers`: something that appears ONLY in that mode. Avoid strings",
+    "that double as ordinary copy — 'Get started' is a marker of purchase mode, but",
+    "'Ready to get started?' is a heading that exists in both, which is why it is",
+    "not listed as forbidden in waitlist mode."
+  ],
+  "sites": [
+    {
+      "name": "Marketing site",
+      "baseUrl": "https://www.mmcbuild.com.au",
+      "pages": [
+        "/",
+        "/pricing",
+        "/products",
+        "/mmc-comply",
+        "/mmc-build",
+        "/mmc-quote",
+        "/mmc-directory",
+        "/mmc-suppliers",
+        "/mmc-train",
+        "/contact",
+        "/about",
+        "/investors",
+        "/case-studies"
+      ],
+      "flags": [
+        {
+          "name": "purchase-cta (NEXT_PUBLIC_PURCHASE_CTA_ENABLED)",
+          "modes": {
+            "purchase": {
+              "markers": [
+                "Get started",
+                "Contact sales"
+              ],
+              "forbidden": [
+                "waitlist"
+              ]
+            },
+            "waitlist": {
+              "markers": [
+                "Join Waitlist",
+                "Join the Waitlist"
+              ],
+              "forbidden": []
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
