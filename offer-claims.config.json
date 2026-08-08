@@ -1,0 +1,69 @@
+{
+  "_comment": [
+    "What this site is allowed to SAY about prices and the free trial.",
+    "",
+    "In one week this repo published four different descriptions of the same offer:",
+    "a FAQ promising the Essential plan 'free for 1 month', a plan badge promising",
+    "'free for 1 month', a call-to-action claiming 'card required at sign-up' four",
+    "inches from a signup page reading 'No credit card required', and an assistant",
+    "reporting a '60-day free trial'. The truth was 14 days, no card, every plan.",
+    "Two had been live for months, on a site taking payment.",
+    "",
+    "None of them appeared in a diff, which is why review after review walked past",
+    "them: they were not changes, they were statements that stopped being true while",
+    "nobody was looking at them. That is the class of defect this file exists to end.",
+    "",
+    "KEEP THIS HONEST. Every figure below is the amount Stripe actually charges,",
+    "confirmed against the LIVE account on 2026-08-09. If a price changes in Stripe",
+    "and not here, this file becomes the new lie and the check goes green over it —",
+    "which is exactly why `verifyAgainstStripe` exists (see below)."
+  ],
+
+  "authority": {
+    "_trialDays_comment": [
+      "14 days, from the organisations.trial_ends_at column default (migration 00027).",
+      "⚠️ Subscribing currently grants a FURTHER 14-day Stripe trial on top of this, so",
+      "a customer can reach ~28 free days in two stages. That is an open product",
+      "question on SCRUM-393, not a licence to state a longer number here: 14 is what",
+      "a new account gets, and it is what every surface should say until Karen decides."
+    ],
+    "trialDays": 14,
+
+    "prices": [
+      { "plan": "Essential Monthly", "amount": 49, "currency": "AUD", "interval": "month", "stripePriceId": "price_1TyrwLJc57PKv9hdkAHIjxt3" },
+      { "plan": "Professional Monthly", "amount": 199, "currency": "AUD", "interval": "month", "stripePriceId": "price_1TyrwzJc57PKv9hdz2Ne5ntr" },
+      { "plan": "Essential Annual", "amount": 470, "currency": "AUD", "interval": "year", "stripePriceId": "price_1TysWqJc57PKv9hdKaAFCNN9" },
+      { "plan": "Professional Annual", "amount": 1910, "currency": "AUD", "interval": "year", "stripePriceId": "price_1TysYnJc57PKv9hdk2LgaZYY" },
+      { "plan": "Verified Supplier", "amount": 199, "currency": "AUD", "interval": "month", "stripePriceId": "price_1TyshXJc57PKv9hdfHBbDEUT" },
+      { "plan": "Growth Partner", "amount": 299, "currency": "AUD", "interval": "month", "stripePriceId": "price_1TyshQJc57PKv9hdG1uC5TsG" }
+    ]
+  },
+
+  "_roots_comment": [
+    "The surfaces that make claims to a visitor. Deliberately NOT the whole repo:",
+    "the dashboard quotes project costs and estimates, which are outputs of the",
+    "product rather than statements about what it costs to buy."
+  ],
+  "roots": [
+    "src/app/(marketing)",
+    "src/lib/marketing",
+    "src/lib/assistant",
+    "src/lib/stripe",
+    "src/components/legal"
+  ],
+
+  "_verifyAgainstStripe_comment": [
+    "OFF, and this is a real cost that should not be glossed: with it off, the prices",
+    "above are unverified, and if one changes in Stripe this file quietly becomes the",
+    "new source of the error while the check keeps reporting green. The whole point of",
+    "the option is that the authority should be the money, not this JSON.",
+    "",
+    "It is off only because turning it on requires a Stripe key in CI, and a LIVE",
+    "secret key in Actions for a read-only price check is the wrong trade. The right",
+    "fix is a RESTRICTED key with read access to Prices and nothing else — a few",
+    "minutes in the Stripe dashboard — then set this true and add STRIPE_SECRET_KEY",
+    "to the repo secrets. Until then the figures above were checked by hand, once,",
+    "on the date in the comment at the top, which works exactly once."
+  ],
+  "verifyAgainstStripe": false
+}
