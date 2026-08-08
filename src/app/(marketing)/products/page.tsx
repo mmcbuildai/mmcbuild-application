@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { is3dRenderingEnabled } from "@/lib/build/render-3d";
 
-import { ctaHref, ctaLabel } from "@/lib/marketing/purchase-cta";
+import { ctaHref, ctaLabel, isPurchaseCtaEnabled } from "@/lib/marketing/purchase-cta";
 export const metadata: Metadata = {
   title: "Our Solutions — MMC Build Platform",
   description: "One Platform. Five Core Solutions. Built for MMC Adoption.",
@@ -191,8 +191,15 @@ export default function ProductsPage() {
       <section className="py-24 bg-slate-50">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-slate-900 mb-6">Ready to get started?</h2>
+          {/* SCRUM-372. The BUTTON below was wired to the flag; this sentence
+              was not, so after the 8 August flip the page invited you to join a
+              waitlist directly above a button that said "Get started" and led
+              to sign-up. Copy adjacent to a switched control has to switch with
+              it. */}
           <p className="text-xl text-slate-600 mb-8">
-            Join the waitlist to get early access to our complete MMC Suite.
+            {isPurchaseCtaEnabled()
+              ? "Start your 14-day free trial and get the complete MMC Suite."
+              : "Join the waitlist to get early access to our complete MMC Suite."}
           </p>
           <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-10">
             <Link href={ctaHref("/contact")}>
