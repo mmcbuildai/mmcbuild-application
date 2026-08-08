@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { InviteSessionRedirect } from "./invite-session-redirect";
 import { ArrowRight, Hammer, FileCheck, Users, GraduationCap, Bot } from "lucide-react";
 import SocialProof from "@/components/marketing/social-proof";
+import { ctaHref, ctaLabel } from "@/lib/marketing/purchase-cta";
 
 const organizationSchema = {
   "@context": "https://schema.org",
@@ -131,8 +132,12 @@ export default async function HomePage() {
               size="lg"
               className="h-12 rounded-full bg-blue-600 px-8 text-base text-white shadow-xl shadow-blue-600/20 hover:bg-blue-500 sm:h-14 sm:px-10 sm:text-lg"
             >
-              <Link href="/contact">
-                Join the Waitlist <ArrowRight className="ml-2 h-5 w-5" />
+              {/* SCRUM-372. This was the one primary CTA on the site that was
+                  never wired to the flag, so the flip on 8 August left the
+                  biggest button on the homepage still offering a waitlist and
+                  pointing at /contact, on a site that had started selling. */}
+              <Link href={ctaHref("/contact")}>
+                {ctaLabel()} <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
           </div>
