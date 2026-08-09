@@ -6,6 +6,10 @@ import {
   requiresPdfConversion,
   type PlanFileKind,
 } from "@/lib/plans/file-kind";
+import {
+  classifyIngestOutcome,
+  type IngestOutcome,
+} from "@/lib/plans/ingest-outcome";
 
 export const processPlan = inngest.createFunction(
   {
@@ -130,6 +134,51 @@ export const processPlan = inngest.createFunction(
       // pdf-parse@1.1.1 throwing "bad XRef entry" on malformed PDFs and embed
       // errors on DWG-derived text. On ANY such failure, keep the file and fall
       // back to manual_review (a usable, activatable state). (SCRUM-272)
+
+      // Ingest a PDF, and if it yields NOTHING, try reading it with vision.
+      //
+      // A drawing exported from CAD is a picture of words — room names and
+      // dimensions are line-work, not characters — so text extraction returns
+      // zero chunks and every downstream feature has no input. Karen's 36.9MB
+      // DWG (2026-08-04) produced 0 chunks where a working PDF produces 28.
+      //
+      // Ordered text-first deliberately: extracted text is exact, a vision
+      // transcription is a model's reading of a picture, and we prefer the
+      // exact one whenever it exists. That ordering is also the cost control —
+      // a normal text PDF never reaches the model. On any vision failure we
+      // return the original empty result, which classifyIngestOutcome turns
+      // into an honest manual_review rather than a false "ready".
+      const ingestPdfWithVisionFallback = async (pdfBuffer: Buffer) => {
+        const direct = await ingestPlan(
+          plan.org_id,
+          plan.id,
+          pdfBuffer,
+          "pdf",
+          plan.file_name,
+        );
+        if (direct.chunkCount > 0) return direct;
+
+        const { readPlanTextViaVision } = await import(
+          "@/lib/plans/vision-text-fallback"
+        );
+        console.warn(
+          `[processPlan] ${plan.id}: text extraction produced no chunks — reading the drawing with vision.`,
+        );
+        const vision = await readPlanTextViaVision(pdfBuffer, plan.file_name);
+        if ("error" in vision) {
+          console.warn(
+            `[processPlan] ${plan.id}: vision fallback did not produce text: ${vision.error}`,
+          );
+          return direct;
+        }
+        return await ingestPlanFromText({
+          orgId: plan.org_id,
+          planId: plan.id,
+          text: vision.text,
+          pageCount: direct.pageCount || 1,
+        });
+      };
+
       try {
         if (kind === "dwg") {
           const { convertDwg, convertViaCloudConvert } = await import(
@@ -165,13 +214,7 @@ export const processPlan = inngest.createFunction(
                 errorMessage: `${reason}; DWG → PDF fallback also failed: ${pdf.error}`,
               };
             }
-            return await ingestPlan(
-              plan.org_id,
-              plan.id,
-              pdf.buffer,
-              "pdf",
-              plan.file_name,
-            );
+            return await ingestPdfWithVisionFallback(pdf.buffer);
           };
 
           // 1. Preferred: DWG → DXF (preserves CAD layers + text annotations).
@@ -245,14 +288,14 @@ export const processPlan = inngest.createFunction(
               errorMessage: `${kind} → PDF conversion failed: ${conv.error}`,
             };
           }
-          return await ingestPlan(
-            plan.org_id,
-            plan.id,
-            conv.buffer,
-            "pdf",
-            plan.file_name,
-          );
+          return await ingestPdfWithVisionFallback(conv.buffer);
         }
+
+        // Native PDF gets the vision fallback too — a scanned or vector-only
+        // PDF is the same defect wearing a different extension. Images keep the
+        // plain path: callVisionModel takes a PDF, and a photo of a plan is a
+        // different problem with a different answer (see noContentMessage).
+        if (kind === "pdf") return await ingestPdfWithVisionFallback(sourceBuffer);
 
         return await ingestPlan(
           plan.org_id,
@@ -277,14 +320,27 @@ export const processPlan = inngest.createFunction(
       }
     });
 
-    // 4. Update status: DWG/manual-review files are stored only; everything
-    //    else is marked ready once chunks are embedded.
+    // 4. Update status from what ingestion ACTUALLY produced.
+    //
+    //    This used to read `result.manualReview ? "manual_review" : "ready"`,
+    //    so a plan that extracted ZERO chunks was marked ready with no error —
+    //    indistinguishable, to the user and to us, from one that extracted
+    //    everything. Karen's 36.9MB DWG (2026-08-04) is the reported case: the
+    //    upload genuinely had no problems, the reading did, and nothing said
+    //    so. classifyIngestOutcome applies the repo's own rule — a job
+    //    reporting done is not proof of success — and names the cause in the
+    //    user's terms. It is format-agnostic on purpose: a scanned PDF and an
+    //    unreadable image fail identically.
     await step.run("update-status-final", async () => {
       const admin = createAdminClient();
+      const classified = classifyIngestOutcome(
+        result as IngestOutcome,
+        plan.file_kind ?? "pdf",
+      );
       await admin
         .from("plans")
         .update({
-          status: result.manualReview ? "manual_review" : "ready",
+          status: classified.status,
           page_count: result.pageCount,
         } as never)
         .eq("id", plan.id);
@@ -293,8 +349,7 @@ export const processPlan = inngest.createFunction(
       // reason shows on the plan card instead of only in function logs.
       // Best-effort + separate from the status write: pre-migration (no
       // error_message column) this errors silently and never fails the run.
-      const errorMessage =
-        (result as { errorMessage?: string }).errorMessage ?? null;
+      const errorMessage = classified.errorMessage;
       const { error: msgErr } = await admin
         .from("plans")
         .update({ error_message: errorMessage } as never)
