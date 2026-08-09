@@ -194,3 +194,44 @@ assertion that could not be made is not evidence that the property holds.
 
 Runs in CI on merge to main and daily (never on PRs — like the schema-drift gate, it judges
 production, not the branch). Needs `SUPABASE_SERVICE_ROLE_KEY`; refuses to exit 0 unconfigured.
+
+---
+
+## Walking the create-project flow (SCRUM-378)
+
+`scripts/qa-walk-create-project.mjs` drives create-project against a live deployment as a real
+signed-in user and asserts the two things Karen reported: that the new project is **visible on
+/projects afterwards**, and that re-using the name shows the real duplicate message rather than a
+generic digest.
+
+```bash
+QA_WALK_EMAIL='<qa account>' QA_WALK_PASSWORD='<password>' \
+  node scripts/qa-walk-create-project.mjs
+# or against a preview
+QA_WALK_EMAIL=… QA_WALK_PASSWORD=… node scripts/qa-walk-create-project.mjs --base-url https://<preview>.vercel.app
+```
+
+**Why it is a script and not a line in a checklist.** SCRUM-378 was reported twice. Throughout, the
+repo had a green suite, a clean typecheck and successful deploys — none of which could see the
+defect, because it lived in the relationship between a server action and the page the user came
+back to. Only walking the path can see that. Exit codes distinguish the two outcomes that must
+never be confused: `1` = an assertion failed (a real finding), `2` = the run could not be completed
+(**not** a pass — nothing after the failure point was checked).
+
+**Two things it encodes, both of which cost a run to discover:**
+
+- The **Terms of Use gate** is a full-viewport `z-[100]` overlay that intercepts every click until
+  accepted. It is correct behaviour, but any run on an account that has not accepted the current
+  terms silently loses its first interaction to it — the click resolves to the button and then
+  times out, which reads as a broken selector.
+- It asserts `location.hostname` **in the same call** as the measurements. A headless browser that
+  has reset returns `about:blank` data that is indistinguishable from a real result.
+
+### A fourth account exists outside the three above
+
+`dennis@factory2key.com.au` is an `owner` of its own org (`ca90c098-…`) and is **not** one of the
+three identities in the table above — note it is a different address from the documented `user`
+identity, `dennis+qauser@factory2key.com.au`. Its password was rotated on 2026-08-09 to run the
+SCRUM-378 verification and is stored at `~/.mmc-qa-creds` on Dennis's machine. If it had a prior
+password recorded elsewhere, that one no longer works. Prefer the three documented identities;
+this one is recorded here so it is not a mystery account.

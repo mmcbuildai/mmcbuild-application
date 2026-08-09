@@ -17,6 +17,11 @@ import {
  * the previous version existed twice, in two files, and had to be corrected
  * twice. Byte-identical in mmcbuild-marketing and mmcbuild-application.
  */
+// @social-proof-ok: this component publishes nothing today — both lists are empty and the
+// switch is off, so it returns null. Karen confirmed on 2026-08-05 (SCRUM-376) that the
+// partnerships are not yet in place. Recorded by Dennis, 2026-08-09. Re-attest here the
+// moment real entries exist, naming who consented and when.
+
 export default function SocialProof() {
   const partners = showPartners();
   const testimonials = showTestimonials();
@@ -62,8 +67,14 @@ export default function SocialProof() {
         <section className="py-24 bg-gradient-to-b from-slate-900 to-slate-800">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
+              {/* Do not restore the scaffold heading this replaced. It is on the audit's
+                  known-filler list, so it fails whether or not the section is attested —
+                  a template string cannot become true because somebody signed for it.
+                  (Quoting it here would fail too: the check is a plain substring match,
+                  which it must be, or the filler list could be evaded by a comment.)
+                  Kept parallel to the partners heading above, "Who we work with". */}
               <h2 className="text-3xl font-bold text-white sm:text-4xl mb-4">
-                What our customers say
+                In their words
               </h2>
             </div>
 

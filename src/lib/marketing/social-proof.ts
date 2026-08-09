@@ -35,6 +35,14 @@
  * If you change it here, change it there in the same pair of PRs.
  */
 
+// @social-proof-ok: nothing is published from this file. PARTNERS and TESTIMONIALS are
+// both empty by decision — Karen confirmed on 2026-08-05 (SCRUM-376) that the partnerships
+// are not yet in place, and no consented quote exists. Recorded by Dennis, 2026-08-09.
+//
+// ⚠️ This attests the EMPTY SHELL and nothing else. The moment a real entry is added below,
+// this line must be rewritten to say who gave permission and when — an attestation that
+// outlives the thing it describes is worse than none, because it reads as green forever.
+
 export type Partner = {
   /** The organisation's name, exactly as they have agreed it may be shown. */
   name: string;

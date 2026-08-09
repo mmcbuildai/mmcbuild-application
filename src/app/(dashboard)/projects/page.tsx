@@ -21,10 +21,14 @@ const showTestingGuide = process.env.NEXT_PUBLIC_TESTING_MODE === "true";
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ prompt?: string }>;
+  searchParams: Promise<{ prompt?: string; unavailable?: string }>;
 }) {
   const params = await searchParams;
   const autoCreate = params.prompt === "create";
+  // Set when /projects/[id] could not show a project and sent the user here
+  // (SCRUM-378). Arriving on this list with no explanation is what made a
+  // created project look lost.
+  const unavailableId = params.unavailable ?? null;
   const supabase = await createClient();
 
   // Beta testers share one org (MMC Build), so RLS alone would show them every
@@ -62,6 +66,22 @@ export default async function ProjectsPage({
   return (
     <div className="space-y-6">
       {showTestingGuide && <TestingGuide />}
+
+      {unavailableId && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardHeader>
+            <CardTitle className="text-base text-amber-900">
+              We couldn&apos;t open that project
+            </CardTitle>
+            <CardDescription className="text-amber-800">
+              You&apos;ve been brought back to your projects because that one
+              couldn&apos;t be opened. Your work is listed below. If you had just
+              created it and it isn&apos;t here, tell us roughly when — the cause
+              is recorded and we can look it up.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       <ExplainerVideo module="projects" videoUrl="/videos/projects-explainer.mp4" />
 

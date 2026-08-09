@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/supabase/db";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { deriveSiteIntel } from "@/lib/site-intel";
 import { getStaticMapUrl } from "@/lib/services/mapbox";
 import { inngest } from "@/lib/inngest/client";
@@ -322,13 +323,27 @@ export async function createProject(
     }
   }
 
-  // SCRUM-349: do NOT revalidatePath("/projects") here. The New Project dialog
-  // lives ON /projects, and revalidating the current route in the same
-  // transition as the client's router.push("/projects/[id]") clobbers the push —
-  // the user lands back on the list instead of the new project's overview. The
-  // sample-create path (createProjectFromSample) omits this call and navigates
-  // correctly; keep parity. The list is refreshed on next navigation.
-  return { projectId: project.id };
+  // Revalidate the list AND navigate, in one server response (SCRUM-378).
+  //
+  // The previous shape was: revalidate nothing here, return the id, let the
+  // client router.push to the new project. That came from SCRUM-349, where
+  // revalidatePath("/projects") — the route the dialog lives on — raced the
+  // client's push and clobbered it, dropping the user back on the list.
+  // Removing the revalidate fixed the race but removed the only thing that
+  // ever refreshed the list, so ANY return to /projects afterwards showed the
+  // list as it was rendered BEFORE the project existed. The project was there;
+  // the page was old. Retrying the same name then hit the unique constraint,
+  // which is exactly the pair of screens Karen reported on 5 and 9 August: a
+  // project that is invisible, and a name that is already taken.
+  //
+  // Redirecting from the server is what makes both true at once. There is no
+  // client push left to clobber, so the revalidate is safe again, and the
+  // destination is decided in the same transaction that created the row.
+  revalidatePath("/projects");
+  // The wizard's first step is the Overview tab (ProjectTabs hides any tab
+  // above `setup_step`, which is 0 on a new project). The old target of
+  // `?tab=documents` therefore asked for a tab that was not in the tab strip.
+  redirect(`/projects/${project.id}`);
 }
 
 export async function copyProject(sourceProjectId: string) {
@@ -435,8 +450,13 @@ export async function copyProject(sourceProjectId: string) {
     await admin.from("project_contributors").insert(rows as never);
   }
 
+  // Same shape as createProject (SCRUM-378): revalidate + redirect in ONE
+  // server response. This path already revalidated "/projects" and then let the
+  // client push — which is precisely the race SCRUM-349 diagnosed on the create
+  // path and never fixed here, so copying a project from the list could drop
+  // you back on the list.
   revalidatePath("/projects");
-  return { success: true, projectId: newId };
+  redirect(`/projects/${newId}`);
 }
 
 export async function advanceProjectSetupStep(
@@ -1089,7 +1109,9 @@ export async function createProjectFromSample(
     }
   }
 
-  return { success: true, projectId };
+  // Revalidate + redirect in one response — see createProject (SCRUM-378).
+  revalidatePath("/projects");
+  redirect(`/projects/${projectId}`);
 }
 
 export async function retryPlanProcessing(planId: string) {

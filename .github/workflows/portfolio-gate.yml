@@ -18,6 +18,10 @@ name: Portfolio gate (social proof · sibling parity)
 # have done on its first firing.
 
 on:
+  # The offer-claims job runs on PULL REQUESTS as well, and blocks. The other two
+  # judge published content and live sites rather than the diff, so they stay on
+  # the schedule — see the `if:` on each.
+  pull_request:
   schedule:
     - cron: "0 23 * * *" # daily, 23:00 UTC ≈ 09:00 Brisbane
   workflow_dispatch:
@@ -25,6 +29,10 @@ on:
 jobs:
   social-proof:
     name: No fabricated or unattested social proof
+    # Not on PRs: it reports 3 findings that are a CLIENT decision (the case-study
+    # testimonials, SCRUM-383). Blocking every pull request on something no engineer
+    # can resolve is exactly how a check gets switched off for good.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -62,6 +70,9 @@ jobs:
 
   sibling-parity:
     name: The two MMC repos agree with each other
+    # Not on PRs: half of what it asserts is about the LIVE sites, which a pull
+    # request has not changed yet.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -85,7 +96,20 @@ jobs:
           token: ${{ secrets.GH_PACKAGES_TOKEN }}
           path: mmcbuild-marketing
 
+      # `package_json_file` is required HERE and not in the job above, and the
+      # difference is the whole reason this failed on its first run: this job
+      # checks out the application into a SUBDIRECTORY so the marketing repo can
+      # sit beside it, which leaves no package.json at the workspace root — and
+      # pnpm/action-setup reads the pnpm version from `packageManager` there.
+      #
+      # Pointing it at the file rather than pinning `version:` keeps this repo's
+      # existing convention (see the note in ci.yml): the version comes from
+      # package.json, so it cannot drift out of step with what everything else
+      # installs.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: mmcbuild-application/package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -103,3 +127,61 @@ jobs:
           ./mmcbuild-application/node_modules/.bin/portfolio-gate-audit-sibling-parity
           --root .
           --config mmcbuild-application/sibling-parity.config.json
+
+  offer-claims:
+    name: Prices and trial length match what we actually charge
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+        run: pnpm install --frozen-lockfile
+
+      # In one week this site published FOUR different descriptions of the same
+      # offer: a FAQ promising Essential "free for 1 month", a plan badge saying
+      # the same, a call-to-action claiming "card required at sign-up" four
+      # inches from a signup page reading "No credit card required", and an
+      # assistant reporting a "60-day free trial". The truth was 14 days, no
+      # card, every plan. Two had been live for months, on a site taking money.
+      #
+      # None of them ever appeared in a diff. They were not changes — they were
+      # statements that stopped being true while nobody looked at them, which is
+      # why every other check in this file would have passed straight over them.
+      #
+      # ⚠️ REPORT-ONLY, for the same reason as the social-proof job above and no
+      # other: as of 9 August it reports the supplier tiers ("$99 Basic
+      # Directory", "$499 Professional Directory", "first 2 months free"), which
+      # match neither the confirmed $199/$299 model nor anything purchasable.
+      # Those figures are already gated out of the live site and correcting them
+      # is Karen's decision, not something a build should block on. It moves to
+      # `pull_request` the day the count reaches zero — and the count is the
+      # measure of whether that is happening, rather than a promise that expires.
+      # BLOCKING as of 2026-08-09, and only because the count reached ZERO that
+      # day. Every figure the two sites state now matches a live Stripe Price,
+      # and every free-trial length matches what a new account actually gets.
+      #
+      # Turning it on while it is clean costs nothing. Waiting until it has
+      # findings turns switching it on into an argument about somebody's open
+      # ticket, which is how a check ends up permanently "temporarily" advisory —
+      # the social-proof job above is sitting in exactly that position.
+      #
+      # A figure that is legitimately different — a genuine comparison price — is
+      # not a reason to switch this off. It takes one line naming what
+      # substantiates it:
+      #     // @offer-claim-ok: <what this figure is, who confirmed it, when>
+      #
+      # ⚠️ `verifyAgainstStripe` is still OFF, so this can tell you the PAGE
+      # disagrees with the config, but NOT that the config itself has gone stale.
+      # Closing that needs a Stripe restricted key (Prices:Read) in the repo
+      # secrets. Until then the declared prices are only as current as the last
+      # hand-check, which was 2026-08-09.
+      - name: Audit offer claims
+        run: pnpm exec portfolio-gate-audit-offer-claims

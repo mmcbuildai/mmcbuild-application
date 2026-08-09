@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +21,7 @@ import {
 import { SAMPLE_DESIGNS } from "@/lib/beta/sample-designs";
 import { Plus, Loader2, AlertTriangle, ArrowRight } from "lucide-react";
 import { AddressAutocomplete } from "@/components/common/address-autocomplete";
+import { isRedirectError } from "@/lib/navigation/redirect-error";
 import { usePropertyOnboarding, PropertyAssessment } from "@/lib/property-services";
 import type { GeocodedAddress } from "@/lib/services/mapbox";
 
@@ -37,7 +37,6 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
   // disabled state — which created a project then hit the unique-name 500 on
   // the second insert. A ref blocks the second call synchronously.
   const submittingRef = useRef(false);
-  const router = useRouter();
 
   const property = usePropertyOnboarding({
     supabaseUrl: process.env.NEXT_PUBLIC_PROPERTY_SERVICES_URL!,
@@ -76,20 +75,28 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
     setLoading(true);
     setSubmitError(null);
     try {
-      // createProject returns { error } rather than throwing (SCRUM-378) —
-      // a thrown message is replaced by Next with a generic digest in
-      // production, so the useful text never reached the user. Same shape as
-      // handleUseSample below.
+      // createProject returns { error } for a failure the user can act on
+      // (SCRUM-378) — a thrown message is replaced by Next with a generic
+      // digest in production, so the useful text never reached the user.
+      //
+      // On SUCCESS it does not return: it revalidates the list and redirects
+      // server-side, so there is no client push here to race the revalidation
+      // (SCRUM-349) and no window in which the list can be stale. `res` is
+      // therefore optional — read it defensively rather than assuming a value.
       const res = await createProject(formData);
-      if (res.error) {
+      if (res?.error) {
         setSubmitError(res.error);
         return;
       }
       setOpen(false);
       geocodedRef.current = null;
       property.reset();
-      router.push(`/projects/${res.projectId}?tab=documents`);
     } catch (err) {
+      // A server-action redirect surfaces here as a thrown error carrying a
+      // NEXT_REDIRECT digest. Swallowing it would strand the user in the
+      // dialog and show them the framework's internal string as if it were a
+      // failure — so let it through untouched.
+      if (isRedirectError(err)) throw err;
       const message =
         err instanceof Error ? err.message : "Failed to create project";
       setSubmitError(message);
@@ -127,13 +134,15 @@ export function CreateProjectDialog({ defaultOpen = false }: { defaultOpen?: boo
             }
           : null,
       );
-      if (res.error) {
+      // Same contract as createProject: success redirects server-side and
+      // never returns, so only a failure produces a value here.
+      if (res?.error) {
         setSubmitError(res.error);
         return;
       }
       setOpen(false);
-      router.push(`/projects/${res.projectId}?tab=documents`);
     } catch (err) {
+      if (isRedirectError(err)) throw err;
       setSubmitError(
         err instanceof Error ? err.message : "Failed to create from sample",
       );

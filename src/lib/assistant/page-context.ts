@@ -30,7 +30,11 @@ const STATIC_ROUTES: Record<string, PageDescription> = {
   },
   "/billing": {
     module: "Billing",
-    summary: "Stripe-backed subscription management. Currently a 60-day free trial then paid plans.",
+    // 60 days was the ORIGINAL default in migration 00025 and has been wrong
+    // since 00027 changed it to 14. This string is what the assistant tells a
+    // user who asks about billing, so a stale number here is not an internal
+    // note — it is the product stating a false trial length out loud.
+    summary: "Stripe-backed subscription management. Currently a 14-day free trial then paid plans.",
   },
   "/settings": {
     module: "Settings",
