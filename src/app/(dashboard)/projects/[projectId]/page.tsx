@@ -52,7 +52,7 @@ export default async function ProjectOverviewPage({
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const { data: rawProject } = await supabase
+  const { data: rawProject, error: projectError } = await supabase
     .from("projects")
     .select("*")
     .eq("id", projectId)
@@ -71,7 +71,71 @@ export default async function ProjectOverviewPage({
     | null;
 
   if (!project) {
-    redirect("/projects");
+    // SCRUM-378. This branch used to be a bare `redirect("/projects")`, and it
+    // is the only code path in the app that can put a signed-in user back on
+    // the projects list without them asking. It fired on `!project` — which
+    // `.single()` produces for BOTH "no such row for you" and "the read
+    // failed" — and said nothing on the way out. So a momentary read failure
+    // was indistinguishable, to the user AND to us, from a project that had
+    // never been created. Karen described exactly that on 5 August: the
+    // project page appeared for about two seconds, then returned her to Saved
+    // Projects with nothing listed.
+    //
+    // Two things change. The cause is written down, so the next occurrence is
+    // read rather than reasoned backwards from a screenshot. And the two cases
+    // are no longer treated alike: only a genuine "not visible to you" leaves
+    // the page.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    // PGRST116 is PostgREST's "no rows returned" for `.single()`. Anything
+    // else — a timeout, a dropped connection, a replica that has not caught up
+    // — is a failure to READ the project, not evidence about whether it exists.
+    const genuinelyAbsent = !projectError || projectError.code === "PGRST116";
+    console.error("[projects/[projectId]] project not rendered", {
+      projectId,
+      userId: user?.id ?? null,
+      genuinelyAbsent,
+      code: projectError?.code ?? null,
+      message: projectError?.message ?? null,
+    });
+
+    if (!genuinelyAbsent) {
+      // Degrade, don't fake: stay on the URL the user asked for and say what
+      // happened. Navigating away here is what made a transient fault look
+      // like data loss.
+      return (
+        <div className="space-y-6">
+          <Link
+            href="/projects"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Projects
+          </Link>
+          <Card className="border-amber-300 bg-amber-50">
+            <CardHeader>
+              <CardTitle className="text-base text-amber-900">
+                We couldn&apos;t open this project just now
+              </CardTitle>
+              <CardDescription className="text-amber-800">
+                This is a problem reading it, not a problem with the project
+                itself — nothing has been lost. Reload the page to try again. If
+                it keeps happening, tell us roughly when and we can match it to
+                the logs.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="outline">
+                <Link href={`/projects/${projectId}`}>Try again</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    redirect(`/projects?unavailable=${projectId}`);
   }
 
   const isDraft = project.status === "draft";
