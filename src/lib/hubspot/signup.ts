@@ -1,5 +1,5 @@
 import { db } from "@/lib/supabase/db";
-import type { LeadInput } from "@/lib/validators/lead";
+import { leadSchema, type LeadInput } from "@/lib/validators/lead";
 import { submitToHubSpotForm } from "./forms";
 
 /**
@@ -50,19 +50,31 @@ export async function recordSignupLead(input: {
     const firstName = parts[0] || email.split("@")[0] || "Unknown";
     const lastName = parts.length > 1 ? parts.slice(1).join(" ") : "";
 
-    const lead: LeadInput = {
+    // Built through the schema rather than as a bare literal, so the ten
+    // attribution fields SCRUM-373 added (hutk, utm*, fbclid, gclid,
+    // landingPage, referrer) pick up their documented empty defaults instead of
+    // having to be restated here — and so the next field added to a lead does
+    // not break this call site again.
+    //
+    // This file typechecked green on its own branch and RED on main: it was
+    // written against a LeadInput from 30 July and the attribution fields landed
+    // in between, so the literal was missing ten required properties the moment
+    // the two met. A literal must be edited every time the type grows; parse()
+    // must not.
+    //
+    // A server-side signup carries no campaign data of its own — the UTM values
+    // live in the browser's first-touch cookie, which this path (inside
+    // provisionUser) never sees. Empty is therefore the honest value, not a
+    // placeholder for something we failed to collect.
+    const lead: LeadInput = leadSchema.parse({
       formType: "signup",
       firstName,
       lastName,
       email,
-      phoneCountry: "",
-      phone: "",
       company: input.orgName?.trim() || "",
-      role: "",
-      interest: "",
       message: "Created an account in the MMC Build app.",
       sourcePage: "https://app.mmcbuild.com.au/signup",
-    };
+    });
 
     // 1. Durable row first, exactly as /api/leads does — the CRM is downstream of
     //    our own record, never the other way round, so a HubSpot problem can
