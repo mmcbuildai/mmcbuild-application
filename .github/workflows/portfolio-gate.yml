@@ -116,3 +116,43 @@ jobs:
           ./mmcbuild-application/node_modules/.bin/portfolio-gate-audit-sibling-parity
           --root .
           --config mmcbuild-application/sibling-parity.config.json
+
+  offer-claims:
+    name: Prices and trial length match what we actually charge
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+        run: pnpm install --frozen-lockfile
+
+      # In one week this site published FOUR different descriptions of the same
+      # offer: a FAQ promising Essential "free for 1 month", a plan badge saying
+      # the same, a call-to-action claiming "card required at sign-up" four
+      # inches from a signup page reading "No credit card required", and an
+      # assistant reporting a "60-day free trial". The truth was 14 days, no
+      # card, every plan. Two had been live for months, on a site taking money.
+      #
+      # None of them ever appeared in a diff. They were not changes — they were
+      # statements that stopped being true while nobody looked at them, which is
+      # why every other check in this file would have passed straight over them.
+      #
+      # ⚠️ REPORT-ONLY, for the same reason as the social-proof job above and no
+      # other: as of 9 August it reports the supplier tiers ("$99 Basic
+      # Directory", "$499 Professional Directory", "first 2 months free"), which
+      # match neither the confirmed $199/$299 model nor anything purchasable.
+      # Those figures are already gated out of the live site and correcting them
+      # is Karen's decision, not something a build should block on. It moves to
+      # `pull_request` the day the count reaches zero — and the count is the
+      # measure of whether that is happening, rather than a promise that expires.
+      - name: Audit offer claims
+        run: pnpm exec portfolio-gate-audit-offer-claims
+        continue-on-error: true
