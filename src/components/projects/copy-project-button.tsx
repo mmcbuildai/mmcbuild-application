@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -29,7 +28,6 @@ export function CopyProjectButton({
   variant = "icon",
   stopPropagation = false,
 }: CopyProjectButtonProps) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -47,13 +45,15 @@ export function CopyProjectButton({
   function runCopy() {
     startTransition(async () => {
       setError(null);
+      // copyProject revalidates the list and redirects server-side on success
+      // (SCRUM-378), so it does not return a value in that case. The previous
+      // shape — revalidatePath("/projects") in the action plus a client push —
+      // is the exact race SCRUM-349 diagnosed on the create path: the
+      // revalidation of the route this button sits on could clobber the push
+      // and drop the user back on the list.
       const result = await copyProject(projectId);
-      if (result.error) {
+      if (result?.error) {
         setError(result.error);
-        return;
-      }
-      if (result.projectId) {
-        router.push(`/projects/${result.projectId}`);
       }
     });
   }
