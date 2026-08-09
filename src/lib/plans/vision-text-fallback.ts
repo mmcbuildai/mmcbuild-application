@@ -2,6 +2,7 @@ import { PDFDocument } from "pdf-lib";
 import { callVisionModel } from "@/lib/build/spatial/vision-call";
 import { singlePagePdfBase64 } from "./pdf-page-split";
 import { preparePdfBufferForVision } from "./pdf-vision-prep";
+import { rasterisePageToTiles } from "./raster-tiles";
 
 /**
  * Read the text off a plan by LOOKING at it, when the PDF has no text layer.
@@ -81,6 +82,18 @@ const PAGE_MAX_TOKENS = 4000;
 const WHOLE_DOC_MAX_TOKENS = 8000;
 
 /**
+ * How many blank sheets we will re-read as tiles.
+ *
+ * Escalation is the expensive path (a CloudConvert job plus a model call per
+ * tile), and a set where sheet after sheet is genuinely blank should not cost
+ * the same as one where the first sheet is a dense drawing we failed to read.
+ * Front sheets carry the title block, floor plans and schedules, so the first
+ * few are where the text is. Sheets past the limit are LOGGED, not silently
+ * left out.
+ */
+export const MAX_ESCALATED_PAGES = 3;
+
+/**
  * Below this a reply is not a transcription — it is the model failing in a way
  * the marker didn't catch. Embedding it would put a meaningless chunk into
  * retrieval and let the plan claim it had been read.
@@ -110,6 +123,24 @@ const USER_PROMPT =
 const pageUserPrompt = (page: number, total: number) =>
   `Transcribe every piece of text visible on this drawing sheet (sheet ${page} ` +
   `of ${total}), following the rules exactly.`;
+
+/**
+ * A tile is a REGION of a sheet, and saying so matters: told it is looking at a
+ * whole drawing, the model editorialises about what is missing. Told it is
+ * looking at one part of one, it just reads what is in front of it.
+ */
+const tileUserPrompt = (
+  row: number,
+  col: number,
+  rows: number,
+  cols: number,
+  page: number,
+  totalPages: number,
+) =>
+  `This image is one region (row ${row} of ${rows}, column ${col} of ${cols}) ` +
+  `of drawing sheet ${page} of ${totalPages}. Transcribe every piece of text ` +
+  `visible in THIS region, following the rules exactly. Do not comment on what ` +
+  `is cut off at the edges.`;
 
 export type VisionTextResult =
   | { text: string; truncated?: true }
@@ -150,6 +181,18 @@ async function transcribeBuffer(
     maxTokens,
   });
 
+  return gradeReply(result);
+}
+
+/**
+ * Grade a model reply identically whether we sent a PDF page or an image tile.
+ * One place, so the marker check, the length floor and the truncation signal
+ * cannot drift apart between the two paths.
+ */
+function gradeReply(result: {
+  text?: string;
+  stopReason?: string;
+}): PageOutcome {
   const text = (result.text ?? "").trim();
 
   if (!text || text.includes(NO_LEGIBLE_TEXT)) return { kind: "blank" };
@@ -165,6 +208,87 @@ async function transcribeBuffer(
   // Surfaced rather than swallowed: a partial read recorded as a complete one
   // is the defect this whole module exists to close.
   return { kind: "text", text, truncated: result.stopReason === "max_tokens" };
+}
+
+/**
+ * Read a sheet the model said was blank by rasterising it and reading it in
+ * tiles at native scale.
+ *
+ * WHY A SECOND ATTEMPT RATHER THAN DOING THIS FIRST
+ * Rasterising costs a CloudConvert job plus one model call per tile. A scanned
+ * A4 page reads perfectly well as a native PDF, because at A4 the ~1568px the
+ * model works at is roughly the page's own resolution. It is the ARCHITECTURAL
+ * sheet — A1, A0, a model-space dump — where that same 1568px destroys the
+ * text. Escalating only on a blank reply spends the money exactly where the
+ * cheap path failed, and nowhere else.
+ *
+ * Returns `blank` only when every tile came back blank, which is then a real
+ * finding rather than an artefact of how we sent the page.
+ */
+async function transcribeSheetByTiles(
+  pagePdf: Buffer,
+  label: string,
+  page: number,
+  totalPages: number,
+): Promise<PageOutcome> {
+  const rastered = await rasterisePageToTiles(pagePdf);
+  if ("error" in rastered) {
+    return { kind: "skipped", reason: `could not rasterise the sheet: ${rastered.error}` };
+  }
+
+  const { tiles, rows, cols } = rastered;
+  console.warn(
+    `[vision-text-fallback] ${label}: sheet ${page} read nothing as a whole page — re-reading it as ${cols}x${rows} tiles at ${rastered.width}x${rastered.height}.`,
+  );
+
+  const parts: string[] = [];
+  let truncated = false;
+  let blank = 0;
+
+  for (const tile of tiles) {
+    try {
+      const result = await callVisionModel("plan_vision", {
+        system: SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: tileUserPrompt(tile.row, tile.col, rows, cols, page, totalPages),
+          },
+        ],
+        images: [{ data: tile.data, mimeType: tile.mimeType }],
+        temperature: 0,
+        maxTokens: PAGE_MAX_TOKENS,
+      });
+      const graded = gradeReply(result);
+      if (graded.kind === "text") {
+        parts.push(graded.text);
+        truncated ||= graded.truncated;
+      } else if (graded.kind === "blank") {
+        blank++;
+      }
+    } catch (e) {
+      // A failed tile leaves a gap, and the gap is logged rather than hidden.
+      console.warn(
+        `[vision-text-fallback] ${label}: tile r${tile.row}c${tile.col} failed:`,
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  }
+
+  if (parts.length === 0) {
+    console.warn(
+      `[vision-text-fallback] ${label}: all ${tiles.length} tiles of sheet ${page} were blank.`,
+    );
+    return { kind: "blank" };
+  }
+
+  console.warn(
+    `[vision-text-fallback] ${label}: sheet ${page} yielded text from ${parts.length}/${tiles.length} tiles (${blank} blank).`,
+  );
+  // Tiles overlap, so a label on a seam appears in both. Left in deliberately:
+  // a duplicated room name costs a little retrieval noise, whereas trimming it
+  // risks deleting a genuine repeat (a schedule row, a repeated dimension).
+  return { kind: "text", text: parts.join("\n"), truncated };
 }
 
 /**
@@ -194,12 +318,17 @@ export async function readPlanTextViaVision(
     // Nothing to gain from splitting a single sheet, and re-saving it through
     // pdf-lib would only risk a parse we already know we don't need.
     if (!doc || totalPages <= 1) {
-      const outcome = await transcribeBuffer(
+      let outcome = await transcribeBuffer(
         pdf,
         label,
         USER_PROMPT,
         WHOLE_DOC_MAX_TOKENS,
       );
+      // A single huge CAD sheet is the case that reads blank as a whole page
+      // and reads fine in tiles. This is Karen's file.
+      if (outcome.kind === "blank") {
+        outcome = await transcribeSheetByTiles(pdf, label, 1, 1);
+      }
       if (outcome.kind === "text") {
         if (outcome.truncated) {
           console.warn(
@@ -228,6 +357,9 @@ export async function readPlanTextViaVision(
 
     const pages = Array.from({ length: pageCount }, (_, i) => i + 1);
     const outcomes: { page: number; outcome: PageOutcome }[] = [];
+    // Shared across the batches. JS is single-threaded, so a plain counter is
+    // sound here — the increment cannot interleave with another sheet's read.
+    let escalations = 0;
 
     for (let i = 0; i < pages.length; i += PAGE_CONCURRENCY) {
       const batch = pages.slice(i, i + PAGE_CONCURRENCY);
@@ -241,15 +373,35 @@ export async function readPlanTextViaVision(
                 outcome: { kind: "skipped", reason: "the sheet could not be split out" },
               };
             }
-            return {
-              page,
-              outcome: await transcribeBuffer(
-                Buffer.from(b64, "base64"),
-                `${label} (sheet ${page})`,
-                pageUserPrompt(page, totalPages),
-                PAGE_MAX_TOKENS,
-              ),
-            };
+            const pagePdf = Buffer.from(b64, "base64");
+            let outcome = await transcribeBuffer(
+              pagePdf,
+              `${label} (sheet ${page})`,
+              pageUserPrompt(page, totalPages),
+              PAGE_MAX_TOKENS,
+            );
+
+            // Blank as a whole page usually means the sheet is too big to be
+            // legible once scaled down, not that it is empty. Re-read it in
+            // tiles — bounded, because escalation is the expensive path.
+            if (outcome.kind === "blank") {
+              if (escalations < MAX_ESCALATED_PAGES) {
+                escalations++;
+                outcome = await transcribeSheetByTiles(
+                  pagePdf,
+                  label,
+                  page,
+                  totalPages,
+                );
+              } else {
+                // No silent cap — say which sheet went unre-read and why.
+                console.warn(
+                  `[vision-text-fallback] ${label}: sheet ${page} read nothing, but the tile re-read limit (${MAX_ESCALATED_PAGES}) is used up — this sheet was not re-read.`,
+                );
+              }
+            }
+
+            return { page, outcome };
           } catch (e) {
             // One bad sheet must not cost us the rest of the set.
             return {
