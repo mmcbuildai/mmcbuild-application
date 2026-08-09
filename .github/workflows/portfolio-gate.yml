@@ -18,6 +18,10 @@ name: Portfolio gate (social proof · sibling parity)
 # have done on its first firing.
 
 on:
+  # The offer-claims job runs on PULL REQUESTS as well, and blocks. The other two
+  # judge published content and live sites rather than the diff, so they stay on
+  # the schedule — see the `if:` on each.
+  pull_request:
   schedule:
     - cron: "0 23 * * *" # daily, 23:00 UTC ≈ 09:00 Brisbane
   workflow_dispatch:
@@ -25,6 +29,10 @@ on:
 jobs:
   social-proof:
     name: No fabricated or unattested social proof
+    # Not on PRs: it reports 3 findings that are a CLIENT decision (the case-study
+    # testimonials, SCRUM-383). Blocking every pull request on something no engineer
+    # can resolve is exactly how a check gets switched off for good.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -62,6 +70,9 @@ jobs:
 
   sibling-parity:
     name: The two MMC repos agree with each other
+    # Not on PRs: half of what it asserts is about the LIVE sites, which a pull
+    # request has not changed yet.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -153,6 +164,24 @@ jobs:
       # is Karen's decision, not something a build should block on. It moves to
       # `pull_request` the day the count reaches zero — and the count is the
       # measure of whether that is happening, rather than a promise that expires.
+      # BLOCKING as of 2026-08-09, and only because the count reached ZERO that
+      # day. Every figure the two sites state now matches a live Stripe Price,
+      # and every free-trial length matches what a new account actually gets.
+      #
+      # Turning it on while it is clean costs nothing. Waiting until it has
+      # findings turns switching it on into an argument about somebody's open
+      # ticket, which is how a check ends up permanently "temporarily" advisory —
+      # the social-proof job above is sitting in exactly that position.
+      #
+      # A figure that is legitimately different — a genuine comparison price — is
+      # not a reason to switch this off. It takes one line naming what
+      # substantiates it:
+      #     // @offer-claim-ok: <what this figure is, who confirmed it, when>
+      #
+      # ⚠️ `verifyAgainstStripe` is still OFF, so this can tell you the PAGE
+      # disagrees with the config, but NOT that the config itself has gone stale.
+      # Closing that needs a Stripe restricted key (Prices:Read) in the repo
+      # secrets. Until then the declared prices are only as current as the last
+      # hand-check, which was 2026-08-09.
       - name: Audit offer claims
         run: pnpm exec portfolio-gate-audit-offer-claims
-        continue-on-error: true
