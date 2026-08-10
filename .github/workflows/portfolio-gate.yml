@@ -25,6 +25,11 @@ on:
   schedule:
     - cron: "0 23 * * *" # daily, 23:00 UTC ≈ 09:00 Brisbane
   workflow_dispatch:
+    inputs:
+      force_report:
+        description: "Treat this run as failed, to test the issue routing end to end"
+        type: boolean
+        default: false
 
 jobs:
   social-proof:
@@ -185,3 +190,120 @@ jobs:
       # hand-check, which was 2026-08-09.
       - name: Audit offer claims
         run: pnpm exec portfolio-gate-audit-offer-claims
+
+  route-result:
+    name: Route the result to a human
+    # THE GAP THIS CLOSES. A pull_request failure paints a red X in a page the
+    # author already has open; a workflow_dispatch has someone watching it. The
+    # nightly cron has NO recipient — GitHub emails only whoever last edited the
+    # cron expression, into the same stream as every other notification, which in
+    # practice is nobody.
+    #
+    # On 9 Aug this workflow went from green (8 Aug, every job) to red naming
+    # exactly ONE job, and it sat unread for a day while the two pricing pages
+    # contradicted each other about the customer's card on a product taking real
+    # payments. The signal was as clean as CI gets. Nobody was drowning in noise;
+    # nobody was looking.
+    #
+    # ⚠️ An earlier note in sibling-parity.config.json blamed alert fatigue and was
+    # WRONG (corrected in #173). That matters here because the wrong diagnosis
+    # implies the wrong fix — "clear the findings, soften the checks" — when the
+    # actual problem is that an unattended run has nowhere to arrive.
+    #
+    # Runs for the SCHEDULE and for any manual dispatch; never for a pull request,
+    # where a red X already reaches the author and an issue would be pure noise.
+    #
+    # ⚠️ It was first written as `schedule || force_report`, and testing it caught
+    # the flaw: an ordinary dispatch then SKIPPED this job, so someone who fixed
+    # the gate and re-ran it by hand would watch the issue stay open and conclude
+    # the auto-close was broken. A manual re-run is the most likely way a fix gets
+    # confirmed, so it must be able to clear the state it is confirming.
+    #
+    # `force_report` therefore only controls whether to SIMULATE a failure — it is
+    # not the gate on whether routing runs at all. Its purpose is that the routing
+    # can be TESTED rather than assumed to work: this repo has already paid twice
+    # for guards that existed and never ran.
+    if: always() && github.event_name != 'pull_request'
+    needs: [social-proof, sibling-parity, offer-claims]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SOCIAL: ${{ needs.social-proof.result }}
+          PARITY: ${{ needs.sibling-parity.result }}
+          CLAIMS: ${{ needs.offer-claims.result }}
+          FORCED: ${{ github.event.inputs.force_report }}
+        run: |
+          set -euo pipefail
+
+          # An ISSUE rather than an email, deliberately. An email is a moment you
+          # can miss exactly once and lose for good; an issue is a STATE that
+          # survives being missed. This repo already works through issues
+          # (`gh issue list --label accept`), so it is a page someone opens.
+          LABEL="gate-failure"
+          gh label create "$LABEL" --color B60205 \
+            --description "A nightly portfolio-gate run failed and needs a human" \
+            --force >/dev/null 2>&1 || true
+
+          # Written as explicit `if` blocks, not `[ test ] && VAR=...`. Under
+          # `set -e` a false test at the END of a script aborts it — so the
+          # concise form works today only because other lines follow it, and
+          # would silently stop reporting the day someone reorders them. A guard
+          # that fails closed by accident of line order is not a guard.
+          FAILED=""
+          if [ "$SOCIAL" = "failure" ]; then
+            FAILED="${FAILED}- No fabricated or unattested social proof"$'\n'
+          fi
+          if [ "$PARITY" = "failure" ]; then
+            FAILED="${FAILED}- The two MMC repos agree with each other"$'\n'
+          fi
+          if [ "$CLAIMS" = "failure" ]; then
+            FAILED="${FAILED}- Prices and trial length match what we actually charge"$'\n'
+          fi
+          if [ "${FORCED:-}" = "true" ]; then
+            FAILED="${FAILED}- (SIMULATED via force_report — a routing test, not a real finding)"$'\n'
+          fi
+
+          # Dedupe on the LABEL, not the title: the title names which checks failed
+          # and that set changes between runs, so matching on it would file a fresh
+          # issue every night. One open issue per outage, commented on — thirty
+          # issues in a month is how a channel becomes the noise it was built to
+          # cut through.
+          EXISTING="$(gh issue list --label "$LABEL" --state open --limit 1 --json number --jq '.[0].number // empty')"
+
+          if [ -n "$FAILED" ]; then
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --body "Failed again — $RUN_URL
+
+          $FAILED"
+              echo "commented on #$EXISTING"
+            else
+              gh issue create --label "$LABEL" \
+                --title "Nightly portfolio gate is failing — a check nobody is watching went red" \
+                --body "The scheduled \`portfolio-gate\` run failed. Nothing else will tell you: a cron has no author to notify and no pull request to block, which is exactly how the 9 August pricing drift stayed live for a day.
+
+          **Failing checks**
+
+          $FAILED
+          **Run:** $RUN_URL
+
+          ---
+
+          This issue closes ITSELF on the next green scheduled run, so it is safe to leave open — it is tracking a state, not asking for acknowledgement. If it is still open, the gate is still red." >/dev/null
+              echo "opened a new tracking issue"
+            fi
+          else
+            if [ -n "$EXISTING" ]; then
+              gh issue close "$EXISTING" --comment "Green again — $RUN_URL
+
+          Closing automatically. A signal nobody clears decays into wallpaper, which defeats the point of routing it here." >/dev/null
+              echo "closed #$EXISTING"
+            else
+              echo "all checks green, nothing open — nothing to do"
+            fi
+          fi
