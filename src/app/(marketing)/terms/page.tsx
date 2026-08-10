@@ -80,28 +80,43 @@ export default function TermsPage() {
               </li>
             </ul>
 
-            <h3>7.2 Free trial and the first charge</h3>
+            <h3>7.2 Free trials and the first charge</h3>
+            <p>
+              There are two separate free periods, and they work differently. The
+              first comes with the account and asks nothing of you; the second comes
+              with a subscription and requires a card.
+            </p>
             <ul>
               <li>
-                New subscriptions include a <strong>14-day free trial</strong>, which
-                includes <strong>10 compliance runs and 5 plan uploads</strong> — the
-                same allowance as a paid Essential subscription.
-              </li>
-              <li>
-                <strong>A valid payment card is required to start the trial.</strong>{" "}
-                You are not charged during the trial.
+                <strong>Creating an account gives you 14 days free</strong>, including{" "}
+                <strong>10 compliance runs and 5 plan uploads</strong> — the same
+                allowance as a paid Essential subscription.{" "}
+                <strong>No payment card is required</strong>, and none is stored.
               </li>
               <li>
                 <strong>
-                  At the end of the 14 days your card is automatically charged for
-                  the first billing period, unless you cancel before then.
+                  You are not charged at the end of that period, automatically or
+                  otherwise.
+                </strong>{" "}
+                Paid features stop until you choose to subscribe. Your projects and
+                past results are retained.
+              </li>
+              <li>
+                <strong>Subscribing requires a valid payment card</strong> and starts
+                a <strong>further 14-day free trial</strong>. You are not charged
+                during it.
+              </li>
+              <li>
+                <strong>
+                  At the end of that second period your card is automatically charged
+                  for the first billing period, unless you cancel before then.
                 </strong>{" "}
                 The amount and the date are shown to you before you enter your card,
                 and we email you before the charge is taken.
               </li>
               <li>
-                <strong>Cancelling during the trial costs you nothing.</strong> You
-                can cancel at any time from the Billing page — see clause 7.4.
+                <strong>Cancelling during either period costs you nothing.</strong>{" "}
+                You can cancel at any time from the Billing page — see clause 7.4.
               </li>
             </ul>
 

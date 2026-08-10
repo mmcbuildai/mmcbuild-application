@@ -447,13 +447,23 @@ export function BillingContent({
             {hasSubscription ? "Your subscription terms" : "Before you subscribe"}
           </p>
           <ul className="mt-2 space-y-1.5">
+            {/*
+              "14-day free trial" is ambiguous here, because there are TWO of
+              them: the free period that came with the account (no card), and the
+              one that starts when you subscribe (card required). This panel is
+              about the second — but a reader part-way through the first has no
+              way to know that from the words alone, and the two differ on the
+              only question that matters, which is whether anything gets charged.
+              So say which one this is.
+            */}
             <li>
-              Every plan starts with a <strong>14-day free trial</strong>. A card
-              is required to begin it, and you are not charged during the trial.
+              Subscribing starts a <strong>further 14-day free trial</strong>,
+              separate from the free period your account began with. A card is
+              required to begin it, and you are not charged during it.
             </li>
             <li>
-              At the end of the 14 days your card is charged automatically for
-              the first period, unless you cancel before then.
+              At the end of that second 14 days your card is charged automatically
+              for the first period, unless you cancel before then.
             </li>
             {/*
               This line was written in the present tense for everybody, which
