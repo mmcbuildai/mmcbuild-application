@@ -1,5 +1,3 @@
-import { TRIAL_DAYS, TRIAL_RUN_LIMIT, TRIAL_UPLOAD_LIMIT } from "@/lib/stripe/plans";
-
 /**
  * The commercial facts, stated ONCE.
  *
@@ -34,6 +32,36 @@ import { TRIAL_DAYS, TRIAL_RUN_LIMIT, TRIAL_UPLOAD_LIMIT } from "@/lib/stripe/pl
  * boolean merely *asserting* what Stripe does would be a second place to be
  * wrong, which is the problem rather than the fix.
  */
+
+/**
+ * ⚠️ THIS FILE HAS NO IMPORTS, ON PURPOSE, AND MUST KEEP NONE.
+ *
+ * It is byte-identical in mmcbuild-application and mmcbuild-marketing and
+ * guarded by `sibling-parity` — the same discipline as purchase-cta.ts, which
+ * consumes it. The marketing site has no `lib/stripe`, so anything imported
+ * here could not resolve there, and the two copies would stop being copies.
+ *
+ * That is also why the three primitives are DECLARED here rather than in
+ * `lib/stripe/plans`, which re-exports them: the facts are what we tell a
+ * customer, and Stripe is one of the places that enforces them, not their home.
+ */
+
+/** How long the ACCOUNT's free period runs. */
+export const TRIAL_DAYS = 14;
+
+/**
+ * What the account's free period includes.
+ *
+ * Deliberately equal to PLANS.essential.runLimit / uploadLimit, pinned by
+ * `tests/unit/billing/trial-allowance.test.ts` so the pair cannot drift.
+ *
+ * ⚠️ This number was declared TWICE for months — here (as `persona-access`) and
+ * in `plans` — both 10, with the sidebar reading one and the terms the other.
+ * Nothing would have reported the day they disagreed. It is now declared once
+ * and re-exported, and a test fails if a second declaration appears.
+ */
+export const TRIAL_RUN_LIMIT = 10;
+export const TRIAL_UPLOAD_LIMIT = 5;
 
 /**
  * Sign-up takes no card.

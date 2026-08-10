@@ -68,7 +68,15 @@
         "in sync — both are byte-identical by design today and nothing was guarding",
         "them. Cheaper to pin now than to reconcile after they drift."
       ],
+      "_identicalFiles_commercial_facts": [
+        "commercial-facts.ts is added because purchase-cta.ts now IMPORTS it, so",
+        "the two repos agreeing about purchase-cta means nothing unless they also",
+        "agree about the module it reads its numbers from. It has NO imports on",
+        "purpose - the marketing site has no lib/stripe, so anything it pulled in",
+        "could not resolve there and the copies would stop being copies."
+      ],
       "identicalFiles": [
+        "src/lib/legal/commercial-facts.ts",
         "src/lib/marketing/purchase-cta.ts",
         "src/lib/attribution/first-touch.ts",
         "src/components/analytics/hubspot-tracking.tsx"
