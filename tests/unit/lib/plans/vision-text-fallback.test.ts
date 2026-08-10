@@ -210,6 +210,67 @@ describe("readPlanTextViaVision — re-reads a blank sheet in tiles", () => {
   });
 });
 
+describe("readPlanTextViaVision — keeps what it could not read", () => {
+  it("keeps the first tile so someone can LOOK at what the model saw", async () => {
+    // Three fixes were designed against a rendered sheet nobody had ever seen.
+    // When every tile comes back blank, this image is the ONLY thing that can
+    // separate "we read it badly" from "the render is empty".
+    mockCallVisionModel.mockResolvedValue({ text: NO_LEGIBLE_TEXT });
+    const kept: string[] = [];
+
+    await readPlanTextViaVision(await makePdf(1), "sheet.pdf", {
+      onArtifact: async (name) => {
+        kept.push(name);
+      },
+    });
+
+    expect(kept).toEqual(["sheet-1-tile-r1c1.jpg"]);
+  });
+
+  it("captures the tile BEFORE reading it, not after the verdict is known", async () => {
+    // Captured only on failure means captured never, because the interesting
+    // runs are the ones where something unexpected happens mid-read.
+    let capturedBeforeAnyCall = false;
+    mockCallVisionModel
+      .mockResolvedValueOnce({ text: NO_LEGIBLE_TEXT }) // whole page
+      .mockImplementation(async () => ({ text: TILE_TEXT }));
+
+    await readPlanTextViaVision(await makePdf(1), "sheet.pdf", {
+      onArtifact: async () => {
+        // one call so far: the whole-page attempt, before any tile is read
+        capturedBeforeAnyCall = mockCallVisionModel.mock.calls.length === 1;
+      },
+    });
+
+    expect(capturedBeforeAnyCall).toBe(true);
+  });
+
+  it("keeps nothing when the page read fine", async () => {
+    const kept: string[] = [];
+    await readPlanTextViaVision(await makePdf(2), "set.pdf", {
+      onArtifact: async (name) => {
+        kept.push(name);
+      },
+    });
+    expect(kept).toEqual([]);
+  });
+
+  it("never lets a broken sink break the read it is diagnosing", async () => {
+    mockCallVisionModel
+      .mockResolvedValueOnce({ text: NO_LEGIBLE_TEXT })
+      .mockResolvedValue({ text: TILE_TEXT });
+
+    const result = await readPlanTextViaVision(await makePdf(1), "sheet.pdf", {
+      onArtifact: async () => {
+        throw new Error("storage is down");
+      },
+    });
+
+    expect(result).not.toHaveProperty("error");
+    expect((result as { text: string }).text).toContain("ENSUITE 1800 x 2400");
+  });
+});
+
 describe("readPlanTextViaVision — the single-sheet and unparseable paths", () => {
   it("sends a one-sheet PDF whole rather than re-saving it", async () => {
     const result = await readPlanTextViaVision(await makePdf(1), "one.pdf");

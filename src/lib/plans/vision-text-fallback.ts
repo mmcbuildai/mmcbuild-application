@@ -75,6 +75,14 @@ export const MAX_TRANSCRIBED_PAGES = 12;
 /** Sheets transcribed at once. Bounds wall-clock without hammering the provider. */
 const PAGE_CONCURRENCY = 3;
 
+/**
+ * Tiles of ONE sheet read at once. Higher than PAGE_CONCURRENCY because tiles
+ * are the inner loop of an already-escalated read and the wall-clock matters
+ * more there; still bounded, since a sheet can fan out to MAX_TILES and pages
+ * fan out on top of that.
+ */
+const TILE_CONCURRENCY = 4;
+
 /** Output budget for ONE sheet. A single dense sheet's text runs well inside this. */
 const PAGE_MAX_TOKENS = 4000;
 
@@ -145,6 +153,50 @@ const tileUserPrompt = (
 export type VisionTextResult =
   | { text: string; truncated?: true }
   | { error: string };
+
+/**
+ * Hand the caller a copy of what we ACTUALLY SENT the model.
+ *
+ * Three successive fixes to this module reasoned about a rendered CAD sheet
+ * that nobody had ever looked at. On 2026-08-09 the tiled read went to
+ * production and all twelve tiles came back "no legible text" — at which point
+ * "we are reading it badly" and "there is nothing legible in what we produced"
+ * became impossible to tell apart from the outside, because the only artefact
+ * that could separate them existed for a few seconds inside a serverless
+ * function and was never written down.
+ *
+ * So the failing path now keeps the evidence. Optional, best-effort, and never
+ * allowed to affect the read: an artefact sink that throws must not turn a
+ * working transcription into a failure.
+ */
+export type ArtifactSink = (
+  name: string,
+  data: Buffer,
+  contentType: string,
+) => Promise<void>;
+
+export interface VisionTextOptions {
+  /** Called with the images sent to the model, when a sheet reads blank. */
+  onArtifact?: ArtifactSink;
+}
+
+/** Never let diagnostics break the thing they are diagnosing. */
+async function emit(
+  sink: ArtifactSink | undefined,
+  name: string,
+  data: Buffer,
+  contentType: string,
+): Promise<void> {
+  if (!sink) return;
+  try {
+    await sink(name, data, contentType);
+  } catch (e) {
+    console.warn(
+      `[vision-text-fallback] could not keep artefact ${name}:`,
+      e instanceof Error ? e.message : String(e),
+    );
+  }
+}
 
 /** What one sheet produced. "blank" is an answer, not a failure. */
 type PageOutcome =
@@ -230,6 +282,7 @@ async function transcribeSheetByTiles(
   label: string,
   page: number,
   totalPages: number,
+  onArtifact?: ArtifactSink,
 ): Promise<PageOutcome> {
   const rastered = await rasterisePageToTiles(pagePdf);
   if ("error" in rastered) {
@@ -241,11 +294,18 @@ async function transcribeSheetByTiles(
     `[vision-text-fallback] ${label}: sheet ${page} read nothing as a whole page — re-reading it as ${cols}x${rows} tiles at ${rastered.width}x${rastered.height}.`,
   );
 
-  const parts: string[] = [];
-  let truncated = false;
-  let blank = 0;
+  // Keep the FIRST tile before reading any of them. If every tile comes back
+  // blank, this image is the only thing that can say whether the drawing was
+  // illegible or the render was empty — and it has to be captured before the
+  // answer is known, or it is never captured at all.
+  await emit(
+    onArtifact,
+    `sheet-${page}-tile-r${tiles[0].row}c${tiles[0].col}.jpg`,
+    tiles[0].data,
+    "image/jpeg",
+  );
 
-  for (const tile of tiles) {
+  const readTile = async (tile: (typeof tiles)[number]): Promise<PageOutcome> => {
     try {
       const result = await callVisionModel("plan_vision", {
         system: SYSTEM_PROMPT,
@@ -259,19 +319,47 @@ async function transcribeSheetByTiles(
         temperature: 0,
         maxTokens: PAGE_MAX_TOKENS,
       });
-      const graded = gradeReply(result);
-      if (graded.kind === "text") {
-        parts.push(graded.text);
-        truncated ||= graded.truncated;
-      } else if (graded.kind === "blank") {
-        blank++;
-      }
+      return gradeReply(result);
     } catch (e) {
       // A failed tile leaves a gap, and the gap is logged rather than hidden.
       console.warn(
         `[vision-text-fallback] ${label}: tile r${tile.row}c${tile.col} failed:`,
         e instanceof Error ? e.message : String(e),
       );
+      return { kind: "skipped", reason: "tile read failed" };
+    }
+  };
+
+  // Read tiles concurrently, in document order.
+  //
+  // Measured on Karen's file in production (2026-08-09): twelve tiles read
+  // SEQUENTIALLY took 18s of the run's 37s. That is fine for one sheet and
+  // stops being fine at MAX_ESCALATED_PAGES sheets, because the whole ingestion
+  // lives inside a step bounded by Vercel's 300s invocation ceiling — three
+  // escalations of a large set would spend a third of the budget waiting on
+  // calls that have nothing to do with each other.
+  //
+  // Order is preserved by collecting per batch rather than as each settles: the
+  // output is labelled by sheet and read top-left to bottom-right, and a
+  // transcription whose lines arrive in race order would be harder to check
+  // against the drawing for no gain.
+  const graded: PageOutcome[] = [];
+  for (let i = 0; i < tiles.length; i += TILE_CONCURRENCY) {
+    graded.push(
+      ...(await Promise.all(tiles.slice(i, i + TILE_CONCURRENCY).map(readTile))),
+    );
+  }
+
+  const parts: string[] = [];
+  let truncated = false;
+  let blank = 0;
+
+  for (const g of graded) {
+    if (g.kind === "text") {
+      parts.push(g.text);
+      truncated ||= g.truncated;
+    } else if (g.kind === "blank") {
+      blank++;
     }
   }
 
@@ -302,6 +390,7 @@ async function transcribeSheetByTiles(
 export async function readPlanTextViaVision(
   pdf: Buffer,
   label = "plan.pdf",
+  opts: VisionTextOptions = {},
 ): Promise<VisionTextResult> {
   try {
     let doc: PDFDocument | null = null;
@@ -327,7 +416,7 @@ export async function readPlanTextViaVision(
       // A single huge CAD sheet is the case that reads blank as a whole page
       // and reads fine in tiles. This is Karen's file.
       if (outcome.kind === "blank") {
-        outcome = await transcribeSheetByTiles(pdf, label, 1, 1);
+        outcome = await transcribeSheetByTiles(pdf, label, 1, 1, opts.onArtifact);
       }
       if (outcome.kind === "text") {
         if (outcome.truncated) {
@@ -392,6 +481,7 @@ export async function readPlanTextViaVision(
                   label,
                   page,
                   totalPages,
+                  opts.onArtifact,
                 );
               } else {
                 // No silent cap — say which sheet went unre-read and why.
