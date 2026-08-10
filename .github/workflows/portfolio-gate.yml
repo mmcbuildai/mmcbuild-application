@@ -210,10 +210,20 @@ jobs:
     # implies the wrong fix — "clear the findings, soften the checks" — when the
     # actual problem is that an unattended run has nowhere to arrive.
     #
-    # Runs for the SCHEDULE, plus a dispatch that explicitly asks, so the routing
-    # can be TESTED rather than assumed to work. A guard nobody has ever seen fire
-    # is the thing this repo keeps paying for.
-    if: always() && (github.event_name == 'schedule' || github.event.inputs.force_report == 'true')
+    # Runs for the SCHEDULE and for any manual dispatch; never for a pull request,
+    # where a red X already reaches the author and an issue would be pure noise.
+    #
+    # ⚠️ It was first written as `schedule || force_report`, and testing it caught
+    # the flaw: an ordinary dispatch then SKIPPED this job, so someone who fixed
+    # the gate and re-ran it by hand would watch the issue stay open and conclude
+    # the auto-close was broken. A manual re-run is the most likely way a fix gets
+    # confirmed, so it must be able to clear the state it is confirming.
+    #
+    # `force_report` therefore only controls whether to SIMULATE a failure — it is
+    # not the gate on whether routing runs at all. Its purpose is that the routing
+    # can be TESTED rather than assumed to work: this repo has already paid twice
+    # for guards that existed and never ran.
+    if: always() && github.event_name != 'pull_request'
     needs: [social-proof, sibling-parity, offer-claims]
     runs-on: ubuntu-latest
     permissions:
