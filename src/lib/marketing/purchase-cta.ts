@@ -104,34 +104,36 @@ export function ctaHrefForPlan(
 }
 
 /**
- * Supporting copy under a primary call-to-action.
+ * Small print under a primary call-to-action: what happens to the card on
+ * file once the trial ends.
  *
- * ⚠️ THE PREVIOUS WORDING WAS FALSE, and it was false next to every "Get
- * started" button on both websites: "14 days free. Card required at sign-up,
- * charged when the trial ends unless you cancel."
+ * ⚠️ CORRECTED 2026-08-09 (again). The previous wording here — "No card
+ * needed to start — you add one when you subscribe" — was itself inaccurate,
+ * per Karthik: `payment_method_collection: "always"` in billing/actions.ts
+ * forces a card at the very Stripe Checkout that starts the 14-day trial, so
+ * a card is required to begin, not added later. The one thing that's certain
+ * and consequential is stated instead: the card on file gets charged
+ * automatically once the trial ends.
  *
- * No card is required at sign-up. The signup page itself said so one click
- * later — "No credit card required" — so a visitor met two contradictory
- * statements about their card in the space of a single click, on a product
- * that had just started charging real ones.
- *
- * The wording below states only what is certain today and stays true whichever
- * way the open trial-model question is decided (SCRUM-391): the trial is 14
- * days, all modules are unlocked, no card is needed to begin, and a card is
- * taken when the customer subscribes.
- *
- * ⚠️ Deliberately NOT stated: the 10-run cap (TRIAL_RUN_LIMIT), which no
- * pre-signup surface currently discloses, and the fact that subscribing today
- * grants a FURTHER 14-day Stripe trial on top of this one. Both are real, both
- * are Karen's decisions on SCRUM-391, and neither is something to resolve by
- * inventing copy. Update this the moment she answers.
- *
- * Empty in waitlist mode, where there is nothing to disclose.
+ * Empty in waitlist mode, where there is no card and nothing to disclose.
  */
 export function ctaSubtext(): string {
   return isPurchaseCtaEnabled()
-    ? "14 days free, all modules unlocked. No card needed to start — you add one when you subscribe."
+    ? "Automatically charged after the trial period ends."
     : "";
+}
+
+/**
+ * The trial headline — deliberately separate from `ctaSubtext()` above.
+ * "14 days free, all modules unlocked" is the strongest reason to click
+ * "Get started" and was previously buried as small grey subtext under the
+ * button; callers should give it prominent, attention-grabbing treatment
+ * rather than pairing it with the billing fine print.
+ *
+ * Empty in waitlist mode, where there is no trial to advertise.
+ */
+export function trialHighlight(): string {
+  return isPurchaseCtaEnabled() ? "14 days free, all modules unlocked" : "";
 }
 
 /**

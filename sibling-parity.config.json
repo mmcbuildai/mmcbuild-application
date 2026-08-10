@@ -35,7 +35,24 @@
         "from selling and waitlisting at the same time. That was verified by hand with",
         "`diff` when it was written (PR #149/#3), which works exactly once."
       ],
-      "identicalFiles": ["src/lib/marketing/purchase-cta.ts"],
+      "_identicalFiles_drift_2026_08_10": [
+        "purchase-cta.ts DID drift, and the check DID catch it — the scheduled run on",
+        "9 Aug 23:33 UTC failed with exactly this finding. Nobody acted on it, because",
+        "that workflow is permanently red: social-proof legitimately fails on the case",
+        "study testimonials only Karen can clear (SCRUM-383). A job that is always red",
+        "teaches people to stop reading it, and the next genuine failure arrives",
+        "invisible. The drift meanwhile put a FALSE statement about cards on the live",
+        "app pricing page for a day, while the marketing site said the opposite.",
+        "",
+        "first-touch.ts and hubspot-tracking.tsx are added below while they are still",
+        "in sync — both are byte-identical by design today and nothing was guarding",
+        "them. Cheaper to pin now than to reconcile after they drift."
+      ],
+      "identicalFiles": [
+        "src/lib/marketing/purchase-cta.ts",
+        "src/lib/attribution/first-touch.ts",
+        "src/components/analytics/hubspot-tracking.tsx"
+      ],
       "_sharedDependencies_comment": [
         "@vercel/analytics is the 8 August incident precisely: present in the app,",
         "absent from marketing, analytics toggled on for both. Silent if NEITHER has",
