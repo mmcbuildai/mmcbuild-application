@@ -120,7 +120,20 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
             >
               Terms of Use
             </h2>
-            <p className="mt-0.5 text-sm text-zinc-500">
+            {/*
+              Type sizes on this dialog are deliberately larger on mobile.
+              PRODUCT_STANDARDS §1 sets a 16px base on mobile, and every string
+              here was below it — the body at 14px, the line carrying the link
+              to the full Terms at 12px. It is a blocking legal gate that a
+              builder reads on a phone, on site, and agrees to; the smallest
+              text on it should not be the link to the document itself.
+
+              `sm:` returns each to its original size from 640px up, so the
+              desktop dialog is unchanged. Same shape as the fix made to the
+              consent checkbox in @caistech/corporate-components v0.8.1, for
+              the same reason.
+            */}
+            <p className="mt-0.5 text-base text-zinc-500 sm:text-sm">
               {nudging
                 ? "The rest of the page is unavailable until you accept or decline."
                 : "Updated — please read and accept before continuing."}
@@ -128,7 +141,7 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
           </div>
         </div>
 
-        <div className="space-y-3 overflow-y-auto p-6 text-sm leading-relaxed text-zinc-700">
+        <div className="space-y-3 overflow-y-auto p-6 text-base leading-relaxed text-zinc-700 sm:text-sm">
           <p>
             Our Terms of Use have been updated to cover payment, renewal and
             cancellation. By continuing you agree to them. In summary:
@@ -183,7 +196,7 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
               Australian Consumer Law.</strong>
             </li>
           </ul>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-zinc-500 sm:text-xs">
             This is a summary. The{" "}
             <a
               href="/terms"
@@ -198,7 +211,7 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
         </div>
 
         {error && (
-          <p className="px-6 text-sm text-red-600">{error}</p>
+          <p className="px-6 text-base text-red-600 sm:text-sm">{error}</p>
         )}
 
         <div className="flex flex-col-reverse gap-2 border-t p-6 sm:flex-row sm:justify-end">
