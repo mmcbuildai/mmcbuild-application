@@ -104,22 +104,38 @@ export function ctaHrefForPlan(
 }
 
 /**
- * Small print under a primary call-to-action: what happens to the card on
- * file once the trial ends.
+ * Small print under a primary call-to-action: what a visitor is committing to
+ * when they click it.
  *
- * ⚠️ CORRECTED 2026-08-09 (again). The previous wording here — "No card
- * needed to start — you add one when you subscribe" — was itself inaccurate,
- * per Karthik: `payment_method_collection: "always"` in billing/actions.ts
- * forces a card at the very Stripe Checkout that starts the 14-day trial, so
- * a card is required to begin, not added later. The one thing that's certain
- * and consequential is stated instead: the card on file gets charged
- * automatically once the trial ends.
+ * ⚠️ RECONCILED 2026-08-10, after the two repositories spent a day telling
+ * customers different things. The marketing site said "Automatically charged
+ * after the trial period ends"; the application said "No card needed to start".
+ * Both were written in good faith, from real evidence, and BOTH ARE TRUE — of
+ * different doors:
+ *
+ *   SIGN-UP  (where these buttons actually lead) — no card. Karen proved this
+ *            by walking it on 8 August, and /signup itself says "No credit
+ *            card required".
+ *   CHECKOUT (later, when they pick a plan) — a card IS required, because
+ *            `payment_method_collection: "always"` in billing/actions.ts, which
+ *            is what Karthik correctly pointed at on 9 August.
+ *
+ * The wording below is the one that is accurate FOR THE BUTTON IT SITS UNDER.
+ * Every "Get started" leads to sign-up, so a line whose first claim is about
+ * being charged describes a door the visitor has not reached yet, and reads as
+ * a demand for a card that nobody is making.
+ *
+ * ⚠️ Still not stated, and deliberately: the 10-run trial cap, and that
+ * subscribing starts a FURTHER Stripe trial on top of this one (SCRUM-393).
+ * Both are real, both are Karen's to decide on SCRUM-391, and neither is
+ * something to resolve by inventing copy. She also has the larger finding —
+ * this line renders under only 1 of the 8 places the button appears.
  *
  * Empty in waitlist mode, where there is no card and nothing to disclose.
  */
 export function ctaSubtext(): string {
   return isPurchaseCtaEnabled()
-    ? "Automatically charged after the trial period ends."
+    ? "14 days free, all modules unlocked. No card needed to start — you add one when you subscribe."
     : "";
 }
 
