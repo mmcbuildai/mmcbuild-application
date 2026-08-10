@@ -1,3 +1,5 @@
+import { TRIAL_DAYS } from "@/lib/legal/commercial-facts";
+
 /**
  * Public call-to-action mode — waitlist vs purchase (SCRUM-372).
  *
@@ -135,7 +137,7 @@ export function ctaHrefForPlan(
  */
 export function ctaSubtext(): string {
   return isPurchaseCtaEnabled()
-    ? "14 days free, all modules unlocked. No card needed to start — you add one when you subscribe."
+    ? `${TRIAL_DAYS} days free, all modules unlocked. No card needed to start — you add one when you subscribe.`
     : "";
 }
 
@@ -149,7 +151,9 @@ export function ctaSubtext(): string {
  * Empty in waitlist mode, where there is no trial to advertise.
  */
 export function trialHighlight(): string {
-  return isPurchaseCtaEnabled() ? "14 days free, all modules unlocked" : "";
+  return isPurchaseCtaEnabled()
+    ? `${TRIAL_DAYS} days free, all modules unlocked`
+    : "";
 }
 
 /**

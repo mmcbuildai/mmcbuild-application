@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { TRIAL_DAYS, TRIAL_RUN_LIMIT, TRIAL_UPLOAD_LIMIT } from "@/lib/stripe/plans";
 import {
@@ -20,6 +20,46 @@ function read(rel: string): string {
 function withoutComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
+
+describe("each constant is DECLARED exactly once in the codebase", () => {
+  /**
+   * `TRIAL_RUN_LIMIT` was declared twice for months — `persona-access.ts` and
+   * `plans.ts`, both 10. The sidebar read one, the terms and the billing gate
+   * the other. They happened to agree, and nothing anywhere would have reported
+   * the day they stopped.
+   *
+   * A single source of truth built on top of a duplicated constant is not one,
+   * so this counts declarations rather than trusting that nobody adds another.
+   * Re-exports (`export { X } from ...`) are fine and are not declarations.
+   */
+  const SRC = join(process.cwd(), "src");
+
+  function declarationsOf(name: string): string[] {
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.tsx?$/.test(entry.name)) {
+          const text = withoutComments(readFileSync(full, "utf8"));
+          if (new RegExp(`export\\s+const\\s+${name}\\s*=`).test(text)) {
+            hits.push(full.replace(SRC, "src"));
+          }
+        }
+      }
+    };
+    walk(SRC);
+    return hits;
+  }
+
+  for (const name of ["TRIAL_DAYS", "TRIAL_RUN_LIMIT", "TRIAL_UPLOAD_LIMIT"]) {
+    it(`${name} has exactly one declaration`, () => {
+      const found = declarationsOf(name);
+      expect(found, `declared in: ${found.join(", ")}`).toHaveLength(1);
+      expect(found[0]).toContain("commercial-facts");
+    });
+  }
+});
 
 describe("the facts render from the constants", () => {
   it("allowance text tracks both limits", () => {

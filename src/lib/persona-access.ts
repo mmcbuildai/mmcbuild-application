@@ -37,7 +37,16 @@ export const PERSONA_DESCRIPTIONS: Record<UserPersona, string> = {
 // Tier — not persona — controls run limits.
 export const RUN_LIMITED_MODULES: ModuleId[] = ["comply", "build", "quote"];
 
-export const TRIAL_RUN_LIMIT = 10;
+/**
+ * Re-exported so the sidebar's existing import keeps working.
+ *
+ * ⚠️ This was a SECOND declaration of the same number — `export const
+ * TRIAL_RUN_LIMIT = 10` here, and the same line in `lib/stripe/plans`. The
+ * sidebar read this one; the terms and the billing gate read the other. They
+ * happened to agree, and nothing anywhere would have said so on the day they
+ * stopped.
+ */
+export { TRIAL_RUN_LIMIT } from "@/lib/legal/commercial-facts";
 
 // Every tier except Enterprise (and the always-unlimited custom case) has a
 // finite monthly run cap — trial, Essential, and Professional are all limited.

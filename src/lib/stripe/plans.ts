@@ -358,9 +358,19 @@ export const TAX_DISCLOSURE =
  * these should follow — `tests/unit/billing/trial-allowance.test.ts` pins them
  * together so the pair cannot drift.
  */
-export const TRIAL_RUN_LIMIT = 10;
-export const TRIAL_UPLOAD_LIMIT = 5;
-export const TRIAL_DAYS = 14;
+/**
+ * Re-exported, not declared. The home is `@/lib/legal/commercial-facts`, which
+ * has no imports so it can be byte-identical in the marketing repo too.
+ *
+ * Kept exported from here because a dozen files already import them from this
+ * module, and rewriting those call sites would be churn with no safety gained —
+ * the point is one DECLARATION, not one import path.
+ */
+export {
+  TRIAL_RUN_LIMIT,
+  TRIAL_UPLOAD_LIMIT,
+  TRIAL_DAYS,
+} from "@/lib/legal/commercial-facts";
 
 /**
  * Resolve a Stripe price id back to the tier it grants.
