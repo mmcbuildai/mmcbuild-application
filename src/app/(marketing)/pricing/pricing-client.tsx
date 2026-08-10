@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
 import { TAX_QUALIFIER, TAX_DISCLOSURE } from "@/lib/stripe/plans";
 import { isSupplierPricingEnabled } from "@/lib/pricing/supplier-pricing";
+import { trialLengthAdjective } from "@/lib/legal/commercial-facts";
 import {
   ctaHrefForPlan,
   ctaLabelForPlan,
@@ -216,7 +217,7 @@ const faqs = [
     // ⚠️ There is also a 10-run cap on the trial (TRIAL_RUN_LIMIT) that no
     // pre-signup surface mentions. Whether to disclose it here is Karen's call
     // and is on SCRUM-391 — deliberately not answered by inventing copy.
-    a: "Yes — every new account starts with a 14-day free trial with all modules unlocked, and you don't need a credit card to start.",
+    a: `Yes — every new account starts with a ${trialLengthAdjective()} free trial with all modules unlocked, and you don't need a credit card to start.`,
   },
   {
     q: "What payment methods do you accept?",

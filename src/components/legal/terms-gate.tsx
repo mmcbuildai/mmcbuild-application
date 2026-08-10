@@ -6,6 +6,11 @@ import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { acceptTerms } from "@/app/(dashboard)/terms/actions";
 import { signOut } from "@/app/(auth)/actions";
+import {
+  accountTrialLengthText,
+  trialAllowanceText,
+  trialLengthAdjective,
+} from "@/lib/legal/commercial-facts";
 
 /**
  * Terms of Use gate. Blocks the authenticated app until the user accepts.
@@ -130,17 +135,25 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
           </p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
-              <strong>Subscriptions start with a 14-day free trial</strong>, which
-              includes 10 compliance runs and 5 plan uploads. A payment card is
-              required to begin it, and you are not charged during the trial.
+              <strong>Starting an account is free and takes no payment card.</strong>{" "}
+              You get {accountTrialLengthText()} with {trialAllowanceText()} — the
+              same allowance as a paid Essential subscription. No card is stored and
+              nothing is charged.
             </li>
             <li>
               <strong>
-                At the end of the 14 days your card is charged automatically
+                At the end of those {accountTrialLengthText()} you are not charged.
               </strong>{" "}
-              for the first period, unless you cancel before then, and the
-              subscription renews automatically after that until you cancel. We
-              email you before the first charge. Prices are shown excluding GST.
+              Paid features simply stop until you choose to subscribe. Your projects
+              and past results stay where they are.
+            </li>
+            <li>
+              <strong>Subscribing is a separate step that you choose to take.</strong>{" "}
+              It requires a payment card and starts a further{" "}
+              {trialLengthAdjective()} free trial. After that your card is charged
+              for the first period and the subscription renews automatically until
+              you cancel. We email you before the first charge. Prices are shown
+              excluding GST.
             </li>
             <li>
               <strong>You can cancel at any time from the Billing page</strong> — no

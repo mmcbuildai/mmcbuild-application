@@ -12,6 +12,7 @@ import {
   type PlanId,
 } from "@/lib/stripe/plans";
 import { getSubscriptionStatus } from "@/lib/stripe/subscription";
+import { PAYMENT_METHOD_COLLECTION } from "@/lib/legal/commercial-facts";
 import {
   reconcileSubscriptionFromStripe,
   countLiveStripeSubscriptions,
@@ -168,7 +169,13 @@ export async function createCheckoutSession(
       // then the first charge fails, silently, with nothing to alert anyone.
       // The whole point of Option A is that the card is captured up front, so
       // `always` is what makes this model work at all.
-      payment_method_collection: "always",
+      //
+      // Read from `commercial-facts` rather than written here, so the sentence
+      // in the terms and the behaviour at the till cannot disagree. They did:
+      // for three days the terms said a card was required to start the trial
+      // while sign-up took none, and both halves looked correct to whoever
+      // checked them separately.
+      payment_method_collection: PAYMENT_METHOD_COLLECTION,
 
       // GST. Prices are quoted tax-EXCLUSIVE (see TAX_QUALIFIER in plans.ts),
       // so the tax has to be added by the session — configuring the Stripe
