@@ -146,6 +146,50 @@ export type VisionTextResult =
   | { text: string; truncated?: true }
   | { error: string };
 
+/**
+ * Hand the caller a copy of what we ACTUALLY SENT the model.
+ *
+ * Three successive fixes to this module reasoned about a rendered CAD sheet
+ * that nobody had ever looked at. On 2026-08-09 the tiled read went to
+ * production and all twelve tiles came back "no legible text" — at which point
+ * "we are reading it badly" and "there is nothing legible in what we produced"
+ * became impossible to tell apart from the outside, because the only artefact
+ * that could separate them existed for a few seconds inside a serverless
+ * function and was never written down.
+ *
+ * So the failing path now keeps the evidence. Optional, best-effort, and never
+ * allowed to affect the read: an artefact sink that throws must not turn a
+ * working transcription into a failure.
+ */
+export type ArtifactSink = (
+  name: string,
+  data: Buffer,
+  contentType: string,
+) => Promise<void>;
+
+export interface VisionTextOptions {
+  /** Called with the images sent to the model, when a sheet reads blank. */
+  onArtifact?: ArtifactSink;
+}
+
+/** Never let diagnostics break the thing they are diagnosing. */
+async function emit(
+  sink: ArtifactSink | undefined,
+  name: string,
+  data: Buffer,
+  contentType: string,
+): Promise<void> {
+  if (!sink) return;
+  try {
+    await sink(name, data, contentType);
+  } catch (e) {
+    console.warn(
+      `[vision-text-fallback] could not keep artefact ${name}:`,
+      e instanceof Error ? e.message : String(e),
+    );
+  }
+}
+
 /** What one sheet produced. "blank" is an answer, not a failure. */
 type PageOutcome =
   | { kind: "text"; text: string; truncated: boolean }
@@ -230,6 +274,7 @@ async function transcribeSheetByTiles(
   label: string,
   page: number,
   totalPages: number,
+  onArtifact?: ArtifactSink,
 ): Promise<PageOutcome> {
   const rastered = await rasterisePageToTiles(pagePdf);
   if ("error" in rastered) {
@@ -239,6 +284,17 @@ async function transcribeSheetByTiles(
   const { tiles, rows, cols } = rastered;
   console.warn(
     `[vision-text-fallback] ${label}: sheet ${page} read nothing as a whole page — re-reading it as ${cols}x${rows} tiles at ${rastered.width}x${rastered.height}.`,
+  );
+
+  // Keep the FIRST tile before reading any of them. If every tile comes back
+  // blank, this image is the only thing that can say whether the drawing was
+  // illegible or the render was empty — and it has to be captured before the
+  // answer is known, or it is never captured at all.
+  await emit(
+    onArtifact,
+    `sheet-${page}-tile-r${tiles[0].row}c${tiles[0].col}.jpg`,
+    tiles[0].data,
+    "image/jpeg",
   );
 
   const parts: string[] = [];
@@ -302,6 +358,7 @@ async function transcribeSheetByTiles(
 export async function readPlanTextViaVision(
   pdf: Buffer,
   label = "plan.pdf",
+  opts: VisionTextOptions = {},
 ): Promise<VisionTextResult> {
   try {
     let doc: PDFDocument | null = null;
@@ -327,7 +384,7 @@ export async function readPlanTextViaVision(
       // A single huge CAD sheet is the case that reads blank as a whole page
       // and reads fine in tiles. This is Karen's file.
       if (outcome.kind === "blank") {
-        outcome = await transcribeSheetByTiles(pdf, label, 1, 1);
+        outcome = await transcribeSheetByTiles(pdf, label, 1, 1, opts.onArtifact);
       }
       if (outcome.kind === "text") {
         if (outcome.truncated) {
@@ -392,6 +449,7 @@ export async function readPlanTextViaVision(
                   label,
                   page,
                   totalPages,
+                  opts.onArtifact,
                 );
               } else {
                 // No silent cap — say which sheet went unre-read and why.

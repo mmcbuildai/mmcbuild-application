@@ -148,6 +148,47 @@ export const processPlan = inngest.createFunction(
       // a normal text PDF never reaches the model. On any vision failure we
       // return the original empty result, which classifyIngestOutcome turns
       // into an honest manual_review rather than a false "ready".
+      // Keep what we could not read, so the next person can LOOK at it.
+      //
+      // Three fixes to the reading path were designed against a rendered CAD
+      // sheet nobody had ever seen. On 2026-08-09 the tiled read reached
+      // production and all twelve tiles came back "no legible text" — and at
+      // that point "we read it badly" and "the render carries nothing legible"
+      // could not be told apart, because the only artefact that separates them
+      // lived for seconds inside a function and was thrown away.
+      //
+      // Written ONLY on the zero-content path, into the plan's OWN org folder
+      // in the bucket the source file already sits in — same tenant, same RLS,
+      // no new exposure — and best-effort throughout: a diagnostic that breaks
+      // ingestion is worse than no diagnostic.
+      const keepFailedArtifact = async (
+        name: string,
+        data: Buffer,
+        contentType: string,
+      ) => {
+        try {
+          const admin = createAdminClient();
+          const path = `${plan.org_id}/${plan.id}/unreadable/${name}`;
+          const { error } = await admin.storage
+            .from("plan-uploads")
+            .upload(path, data, { contentType, upsert: true });
+          if (error) {
+            console.warn(
+              `[processPlan] ${plan.id}: could not keep ${name}: ${error.message}`,
+            );
+          } else {
+            console.warn(
+              `[processPlan] ${plan.id}: kept ${name} (${data.byteLength} bytes) at ${path} — open it before changing the reader again.`,
+            );
+          }
+        } catch (e) {
+          console.warn(
+            `[processPlan] ${plan.id}: could not keep ${name}:`,
+            e instanceof Error ? e.message : String(e),
+          );
+        }
+      };
+
       const ingestPdfWithVisionFallback = async (pdfBuffer: Buffer) => {
         const direct = await ingestPlan(
           plan.org_id,
@@ -164,7 +205,12 @@ export const processPlan = inngest.createFunction(
         console.warn(
           `[processPlan] ${plan.id}: text extraction produced no chunks — reading the drawing with vision.`,
         );
-        const vision = await readPlanTextViaVision(pdfBuffer, plan.file_name);
+        // The converted PDF is the input every reader failed on — keep it
+        // BEFORE reading, so it survives however the read turns out.
+        await keepFailedArtifact("converted.pdf", pdfBuffer, "application/pdf");
+        const vision = await readPlanTextViaVision(pdfBuffer, plan.file_name, {
+          onArtifact: keepFailedArtifact,
+        });
         if ("error" in vision) {
           console.warn(
             `[processPlan] ${plan.id}: vision fallback did not produce text: ${vision.error}`,
