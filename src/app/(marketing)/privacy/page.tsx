@@ -16,7 +16,7 @@ export default function PrivacyPage() {
             Privacy Policy
           </h1>
           <p className="mx-auto max-w-2xl text-xl text-slate-300">
-            Last updated: January 2026
+            Last updated: 10 August 2026
           </p>
         </div>
       </section>
@@ -51,7 +51,24 @@ export default function PrivacyPage() {
 
             <h2>4. Information Sharing</h2>
             <p>
-              We do not sell, trade, or otherwise transfer your personal information to third parties without your consent, except as described in this policy or as required by law.
+              We do not sell or trade your personal information. We share it only with the service providers listed below, who process it on our behalf so that the platform can operate, and otherwise only where required by law.
+            </p>
+            <ul>
+              <li><strong>Supabase</strong> — database, user accounts and file storage, including the plans and documents you upload.</li>
+              <li><strong>Vercel</strong> — hosting for our website and application.</li>
+              <li><strong>Stripe</strong> — subscription payments and card details. We never store your full card number ourselves.</li>
+              <li><strong>HubSpot</strong> — our customer relationship system. It holds enquiry and sign-up records, and records how you arrived at our website.</li>
+              <li><strong>Resend</strong> — sending account, billing and notification emails.</li>
+              <li><strong>Anthropic</strong> and <strong>OpenAI</strong> — the artificial intelligence services that analyse uploaded plans and documents to produce your compliance, design and cost results.</li>
+              <li><strong>CloudConvert</strong> — converting uploaded CAD and plan files into formats the platform can read.</li>
+              <li><strong>Inngest</strong> — running those analyses in the background after you upload a file.</li>
+              <li><strong>Sentry</strong> — recording technical errors so that faults can be diagnosed and fixed.</li>
+            </ul>
+            <p>
+              Several of these providers operate outside Australia, including in the United States and Europe. Where that is the case, your information is stored and processed overseas, and is subject to the laws of the country in which it is held. By using the platform you consent to that transfer.
+            </p>
+            <p>
+              We do not send your uploaded plans, documents or account details to any provider other than those listed above.
             </p>
 
             <h2>5. Data Security</h2>
@@ -71,7 +88,13 @@ export default function PrivacyPage() {
 
             <h2>7. Cookies</h2>
             <p>
-              We use cookies and similar tracking technologies to track activity on our service and hold certain information. You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent.
+              We use cookies and similar technologies. Some are strictly necessary — they keep you signed in and keep the platform secure, and it cannot work without them.
+            </p>
+            <p>
+              We also use non-essential analytics and marketing cookies. In particular, HubSpot sets a visitor cookie that records how you arrived at our website, including which advertisement or campaign referred you, and links that to any enquiry or sign-up you later submit. That information is held by HubSpot in the United States. We use it to understand which of our campaigns are effective.
+            </p>
+            <p>
+              You can instruct your browser to refuse all cookies or to tell you when one is being set. If you refuse non-essential cookies the platform will still work — we simply will not know which campaign brought you to us.
             </p>
 
             <h2>8. Changes to This Policy</h2>
