@@ -75,6 +75,14 @@ export const MAX_TRANSCRIBED_PAGES = 12;
 /** Sheets transcribed at once. Bounds wall-clock without hammering the provider. */
 const PAGE_CONCURRENCY = 3;
 
+/**
+ * Tiles of ONE sheet read at once. Higher than PAGE_CONCURRENCY because tiles
+ * are the inner loop of an already-escalated read and the wall-clock matters
+ * more there; still bounded, since a sheet can fan out to MAX_TILES and pages
+ * fan out on top of that.
+ */
+const TILE_CONCURRENCY = 4;
+
 /** Output budget for ONE sheet. A single dense sheet's text runs well inside this. */
 const PAGE_MAX_TOKENS = 4000;
 
@@ -297,11 +305,7 @@ async function transcribeSheetByTiles(
     "image/jpeg",
   );
 
-  const parts: string[] = [];
-  let truncated = false;
-  let blank = 0;
-
-  for (const tile of tiles) {
+  const readTile = async (tile: (typeof tiles)[number]): Promise<PageOutcome> => {
     try {
       const result = await callVisionModel("plan_vision", {
         system: SYSTEM_PROMPT,
@@ -315,19 +319,47 @@ async function transcribeSheetByTiles(
         temperature: 0,
         maxTokens: PAGE_MAX_TOKENS,
       });
-      const graded = gradeReply(result);
-      if (graded.kind === "text") {
-        parts.push(graded.text);
-        truncated ||= graded.truncated;
-      } else if (graded.kind === "blank") {
-        blank++;
-      }
+      return gradeReply(result);
     } catch (e) {
       // A failed tile leaves a gap, and the gap is logged rather than hidden.
       console.warn(
         `[vision-text-fallback] ${label}: tile r${tile.row}c${tile.col} failed:`,
         e instanceof Error ? e.message : String(e),
       );
+      return { kind: "skipped", reason: "tile read failed" };
+    }
+  };
+
+  // Read tiles concurrently, in document order.
+  //
+  // Measured on Karen's file in production (2026-08-09): twelve tiles read
+  // SEQUENTIALLY took 18s of the run's 37s. That is fine for one sheet and
+  // stops being fine at MAX_ESCALATED_PAGES sheets, because the whole ingestion
+  // lives inside a step bounded by Vercel's 300s invocation ceiling — three
+  // escalations of a large set would spend a third of the budget waiting on
+  // calls that have nothing to do with each other.
+  //
+  // Order is preserved by collecting per batch rather than as each settles: the
+  // output is labelled by sheet and read top-left to bottom-right, and a
+  // transcription whose lines arrive in race order would be harder to check
+  // against the drawing for no gain.
+  const graded: PageOutcome[] = [];
+  for (let i = 0; i < tiles.length; i += TILE_CONCURRENCY) {
+    graded.push(
+      ...(await Promise.all(tiles.slice(i, i + TILE_CONCURRENCY).map(readTile))),
+    );
+  }
+
+  const parts: string[] = [];
+  let truncated = false;
+  let blank = 0;
+
+  for (const g of graded) {
+    if (g.kind === "text") {
+      parts.push(g.text);
+      truncated ||= g.truncated;
+    } else if (g.kind === "blank") {
+      blank++;
     }
   }
 
