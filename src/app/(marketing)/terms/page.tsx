@@ -1,4 +1,10 @@
 import type { Metadata } from "next";
+import {
+  accountTrialLengthText,
+  signupCardClause,
+  trialAllowanceText,
+  trialLengthAdjective,
+} from "@/lib/legal/commercial-facts";
 
 export const metadata: Metadata = {
   title: "Terms of Use — MMC Build",
@@ -88,10 +94,12 @@ export default function TermsPage() {
             </p>
             <ul>
               <li>
-                <strong>Creating an account gives you 14 days free</strong>, including{" "}
-                <strong>10 compliance runs and 5 plan uploads</strong> — the same
+                <strong>
+                  Creating an account gives you {accountTrialLengthText()} free
+                </strong>
+                , including <strong>{trialAllowanceText()}</strong> — the same
                 allowance as a paid Essential subscription.{" "}
-                <strong>No payment card is required</strong>, and none is stored.
+                <strong>{signupCardClause()}</strong>
               </li>
               <li>
                 <strong>
@@ -103,8 +111,8 @@ export default function TermsPage() {
               </li>
               <li>
                 <strong>Subscribing requires a valid payment card</strong> and starts
-                a <strong>further 14-day free trial</strong>. You are not charged
-                during it.
+                a <strong>further {trialLengthAdjective()} free trial</strong>. You
+                are not charged during it.
               </li>
               <li>
                 <strong>

@@ -13,6 +13,10 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
+  signupCardClauseShort,
+  trialLengthAdjective,
+} from "@/lib/legal/commercial-facts";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -56,7 +60,7 @@ function SignupForm() {
         <CardDescription>
           {isBeta
             ? "Sign up to join the MMC Build beta testing program."
-            : "Start with a 14-day free trial. All modules unlocked. No credit card required."}
+            : `Start with a ${trialLengthAdjective()} free trial. All modules unlocked. ${signupCardClauseShort()}.`}
         </CardDescription>
       </CardHeader>
       <CardContent>

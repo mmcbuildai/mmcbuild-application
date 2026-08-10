@@ -23,6 +23,10 @@ import { PlanCard } from "@/components/billing/plan-card";
 import { PaymentSuccess } from "@/components/billing/payment-success";
 import { TrialBanner } from "@/components/billing/trial-banner";
 import type { SubscriptionStatus } from "@/lib/stripe/subscription";
+import {
+  accountTrialLengthText,
+  trialLengthAdjective,
+} from "@/lib/legal/commercial-facts";
 
 export function BillingContent({
   annualAvailable = false,
@@ -457,13 +461,15 @@ export function BillingContent({
               So say which one this is.
             */}
             <li>
-              Subscribing starts a <strong>further 14-day free trial</strong>,
-              separate from the free period your account began with. A card is
-              required to begin it, and you are not charged during it.
+              Subscribing starts a{" "}
+              <strong>further {trialLengthAdjective()} free trial</strong>, separate
+              from the free period your account began with. A card is required to
+              begin it, and you are not charged during it.
             </li>
             <li>
-              At the end of that second 14 days your card is charged automatically
-              for the first period, unless you cancel before then.
+              At the end of that second {accountTrialLengthText()} your card is
+              charged automatically for the first period, unless you cancel before
+              then.
             </li>
             {/*
               This line was written in the present tense for everybody, which
