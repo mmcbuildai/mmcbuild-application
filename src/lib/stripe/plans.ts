@@ -120,6 +120,22 @@ export const ALL_MODULE_IDS: ModuleId[] = ["comply", "build", "quote", "direct",
 // 'prod_…'", which the billing action surfaces verbatim (see billing/actions.ts).
 export const PLANS = {
   essential: {
+    // ⚠️ ONE LIST, RENDERED IN TWO PLACES. The pricing page and the billing
+    // page used to keep SEPARATE copies of this, edited independently — which
+    // is SCRUM-399: "the billing page has different information". The numbers
+    // agreed (nobody saw a wrong price or allowance); the wording, order and
+    // grouping had drifted, and Professional listed "API access" on one page
+    // and not the other.
+    //
+    // This wording is the PRICING page's, because that is the one the client
+    // maintains and the one Karthik called "the latest". The billing page now
+    // renders the same array.
+    //
+    // "separator" is a horizontal rule, not a feature — it splits the
+    // allowance from the capability list. BOTH renderers understand it
+    // (pricing-client and components/billing/plan-card); a renderer that did
+    // not would print the word "separator" as a bullet, which is exactly what
+    // moving this list here would have caused if only one of them was taught.
     id: "essential",
     name: "Essential",
     price: 49, // early-adopter price charged now
@@ -131,12 +147,14 @@ export const PLANS = {
     seatLimit: 1,
     modules: ALL_MODULE_IDS,
     features: [
+      "10 combined runs / month (MMC Build + MMC Comply)",
+      "5 plan uploads per month",
+      "separator",
       "AI-powered whole-of-house NCC compliance",
       "MMC Build & Comply reports",
-      "AI Copilot for design, cost & constructability",
-      "MMC Directory access",
-      "10 combined runs/month · 5 plan uploads/month",
-      "Single user · standard email support",
+      "AI Copilot for design, cost & constructability insights",
+      "Access to MMC Directory",
+      "Standard email support",
     ],
     stripePriceId:
       process.env.STRIPE_ESSENTIAL_MONTHLY_PRICE_ID ||
@@ -158,12 +176,16 @@ export const PLANS = {
     seatLimit: 5,
     modules: ALL_MODULE_IDS,
     features: [
-      "Everything in Essential",
-      "30 combined runs/month · 10 plan uploads/month",
-      "Multi-user collaboration & role-based permissions",
+      "30 combined runs / month (MMC Build + MMC Comply)",
+      "10 plan uploads per month",
+      "separator",
+      "Multi-user project collaboration",
+      "Team invitations & role-based permissions",
       "Advanced NCC compliance reporting",
-      "API access · integrations roadmap (BIM/SketchUp)",
+      "Upload compliance documents & maintain certifications",
       "Priority email support",
+      "Integrations (BIM / SketchUp – roadmap)",
+      "API access",
     ],
     stripePriceId:
       process.env.STRIPE_PROFESSIONAL_MONTHLY_PRICE_ID ||
@@ -186,11 +208,18 @@ export const PLANS = {
     seatLimit: Infinity,
     modules: ALL_MODULE_IDS,
     features: [
-      "Everything in Professional",
-      "Unlimited runs & plan uploads",
+      "Unlimited* MMC Build + MMC Comply runs",
+      "Unlimited* plan uploads",
+      "separator",
       "Multi-organisation management",
-      "Team training (MMC Train included)",
-      "Dedicated account manager · SLA-backed support",
+      "Portfolio-level compliance & risk reporting",
+      "Advanced governance & audit controls",
+      "Custom integrations",
+      "Dedicated account manager",
+      "Priority support & escalation",
+      "Team training (MMC Train)",
+      "SLA-backed performance & uptime",
+      "API access",
     ],
     stripePriceId: "",
     standardPriceId: "",
