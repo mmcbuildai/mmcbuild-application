@@ -3,6 +3,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureMembership } from "@/lib/auth/membership";
+import { recordSignupLead } from "@/lib/hubspot/signup";
+import {
+  ATTRIBUTION_COOKIE,
+  parseAttribution,
+} from "@/lib/attribution/first-touch";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -58,6 +64,44 @@ export async function signUp(formData: FormData) {
       // Source-of-truth membership + active org for the new owner.
       await ensureMembership(admin, data.user.id, org.id as string, "owner", "internal", {
         setActive: true,
+      });
+
+      // Record the CRM lead HERE, because this is the branch that creates the
+      // account when email confirmation is disabled — which is how production
+      // is configured.
+      //
+      // ⚠️ THIS IS WHY NO SIGN-UP WAS EVER CAPTURED. The capture was wired into
+      // `provisionUser`, on its `self_signup` branch — "the request that
+      // actually creates the profile". That was true when it was written, and
+      // is still true for magic-link, OAuth and invited users. It is NOT true
+      // here: this action creates the org, profile and membership inline, so by
+      // the time `provisionUser` runs (auth callback / dashboard layout) the
+      // profile already exists, it returns "existing", and the capture never
+      // fires. Two provisioning paths, and the lead was attached to the one an
+      // email-and-password signup does not take.
+      //
+      // Measured 2026-08-11: ZERO leads with form_type 'signup' had ever been
+      // written, across every account created since the capture shipped on
+      // 9 August — while contact, waitlist and trades-supplier leads recorded
+      // normally. Calling recordSignupLead directly against production inserted
+      // and synced to HubSpot first time, so the function was never the problem.
+      //
+      // Attribution is read HERE and nowhere else: the first-touch cookie is on
+      // the request that submits this form, and `provisionUser` never sees it.
+      // Capturing the lead without the campaign would have been half a fix —
+      // the point of the work is telling Karen which ad produced the customer.
+      //
+      // Awaited before the redirect, deliberately. `redirect()` throws to unwind
+      // the request, so anything after it never runs; and work left pending on
+      // Vercel after a response is not guaranteed to finish. recordSignupLead
+      // never throws, so sign-up cannot fail because of it.
+      const jar = await cookies();
+      await recordSignupLead({
+        email,
+        fullName,
+        orgName: orgName || null,
+        attribution: parseAttribution(jar.get(ATTRIBUTION_COOKIE)?.value),
+        hutk: jar.get("hubspotutk")?.value ?? null,
       });
     }
 

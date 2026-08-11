@@ -1,4 +1,5 @@
 import { db } from "@/lib/supabase/db";
+import type { Attribution } from "@/lib/attribution/first-touch";
 import { leadSchema, type LeadInput } from "@/lib/validators/lead";
 import { submitToHubSpotForm } from "./forms";
 
@@ -35,6 +36,18 @@ export async function recordSignupLead(input: {
   email: string;
   fullName?: string | null;
   orgName?: string | null;
+  /**
+   * First-touch campaign data, when the CALLER can see it.
+   *
+   * `provisionUser` runs in the auth callback and cannot — it has no request
+   * cookies for the visitor's first touch. The `signUp` server action CAN, so
+   * it reads `mmc_attr` and passes it here. Without this an ad click produces a
+   * lead with no campaign attached, which is the exact complaint this work
+   * exists to answer, so "captured but unattributed" would be only half a fix.
+   */
+  attribution?: Partial<Attribution> | null;
+  /** HubSpot's own visitor token (`hubspotutk`), when the caller can read it. */
+  hutk?: string | null;
 }): Promise<void> {
   try {
     // `leads` is not in the generated Database types, so it goes through the
@@ -62,9 +75,10 @@ export async function recordSignupLead(input: {
     // the two met. A literal must be edited every time the type grows; parse()
     // must not.
     //
-    // A server-side signup carries no campaign data of its own — the UTM values
-    // live in the browser's first-touch cookie, which this path (inside
-    // provisionUser) never sees. Empty is therefore the honest value, not a
+    // Campaign data depends on WHO CALLS THIS. The UTM values live in the
+    // browser's first-touch cookie: the `signUp` server action can read it and
+    // passes it in; `provisionUser` (auth callback) cannot see it and passes
+    // nothing. Empty is therefore the honest value in that second case, not a
     // placeholder for something we failed to collect.
     const lead: LeadInput = leadSchema.parse({
       formType: "signup",
@@ -74,6 +88,20 @@ export async function recordSignupLead(input: {
       company: input.orgName?.trim() || "",
       message: "Created an account in the MMC Build app.",
       sourcePage: "https://app.mmcbuild.com.au/signup",
+      // Empty stays the honest value when the caller has no cookie to read —
+      // the schema defaults every attribution field to "" and buildFields drops
+      // empties, so an unattributed signup is recorded as unattributed rather
+      // than as a guess.
+      hutk: input.hutk ?? "",
+      utmSource: input.attribution?.utmSource ?? "",
+      utmMedium: input.attribution?.utmMedium ?? "",
+      utmCampaign: input.attribution?.utmCampaign ?? "",
+      utmTerm: input.attribution?.utmTerm ?? "",
+      utmContent: input.attribution?.utmContent ?? "",
+      fbclid: input.attribution?.fbclid ?? "",
+      gclid: input.attribution?.gclid ?? "",
+      landingPage: input.attribution?.landingPage ?? "",
+      referrer: input.attribution?.referrer ?? "",
     });
 
     // 1. Durable row first, exactly as /api/leads does — the CRM is downstream of
@@ -93,6 +121,16 @@ export async function recordSignupLead(input: {
         interest: null,
         message: lead.message || null,
         source_page: lead.sourcePage || null,
+        utm_source: lead.utmSource || null,
+        utm_medium: lead.utmMedium || null,
+        utm_campaign: lead.utmCampaign || null,
+        utm_term: lead.utmTerm || null,
+        utm_content: lead.utmContent || null,
+        fbclid: lead.fbclid || null,
+        gclid: lead.gclid || null,
+        landing_page: lead.landingPage || null,
+        referrer: lead.referrer || null,
+        hubspot_utk: lead.hutk || null,
       })
       .select("id")
       .single();
