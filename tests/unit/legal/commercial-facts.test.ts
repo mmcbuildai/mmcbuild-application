@@ -74,9 +74,12 @@ describe("the facts render from the constants", () => {
   });
 
   it("the card clauses follow SIGNUP_REQUIRES_CARD rather than being written twice", () => {
-    expect(SIGNUP_REQUIRES_CARD).toBe(false);
-    expect(signupCardClause()).toContain("No payment card is required");
-    expect(signupCardClauseShort()).toBe("No credit card required");
+    // Flipped 2026-08-13: sign-up now redirects into Stripe checkout, so a card
+    // IS required. The point of the assertion is unchanged — the clauses must
+    // be DERIVED from the flag, so the terms cannot contradict the software.
+    expect(SIGNUP_REQUIRES_CARD).toBe(true);
+    expect(signupCardClause()).toContain("A payment card is required");
+    expect(signupCardClauseShort()).toBe("Credit card required");
   });
 });
 

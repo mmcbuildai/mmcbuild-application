@@ -64,14 +64,21 @@ export const TRIAL_RUN_LIMIT = 10;
 export const TRIAL_UPLOAD_LIMIT = 5;
 
 /**
- * Sign-up takes no card.
+ * Sign-up takes a card.
  *
- * ⚠️ Not derivable the way the checkout flag is: this is the ABSENCE of a
- * payment step, and absence has no constant to export. It is pinned by test
- * instead (`commercial-facts.test.ts` asserts no Stripe session is created on
- * the signup path), because the alternative is trusting that nobody adds one.
+ * ⚠️ CHANGED 2026-08-13, and the change is the whole point of this module.
+ * Sign-up now redirects into Stripe checkout (`/billing/start`) instead of the
+ * dashboard, so a card IS required to create a usable account — Karen's Option
+ * A (SCRUM-366), which was built on 7 August but which nothing routed to.
+ *
+ * For a few hours after that wiring shipped, this flag still said `false`,
+ * which meant the sign-up page and the published terms both promised "no credit
+ * card required" while the very next screen demanded one. A claim on a legal
+ * surface that the software contradicts is worse than no claim at all, and it
+ * is exactly the drift this file exists to make impossible — flipping the flag
+ * corrects the terms, the sign-up card and the marketing sub-text together.
  */
-export const SIGNUP_REQUIRES_CARD = false;
+export const SIGNUP_REQUIRES_CARD = true;
 
 /**
  * Checkout takes a card. CONSUMED by the Stripe session — see the file header.
@@ -118,7 +125,9 @@ export function trialLengthAdjective(): string {
  */
 export function signupCardClause(): string {
   return SIGNUP_REQUIRES_CARD
-    ? "A payment card is required to create an account."
+    ? `A payment card is required to create an account. Nothing is charged for the ` +
+        `first ${TRIAL_DAYS} days, the card is stored securely by our payment provider, ` +
+        `and you can cancel at any time during the free period without being charged.`
     : "No payment card is required to create an account, and none is stored.";
 }
 
