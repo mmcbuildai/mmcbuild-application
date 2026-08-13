@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
 import { PLANS, TAX_QUALIFIER, TAX_DISCLOSURE } from "@/lib/stripe/plans";
+import type { PlanId } from "@/lib/stripe/plans";
 import { isSupplierPricingEnabled } from "@/lib/pricing/supplier-pricing";
 import { trialLengthAdjective } from "@/lib/legal/commercial-facts";
 import {
@@ -21,6 +22,12 @@ type Plan = {
   features: string[];
   cta: string;
   popular: boolean;
+  /**
+   * The tier this card sells, carried into sign-up and on to Stripe checkout.
+   * Explicit rather than derived from `name`, so renaming the display label
+   * cannot silently detach the button from the price it sits under.
+   */
+  planId: PlanId;
 };
 
 /**
@@ -38,6 +45,7 @@ type Plan = {
 const plans: Plan[] = [
   {
     name: "Essential",
+    planId: "essential",
     monthlyPrice: 49,
     description: "Individual builders, architects, designers, early adopters",
     // Was: "Early-adopter price · free for 1 month". The free-month half was
@@ -59,6 +67,7 @@ const plans: Plan[] = [
   },
   {
     name: "Professional",
+    planId: "professional",
     monthlyPrice: 199,
     description: "Active builders, architects & consultants managing multiple projects",
     features: [...PLANS.professional.features],
@@ -67,6 +76,7 @@ const plans: Plan[] = [
   },
   {
     name: "Enterprise",
+    planId: "enterprise",
     monthlyPrice: null,
     // @social-proof-ok: no social proof on this page. The audit matches "Tier 1 & 2 builders"
     // below as a headline metric — its pattern is <number> followed by "builders" — but this
@@ -386,7 +396,12 @@ export function PricingClient() {
                       no self-serve path, so it routes to contact rather than
                       dropping an enterprise buyer into a $49 trial. */}
                   <Link
-                    href={ctaHrefForPlan(plan.monthlyPrice === null, "/contact")}
+                    href={ctaHrefForPlan(
+                      plan.monthlyPrice === null,
+                      "/contact",
+                      plan.planId,
+                      isAnnual ? "year" : "month",
+                    )}
                   >
                     {ctaLabelForPlan(plan.monthlyPrice === null)}{" "}
                     <ArrowRight className="ml-2 h-4 w-4" />
