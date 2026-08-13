@@ -29,11 +29,31 @@ function SignupForm() {
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
   const isBeta = searchParams.get("beta") === "true";
+  const plan = searchParams.get("plan");
+  const interval = searchParams.get("interval") === "year" ? "year" : "month";
   const [isLoading, setIsLoading] = useState(false);
+
+  /**
+   * Where sign-up lands.
+   *
+   * Until 2026-08-13 this was `/dashboard`, which meant a visitor who clicked
+   * "Get started" under a $49 price was given a free 14-day trial and never
+   * shown a card field — on both websites, from all 13 pages. Karen's Option A
+   * (card at sign-up, SCRUM-366) was built and deployed, but nothing routed to
+   * it, so no purchase was possible anywhere.
+   *
+   * ⚠️ The default is checkout, NOT the dashboard. A visitor arriving at a bare
+   * `/signup` with no plan chosen is exactly the case the old behaviour got
+   * wrong, so it must not be the case that opts out.
+   */
+  const checkoutRedirect = plan
+    ? `/billing/start?plan=${encodeURIComponent(plan)}&interval=${interval}`
+    : "/billing/start";
 
   async function handleSubmit(formData: FormData) {
     setIsLoading(true);
-    if (isBeta) formData.set("redirect", "/beta");
+    // Beta testers are not buying anything and keep their own path.
+    formData.set("redirect", isBeta ? "/beta" : checkoutRedirect);
     try {
       await signUp(formData);
     } finally {
@@ -79,8 +99,10 @@ function SignupForm() {
             gated together so "or sign up with email" is never left dangling. */}
         {isGoogleSignInEnabled() && (
           <>
+            {/* Same destination as the email form — a Google sign-up must not
+                be a second way to skip checkout. */}
             <GoogleSignInButton
-              redirectTo={isBeta ? "/beta" : undefined}
+              redirectTo={isBeta ? "/beta" : checkoutRedirect}
               label="Sign up with Google"
             />
 

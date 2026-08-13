@@ -97,12 +97,31 @@ export function ctaLabelForPlan(isCustomPriced: boolean): string {
   return isCustomPriced ? ENTERPRISE_CTA_LABEL : PURCHASE_CTA_LABEL;
 }
 
+/**
+ * ⚠️ THE PLAN MUST TRAVEL WITH THE CLICK (2026-08-13).
+ *
+ * This returned a bare `/signup`, which took no card and granted a free 14-day
+ * trial from a database default — so every plan button on both sites, under
+ * every price, led AWAY from payment. Checkout existed and was correct; nothing
+ * pointed at it. Live Stripe showed zero checkout sessions in 48 hours while
+ * advertising was running.
+ *
+ * The plan and interval now ride on the query string, and sign-up carries them
+ * into `/billing/start`, which creates the Stripe session. A bare `/signup`
+ * still reaches checkout on Essential — see the note in that route.
+ */
 export function ctaHrefForPlan(
   isCustomPriced: boolean,
   waitlistHref: string,
+  planId?: string,
+  interval?: "month" | "year",
 ): string {
   if (!isPurchaseCtaEnabled()) return waitlistHref;
-  return isCustomPriced ? "/contact" : "/signup";
+  if (isCustomPriced) return "/contact";
+  const params = new URLSearchParams();
+  if (planId) params.set("plan", planId);
+  params.set("interval", interval === "year" ? "year" : "month");
+  return `/signup?${params.toString()}`;
 }
 
 /**
