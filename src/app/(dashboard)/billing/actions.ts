@@ -18,6 +18,7 @@ import {
   countLiveStripeSubscriptions,
 } from "@/lib/stripe/reconcile";
 import { redirect } from "next/navigation";
+import type { Attribution } from "@/lib/attribution/first-touch";
 
 async function getOrgWithStripeCustomer() {
   const supabase = await createClient();
@@ -63,9 +64,55 @@ async function getOrgWithStripeCustomer() {
   return org;
 }
 
+
+/**
+ * The campaign that produced a PAYING customer, carried onto the Stripe record.
+ *
+ * Attribution previously stopped at the HubSpot contact: Karen could see which
+ * advertisement produced an enquiry, and nothing at all about which produced
+ * revenue. The first-touch cookie is readable server-side at `/billing/start`
+ * (it is scoped to `.mmcbuild.com.au`, so it survives the marketing site → app
+ * hop), so the values can ride along with the checkout session and land on the
+ * subscription, the customer, and every webhook Stripe sends about them.
+ *
+ * EMPTY VALUES ARE DROPPED rather than written as "". Stripe allows 50 metadata
+ * keys, and a direct visitor with no campaign should leave no trace instead of
+ * five blank ones that read as "we tried to record this and it failed".
+ *
+ * ⚠️ FIRST touch, not last — the advertisement that started the journey. That
+ * is the cookie's deliberate design (see first-touch.ts) and it is the question
+ * "which ad is worth paying for" actually asks.
+ */
+function attributionMetadata(
+  attribution?: Attribution | null,
+): Record<string, string> {
+  if (!attribution) return {};
+  const pairs: [string, string][] = [
+    ["utm_source", attribution.utmSource],
+    ["utm_medium", attribution.utmMedium],
+    ["utm_campaign", attribution.utmCampaign],
+    ["utm_term", attribution.utmTerm],
+    ["utm_content", attribution.utmContent],
+    ["fbclid", attribution.fbclid],
+    ["gclid", attribution.gclid],
+    ["landing_page", attribution.landingPage],
+    ["referrer", attribution.referrer],
+  ];
+  const out: Record<string, string> = {};
+  for (const [key, value] of pairs) {
+    // Stripe caps a metadata value at 500 characters and rejects the request
+    // outright if one is longer, which would fail a real purchase over a long
+    // landing-page URL. The cookie already caps these, but not this call's
+    // contract, so it is enforced here too.
+    if (value) out[key] = value.slice(0, 500);
+  }
+  return out;
+}
+
 export async function createCheckoutSession(
   planId: PlanId,
   interval: BillingInterval = "month",
+  attribution?: Attribution | null,
 ) {
   const plan = PLANS[planId];
   if (!plan || ("isCustom" in plan && plan.isCustom)) {
@@ -144,6 +191,31 @@ export async function createCheckoutSession(
     });
   }
 
+  const campaign = attributionMetadata(attribution);
+
+  // Also stamp the CUSTOMER, so the origin survives beyond this one purchase —
+  // a cancellation and re-subscribe would otherwise lose it. Only when absent:
+  // first touch must not be overwritten by a later campaign, which is the same
+  // rule the cookie itself follows. Never allowed to block a purchase.
+  if (Object.keys(campaign).length > 0) {
+    try {
+      const customer = await stripe.customers.retrieve(org.stripe_customer_id);
+      const existing =
+        !("deleted" in customer && customer.deleted) && customer.metadata
+          ? customer.metadata
+          : {};
+      if (!existing.utm_source && !existing.utm_campaign) {
+        await stripe.customers.update(org.stripe_customer_id, {
+          metadata: { ...existing, ...campaign },
+        });
+      }
+    } catch (e) {
+      console.error("[billing] could not stamp campaign on customer", {
+        detail: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
   let session;
   try {
     session = await stripe.checkout.sessions.create({
@@ -152,9 +224,9 @@ export async function createCheckoutSession(
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?success=true`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?canceled=true`,
-      metadata: { org_id: org.id, plan_id: planId, interval },
+      metadata: { org_id: org.id, plan_id: planId, interval, ...campaign },
       subscription_data: {
-        metadata: { org_id: org.id, plan_id: planId, interval },
+        metadata: { org_id: org.id, plan_id: planId, interval, ...campaign },
         // 14 days free, then Stripe charges the stored card automatically.
         // Karen's decision (SCRUM-366, 7 August): "I would like to go with
         // option A. Based on my experience with the market who are time poor
