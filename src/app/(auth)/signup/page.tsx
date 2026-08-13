@@ -32,6 +32,13 @@ function SignupForm() {
   const plan = searchParams.get("plan");
   const interval = searchParams.get("interval") === "year" ? "year" : "month";
   const [isLoading, setIsLoading] = useState(false);
+  /*
+   * Google sign-up posts its own form and never carries this page's checkbox,
+   * so without gating it here it would be a second route to Stripe that skips
+   * the terms entirely. Disabled in production today; closed anyway, because a
+   * hole guarded by a feature flag is still a hole.
+   */
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   /**
    * Where sign-up lands.
@@ -101,10 +108,20 @@ function SignupForm() {
           <>
             {/* Same destination as the email form — a Google sign-up must not
                 be a second way to skip checkout. */}
-            <GoogleSignInButton
-              redirectTo={isBeta ? "/beta" : checkoutRedirect}
-              label="Sign up with Google"
-            />
+            <div
+              className={termsAccepted || isBeta ? undefined : "pointer-events-none opacity-50"}
+              aria-disabled={!termsAccepted && !isBeta}
+            >
+              <GoogleSignInButton
+                redirectTo={isBeta ? "/beta" : checkoutRedirect}
+                label="Sign up with Google"
+              />
+            </div>
+            {!termsAccepted && !isBeta && (
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                Accept the Terms and Conditions below to continue with Google.
+              </p>
+            )}
 
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
@@ -166,6 +183,44 @@ function SignupForm() {
               Minimum 8 characters
             </p>
           </div>
+          {/*
+            ⚠️ ACCEPTANCE MUST HAPPEN HERE, BEFORE STRIPE (2026-08-13).
+            Terms were previously acknowledged by a blocking modal in the
+            dashboard layout. Sign-up now redirects into Stripe checkout, which
+            never reaches that layout — so a customer would have handed over a
+            card BEFORE agreeing to the terms describing the charge. The
+            acknowledgement therefore belongs on this form.
+          */}
+          <label
+            htmlFor="terms_accepted"
+            className="flex min-h-[44px] items-start gap-3 py-2 text-base sm:text-sm"
+          >
+            <input
+              type="checkbox"
+              id="terms_accepted"
+              name="terms_accepted"
+              value="yes"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              required
+              className="mt-0.5 h-5 w-5 shrink-0 rounded border-input"
+            />
+            <span className="text-muted-foreground">
+              I agree to the{" "}
+              <Link
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Terms and Conditions
+              </Link>
+              , including that a card is required now and will be charged after
+              the {trialLengthAdjective()} free trial unless I cancel before it
+              ends.
+            </span>
+          </label>
+
           <Button type="submit" className="w-full h-11" disabled={isLoading}>
             {isLoading ? "Creating account..." : "Create Account"}
           </Button>
