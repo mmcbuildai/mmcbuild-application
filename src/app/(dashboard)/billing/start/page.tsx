@@ -1,5 +1,10 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createCheckoutSession } from "../actions";
+import {
+  ATTRIBUTION_COOKIE,
+  parseAttribution,
+} from "@/lib/attribution/first-touch";
 import type { BillingInterval, PlanId } from "@/lib/stripe/plans";
 
 /**
@@ -52,7 +57,21 @@ export default async function BillingStartPage({
 
   const interval: BillingInterval = params.interval === "year" ? "year" : "month";
 
-  const result = await createCheckoutSession(plan, interval);
+  /*
+   * The campaign that produced this purchase, read from the first-touch cookie
+   * and carried onto the Stripe subscription and customer.
+   *
+   * This is the only point in the flow where it is BOTH available and about to
+   * become revenue: the cookie is scoped to `.mmcbuild.com.au` so it survives
+   * the marketing-site hop, and this request is the one that creates the
+   * subscription. Attribution previously stopped at the HubSpot contact, so
+   * "which advertisement produced an enquiry" was answerable and "which
+   * produced a paying customer" was not.
+   */
+  const jar = await cookies();
+  const attribution = parseAttribution(jar.get(ATTRIBUTION_COOKIE)?.value);
+
+  const result = await createCheckoutSession(plan, interval, attribution);
 
   // `redirect()` throws to unwind the request, so it must sit outside any
   // try/catch — and after the await, never inside it.
