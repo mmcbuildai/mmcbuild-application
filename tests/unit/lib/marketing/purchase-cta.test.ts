@@ -18,6 +18,10 @@ import {
   PURCHASE_CTA_LABEL,
   WAITLIST_CTA_LABEL,
 } from "@/lib/marketing/purchase-cta";
+// Imported rather than restated: this is the constant the Stripe call reads for
+// `payment_method_collection`, so a test that agrees with it agrees with what
+// actually happens to the visitor's card. See the guard in "purchase mode".
+import { SIGNUP_REQUIRES_CARD } from "@/lib/legal/commercial-facts";
 
 const KEY = "NEXT_PUBLIC_PURCHASE_CTA_ENABLED";
 const original = process.env[KEY];
@@ -92,27 +96,53 @@ describe("purchase mode", () => {
   });
 
   it("discloses the trial terms next to the button", () => {
-    // ⚠️ This test previously asserted /cancel/i because it encoded the belief
-    // that a card is captured at sign-up. It is not — /signup takes no card —
-    // so the test was pinning a false statement in place rather than catching
-    // it. Corrected 2026-08-09 along with the copy.
+    // Four facts a buyer is entitled to before clicking: how long the free
+    // period runs, whether a card is taken now, whether anything is charged
+    // during it, and that they can get out before it ends.
+    //
+    // ⚠️ This assertion has now been wrong TWICE, in opposite directions —
+    // /cancel/i pinned "a card is captured at sign-up" (corrected 9 Aug when it
+    // was not), then /subscrib/i pinned "no card yet, one later" (broken 13 Aug
+    // when sign-up started taking one). Each time the test agreed with the copy
+    // and both were behind the software. Hence the card half is no longer
+    // spelled out here at all: it is derived from SIGNUP_REQUIRES_CARD below,
+    // which is the constant Stripe itself reads.
     set("true");
     const text = ctaSubtext();
     expect(text).toMatch(/14 days free/i);
     expect(text).toMatch(/card/i);
-    // Says WHEN a card is taken, which is the part a visitor needs.
-    expect(text).toMatch(/subscrib/i);
+    expect(text).toMatch(/nothing charged/i);
+    expect(text).toMatch(/cancel/i);
   });
 
-  it("never claims a card is required at sign-up, because none is", () => {
-    // Regression guard for the real defect: this exact claim shipped next to
-    // every "Get started" button on both sites, while the signup page one click
-    // later said "No credit card required". Two contradictory statements about
-    // the visitor's card, on a product taking real ones.
+  it("says the same thing about the card as the software does", () => {
+    // THE regression guard, rewritten 2026-08-14 to stop encoding an answer.
+    //
+    // It used to assert `/no card needed/i` — true on 9 August, false from 13
+    // August when #186 routed sign-up through Stripe checkout, and it failed
+    // here for a day afterwards. An earlier version asserted the opposite and
+    // was also, later, wrong. A test naming ONE side of a flag is a third place
+    // for the claim to live, so it goes stale exactly when the flag flips: at
+    // the moment the copy most needs guarding.
+    //
+    // So it no longer says which way the answer goes. It says the subtext and
+    // SIGNUP_REQUIRES_CARD must agree — and that constant is what the Stripe
+    // call reads for `payment_method_collection`, so agreeing with it is
+    // agreeing with what actually happens to the visitor's card.
+    //
+    // The original defect stays covered either way: "card required at sign-up"
+    // next to every button while the signup page said "No credit card
+    // required" now fails whichever of the two is the lie.
     set("true");
     const text = ctaSubtext();
-    expect(text).not.toMatch(/card required at sign-?up/i);
-    expect(text).toMatch(/no card needed/i);
+
+    if (SIGNUP_REQUIRES_CARD) {
+      expect(text).toMatch(/card required/i);
+      expect(text).not.toMatch(/no (credit )?card/i);
+    } else {
+      expect(text).toMatch(/no (credit )?card/i);
+      expect(text).not.toMatch(/card required/i);
+    }
   });
 
   it("does not use wording that overstates the commitment", () => {
@@ -129,18 +159,19 @@ describe("purchase mode", () => {
     // later empties or softens it while the label stays silent, a card gets
     // captured off a button that never mentioned one.
     //
-    // ⚠️ The /charg|bill/ assertion was dropped on 2026-08-09. It only made
-    // sense under the mistaken belief that sign-up charges a card; the honest
-    // disclosure at this point in the journey is that no card is taken yet and
-    // when one will be. The intent of the test is unchanged and still enforced:
-    // the subtext stays load-bearing whenever the label itself is silent.
+    // ⚠️ The specific WORDING assertion here has churned twice (/charg|bill/
+    // dropped 9 Aug, /subscrib/ broken 13 Aug) because each version described
+    // the offer of the week. The test's actual intent never changed, so it now
+    // asserts only that: the subtext is non-empty and mentions the card
+    // whenever the label is silent about it. Which sentence it uses to do that
+    // is the copy's business, and is pinned against the software one test up.
     set("true");
     const labelMentionsOffer = /trial|free|\$|month/i.test(PURCHASE_CTA_LABEL);
     if (!labelMentionsOffer) {
       const text = ctaSubtext();
       expect(text).not.toBe("");
       expect(text).toMatch(/card/i);
-      expect(text).toMatch(/subscrib/i);
+      expect(text).toMatch(/14 days/i);
     }
   });
 });
