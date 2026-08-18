@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe/client";
 import { inngest } from "@/lib/inngest/client";
 import { getPlanByPriceId } from "@/lib/stripe/plans";
+import { notifyKarthikOfNewSubscription } from "@/lib/email/subscriptions";
 import type Stripe from "stripe";
 
 export async function POST(request: NextRequest) {
@@ -32,6 +33,9 @@ export async function POST(request: NextRequest) {
             session.subscription as string
           );
           await sendSyncEvent(subscription);
+          // Fired here only — checkout.session.completed is the one event that
+          // means "a user just subscribed" (not a renewal or plan change).
+          await notifyKarthikOfNewSubscription(subscription);
         }
         break;
       }
