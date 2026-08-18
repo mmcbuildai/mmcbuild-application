@@ -18,7 +18,9 @@ import {
   countLiveStripeSubscriptions,
 } from "@/lib/stripe/reconcile";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import type { Attribution } from "@/lib/attribution/first-touch";
+import { parseGaClientId } from "@/lib/analytics/ga4-measurement-protocol";
 
 async function getOrgWithStripeCustomer() {
   const supabase = await createClient();
@@ -193,6 +195,17 @@ export async function createCheckoutSession(
 
   const campaign = attributionMetadata(attribution);
 
+  // GA4 client_id, carried through so the Stripe webhook can attribute a
+  // server-side conversion event (fired days later, with no browser present)
+  // back to the visitor who actually clicked the ad. Read here rather than
+  // passed in like `attribution`: by this point the user has navigated fully
+  // onto app.mmcbuild.com.au (through /signup, then here), so the app's own
+  // GA4 tag has already set `_ga` on THIS domain — same-origin, unlike
+  // HubSpot's hutk which needs reading in the browser for a genuine
+  // cross-origin reason. See ga4-measurement-protocol.ts for the full why.
+  const gaClientId = parseGaClientId((await cookies()).get("_ga")?.value);
+  const gaMetadata = gaClientId ? { ga_client_id: gaClientId } : {};
+
   // Also stamp the CUSTOMER, so the origin survives beyond this one purchase —
   // a cancellation and re-subscribe would otherwise lose it. Only when absent:
   // first touch must not be overwritten by a later campaign, which is the same
@@ -224,9 +237,9 @@ export async function createCheckoutSession(
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?success=true`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/billing?canceled=true`,
-      metadata: { org_id: org.id, plan_id: planId, interval, ...campaign },
+      metadata: { org_id: org.id, plan_id: planId, interval, ...campaign, ...gaMetadata },
       subscription_data: {
-        metadata: { org_id: org.id, plan_id: planId, interval, ...campaign },
+        metadata: { org_id: org.id, plan_id: planId, interval, ...campaign, ...gaMetadata },
         // 14 days free, then Stripe charges the stored card automatically.
         // Karen's decision (SCRUM-366, 7 August): "I would like to go with
         // option A. Based on my experience with the market who are time poor
