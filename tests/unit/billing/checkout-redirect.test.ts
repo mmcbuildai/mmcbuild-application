@@ -44,6 +44,14 @@ vi.mock("@/lib/stripe/client", () => ({
 }));
 vi.mock("@/lib/stripe/subscription", () => ({ getSubscriptionStatus: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+// createCheckoutSession reads the `_ga` cookie for GA4 attribution — `cookies()`
+// requires a live Next.js request scope, which does not exist in a plain
+// vitest run, so it must be mocked like every other framework boundary here.
+// No cookie present is the correct default: gaClientId ends up null and the
+// tests below are unaffected by GA4 metadata either way.
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined }),
+}));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function chain(data: unknown): any {

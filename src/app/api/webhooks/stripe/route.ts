@@ -3,6 +3,8 @@ import { stripe } from "@/lib/stripe/client";
 import { inngest } from "@/lib/inngest/client";
 import { getPlanByPriceId } from "@/lib/stripe/plans";
 import { notifyKarthikOfNewSubscription } from "@/lib/email/subscriptions";
+import { sendGA4Event } from "@/lib/analytics/ga4-measurement-protocol";
+import { db } from "@/lib/supabase/db";
 import type Stripe from "stripe";
 
 export async function POST(request: NextRequest) {
@@ -36,6 +38,14 @@ export async function POST(request: NextRequest) {
           // Fired here only — checkout.session.completed is the one event that
           // means "a user just subscribed" (not a renewal or plan change).
           await notifyKarthikOfNewSubscription(subscription);
+          // GA4 "trial started" conversion — fast signal for Google Ads bidding.
+          // A card was just captured (payment_method_collection: "always"), so
+          // this is a meaningfully qualified signal, not a throwaway one — but
+          // it is still not revenue, see the invoice.paid case below for that.
+          await sendGA4Event(subscription.metadata?.ga_client_id, {
+            name: "trial_signup",
+            params: { plan_id: subscription.metadata?.plan_id || "" },
+          });
         }
         break;
       }
@@ -47,8 +57,41 @@ export async function POST(request: NextRequest) {
           : null;
         if (paidSubId) {
           const subscription = await stripe.subscriptions.retrieve(paidSubId as string);
+
+          // Was this subscription still "trialing" in OUR records the moment
+          // before this invoice? If so, this invoice.paid is the trial
+          // genuinely converting to a real charge — the one that actually
+          // matters for revenue-based conversion tracking. Checked BEFORE
+          // sendSyncEvent below, which is what overwrites status to "active".
+          //
+          // Deliberately NOT using Stripe's own `invoice.billing_reason` for
+          // this: "subscription_cycle" covers BOTH the first post-trial charge
+          // AND every renewal after it, so it cannot tell them apart on its
+          // own. Our own stored status can, because sendSyncEvent has not run
+          // yet at this point in the handler.
+          const { data: existingSub } = await db()
+            .from("subscriptions")
+            .select("status")
+            .eq("stripe_subscription_id", paidSubId as string)
+            .maybeSingle();
+          const isTrialConversion = existingSub?.status === "trialing";
+
           // Reset usage on renewal
           await sendSyncEvent(subscription, { resetUsage: true });
+
+          if (isTrialConversion) {
+            // GA4 "purchase" — the real revenue conversion. Uses GA4's own
+            // recommended ecommerce event name + value/currency so Google Ads
+            // can do value-based bidding, not just count conversions.
+            await sendGA4Event(subscription.metadata?.ga_client_id, {
+              name: "purchase",
+              params: {
+                value: (invoice.amount_paid ?? 0) / 100,
+                currency: (invoice.currency || "aud").toUpperCase(),
+                plan_id: subscription.metadata?.plan_id || "",
+              },
+            });
+          }
         }
         break;
       }
