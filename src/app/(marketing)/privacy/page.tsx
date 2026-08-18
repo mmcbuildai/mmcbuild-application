@@ -16,7 +16,7 @@ export default function PrivacyPage() {
             Privacy Policy
           </h1>
           <p className="mx-auto max-w-2xl text-xl text-slate-300">
-            Last updated: 10 August 2026
+            Last updated: 18 August 2026
           </p>
         </div>
       </section>
@@ -58,6 +58,7 @@ export default function PrivacyPage() {
               <li><strong>Vercel</strong> — hosting for our website and application.</li>
               <li><strong>Stripe</strong> — subscription payments and card details. We never store your full card number ourselves.</li>
               <li><strong>HubSpot</strong> — our customer relationship system. It holds enquiry and sign-up records, and records how you arrived at our website.</li>
+              <li><strong>Google Analytics</strong> (operated by Google) — records how visitors use our website, including which pages are viewed and which advertisement or campaign referred you, so we can measure and improve our Google Ads campaigns.</li>
               <li><strong>Resend</strong> — sending account, billing and notification emails.</li>
               <li><strong>Anthropic</strong> and <strong>OpenAI</strong> — the artificial intelligence services that analyse uploaded plans and documents to produce your compliance, design and cost results.</li>
               <li><strong>CloudConvert</strong> — converting uploaded CAD and plan files into formats the platform can read.</li>
@@ -92,6 +93,9 @@ export default function PrivacyPage() {
             </p>
             <p>
               We also use non-essential analytics and marketing cookies. In particular, HubSpot sets a visitor cookie that records how you arrived at our website, including which advertisement or campaign referred you, and links that to any enquiry or sign-up you later submit. That information is held by HubSpot in the United States. We use it to understand which of our campaigns are effective.
+            </p>
+            <p>
+              We also use Google Analytics, which sets a similar cookie to recognise you as a returning visitor across page views and visits. This lets us see which pages you view and, where you arrived via a Google advertisement, links that visit to the campaign that referred you and to any subsequent enquiry, sign-up or purchase — so we can measure and improve the performance of our Google Ads campaigns. That information is held by Google in the United States.
             </p>
             <p>
               You can instruct your browser to refuse all cookies or to tell you when one is being set. If you refuse non-essential cookies the platform will still work — we simply will not know which campaign brought you to us.
