@@ -1,6 +1,7 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { ensureMembership } from "./membership";
 import { recordSignupLead } from "@/lib/hubspot/signup";
+import { notifyKarthikOfNewUser } from "@/lib/email/user-registered";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -124,6 +125,25 @@ export async function provisionUser(
       } as never)
       .eq("id", inv.id);
 
+    // Alert on a brand-new profile only — "joined_additional_org" is a repeat
+    // login by an already-known user, not a registration.
+    if (!existingProfile) {
+      const { data: orgRow } = await admin
+        .from("organisations")
+        .select("name")
+        .eq("id", inv.org_id)
+        .single();
+      const result = await notifyKarthikOfNewUser({
+        email,
+        fullName,
+        orgName: (orgRow as { name?: string } | null)?.name ?? null,
+        outcome: "invited",
+      });
+      if (!result.ok) {
+        console.warn("[provisionUser] Karthik notification (invited) failed:", result.error);
+      }
+    }
+
     return {
       profileId,
       outcome: existingProfile ? "joined_additional_org" : "invited",
@@ -178,6 +198,16 @@ export async function provisionUser(
     fullName,
     orgName: user.orgNameFallback ?? null,
   });
+
+  const notifyResult = await notifyKarthikOfNewUser({
+    email,
+    fullName,
+    orgName: user.orgNameFallback || "My Organisation",
+    outcome: "self_signup",
+  });
+  if (!notifyResult.ok) {
+    console.warn("[provisionUser] Karthik notification (self_signup) failed:", notifyResult.error);
+  }
 
   return {
     profileId: createdProfile ? (createdProfile as { id: string }).id : null,
