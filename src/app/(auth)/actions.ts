@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureMembership } from "@/lib/auth/membership";
 import { recordSignupLead } from "@/lib/hubspot/signup";
+import { notifyKarthikOfNewUser } from "@/lib/email/user-registered";
 import {
   ATTRIBUTION_COOKIE,
   parseAttribution,
@@ -129,6 +130,20 @@ export async function signUp(formData: FormData) {
         attribution: parseAttribution(jar.get(ATTRIBUTION_COOKIE)?.value),
         hutk: jar.get("hubspotutk")?.value ?? null,
       });
+
+      // Same reasoning as recordSignupLead above: this inline branch is the one
+      // that actually runs in production (email confirmation disabled), so the
+      // Karthik alert must fire HERE too — provisionUser's self_signup branch
+      // is unreachable for an email-and-password signup.
+      const notifyResult = await notifyKarthikOfNewUser({
+        email,
+        fullName: fullName || email.split("@")[0],
+        orgName: orgName || "My Organisation",
+        outcome: "self_signup",
+      });
+      if (!notifyResult.ok) {
+        console.warn("[signUp] Karthik notification (self_signup) failed:", notifyResult.error);
+      }
     }
 
     redirect(redirectTo);
