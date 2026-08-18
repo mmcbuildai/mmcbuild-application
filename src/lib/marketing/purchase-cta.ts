@@ -1,3 +1,5 @@
+import { TRIAL_DAYS } from "@/lib/legal/commercial-facts";
+
 /**
  * Public call-to-action mode — waitlist vs purchase (SCRUM-372).
  *
@@ -64,16 +66,18 @@ export function ctaHref(waitlistHref: string): string {
  * two different labels a day apart and the next person to read this deserves
  * to know which one won and why.
  *
- * ⚠️ CORRECTED 2026-08-09. This note previously said "/signup captures a card
- * and charges on day 15 unless cancelled". That is not what the code does, and
- * the belief produced a false claim on every public page — see `ctaSubtext()`.
+ * ⚠️ HISTORY, because this claim has now been wrong in BOTH directions.
+ * On 2026-08-09 this note said "/signup captures a card and charges on day 15",
+ * which was false — sign-up took no card — and the belief put a false claim on
+ * every public page. It was corrected to "captures NO card", which was true
+ * until 2026-08-13, when sign-up was rewired to lead into Stripe checkout.
  *
- * What actually happens: /signup captures NO card. It creates an organisation
- * with a 14-day trial (migration 00027) and all modules unlocked. A card is
- * captured later, at Stripe Checkout, which is a separate deliberate step —
- * `payment_method_collection: "always"` in billing/actions.ts is what forces it
- * there. So the subtext still belongs next to the button, but as an accurate
- * description of a free start, not a warning about a card nobody is taking yet.
+ * What happens NOW: "Get started" carries its plan to /signup, which creates
+ * the account and redirects to /billing/start, which opens a Stripe session
+ * with `payment_method_collection: "always"`. A card IS taken, nothing is
+ * charged for 14 days, and the customer can cancel before then. The single
+ * source for all of that is `SIGNUP_REQUIRES_CARD` in commercial-facts.ts —
+ * read it there rather than restating it in a comment that goes stale.
  */
 export const PURCHASE_CTA_LABEL = "Get started";
 export const WAITLIST_CTA_LABEL = "Join Waitlist";
@@ -95,47 +99,56 @@ export function ctaLabelForPlan(isCustomPriced: boolean): string {
   return isCustomPriced ? ENTERPRISE_CTA_LABEL : PURCHASE_CTA_LABEL;
 }
 
+/**
+ * ⚠️ THE PLAN MUST TRAVEL WITH THE CLICK (2026-08-13).
+ *
+ * This returned a bare `/signup`, which took no card and granted a free 14-day
+ * trial from a database default — so every plan button on both sites, under
+ * every price, led AWAY from payment. Checkout existed and was correct; nothing
+ * pointed at it. Live Stripe showed zero checkout sessions in 48 hours while
+ * advertising was running.
+ *
+ * The plan and interval now ride on the query string, and sign-up carries them
+ * into `/billing/start`, which creates the Stripe session. A bare `/signup`
+ * still reaches checkout on Essential — see the note in that route.
+ */
 export function ctaHrefForPlan(
   isCustomPriced: boolean,
   waitlistHref: string,
+  planId?: string,
+  interval?: "month" | "year",
 ): string {
   if (!isPurchaseCtaEnabled()) return waitlistHref;
-  return isCustomPriced ? "/contact" : "/signup";
+  if (isCustomPriced) return "/contact";
+  const params = new URLSearchParams();
+  if (planId) params.set("plan", planId);
+  params.set("interval", interval === "year" ? "year" : "month");
+  return `/signup?${params.toString()}`;
 }
 
 /**
  * Small print under a primary call-to-action: what a visitor is committing to
  * when they click it.
  *
- * ⚠️ RECONCILED 2026-08-10, after the two repositories spent a day telling
- * customers different things. The marketing site said "Automatically charged
- * after the trial period ends"; the application said "No card needed to start".
- * Both were written in good faith, from real evidence, and BOTH ARE TRUE — of
- * different doors:
+ * ⚠️ REWRITTEN 2026-08-13. The two doors are now one.
  *
- *   SIGN-UP  (where these buttons actually lead) — no card. Karen proved this
- *            by walking it on 8 August, and /signup itself says "No credit
- *            card required".
- *   CHECKOUT (later, when they pick a plan) — a card IS required, because
- *            `payment_method_collection: "always"` in billing/actions.ts, which
- *            is what Karthik correctly pointed at on 9 August.
+ * This note used to explain that sign-up took no card while checkout did, and
+ * that the wording had to describe sign-up because that is where the buttons
+ * led. That is no longer true: every "Get started" now carries its plan into
+ * `/billing/start`, which creates the Stripe session, so the visitor reaches
+ * the card. A card IS required, and saying otherwise under a price is a false
+ * claim on a page that takes payment.
  *
- * The wording below is the one that is accurate FOR THE BUTTON IT SITS UNDER.
- * Every "Get started" leads to sign-up, so a line whose first claim is about
- * being charged describes a door the visitor has not reached yet, and reads as
- * a demand for a card that nobody is making.
- *
- * ⚠️ Still not stated, and deliberately: the 10-run trial cap, and that
- * subscribing starts a FURTHER Stripe trial on top of this one (SCRUM-393).
- * Both are real, both are Karen's to decide on SCRUM-391, and neither is
- * something to resolve by inventing copy. She also has the larger finding —
- * this line renders under only 1 of the 8 places the button appears.
+ * The sentence states all four facts a buyer is entitled to before clicking:
+ * the trial length, that a card is taken now, that nothing is charged during
+ * the trial, and that they can cancel before it ends.
  *
  * Empty in waitlist mode, where there is no card and nothing to disclose.
  */
 export function ctaSubtext(): string {
   return isPurchaseCtaEnabled()
-    ? "14 days free, all modules unlocked. No card needed to start — you add one when you subscribe."
+    ? `${TRIAL_DAYS} days free, all modules unlocked. Card required to start — ` +
+      `nothing charged for ${TRIAL_DAYS} days, cancel any time before then.`
     : "";
 }
 
@@ -149,7 +162,9 @@ export function ctaSubtext(): string {
  * Empty in waitlist mode, where there is no trial to advertise.
  */
 export function trialHighlight(): string {
-  return isPurchaseCtaEnabled() ? "14 days free, all modules unlocked" : "";
+  return isPurchaseCtaEnabled()
+    ? `${TRIAL_DAYS} days free, all modules unlocked`
+    : "";
 }
 
 /**

@@ -4,8 +4,10 @@ import * as React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, ArrowRight, Sparkles } from "lucide-react";
-import { TAX_QUALIFIER, TAX_DISCLOSURE } from "@/lib/stripe/plans";
+import { PLANS, TAX_QUALIFIER, TAX_DISCLOSURE } from "@/lib/stripe/plans";
+import type { PlanId } from "@/lib/stripe/plans";
 import { isSupplierPricingEnabled } from "@/lib/pricing/supplier-pricing";
+import { trialLengthAdjective } from "@/lib/legal/commercial-facts";
 import {
   ctaHrefForPlan,
   ctaLabelForPlan,
@@ -20,11 +22,30 @@ type Plan = {
   features: string[];
   cta: string;
   popular: boolean;
+  /**
+   * The tier this card sells, carried into sign-up and on to Stripe checkout.
+   * Explicit rather than derived from `name`, so renaming the display label
+   * cannot silently detach the button from the price it sits under.
+   */
+  planId: PlanId;
 };
 
+/**
+ * ⚠️ The per-plan feature lists live in `@/lib/stripe/plans` and are rendered
+ * here — they are NOT defined in this file.
+ *
+ * SCRUM-399: this page and the billing page kept separate copies and drifted.
+ * The numbers stayed in step; the wording, order and grouping did not, and
+ * Professional listed "API access" on one page and not the other. The wording
+ * in PLANS is this page's, because it is the one the client maintains.
+ *
+ * Change a feature there and BOTH surfaces move together. Adding the array back
+ * here would silently re-open the same gap.
+ */
 const plans: Plan[] = [
   {
     name: "Essential",
+    planId: "essential",
     monthlyPrice: 49,
     description: "Individual builders, architects, designers, early adopters",
     // Was: "Early-adopter price · free for 1 month". The free-month half was
@@ -40,40 +61,22 @@ const plans: Plan[] = [
     // ⚠️ If a one-month Essential offer WAS intended, it needs building, not
     // re-labelling. That question is on SCRUM-393 with the wider trial model.
     freeNote: "Early-adopter price",
-    features: [
-      "10 combined runs / month (MMC Build + MMC Comply)",
-      "5 plan uploads per month",
-      "separator",
-      "AI-powered whole-of-house NCC compliance",
-      "MMC Build & Comply reports",
-      "AI Copilot for design, cost & constructability insights",
-      "Access to MMC Directory",
-      "Standard email support",
-    ],
+    features: [...PLANS.essential.features],
     cta: "Join Waitlist",
     popular: false,
   },
   {
     name: "Professional",
+    planId: "professional",
     monthlyPrice: 199,
     description: "Active builders, architects & consultants managing multiple projects",
-    features: [
-      "30 combined runs / month (MMC Build + MMC Comply)",
-      "10 plan uploads per month",
-      "separator",
-      "Multi-user project collaboration",
-      "Team invitations & role-based permissions",
-      "Advanced NCC compliance reporting",
-      "Upload compliance documents & maintain certifications",
-      "Priority email support",
-      "Integrations (BIM / SketchUp – roadmap)",
-      "API access",
-    ],
+    features: [...PLANS.professional.features],
     cta: "Join Waitlist",
     popular: true,
   },
   {
     name: "Enterprise",
+    planId: "enterprise",
     monthlyPrice: null,
     // @social-proof-ok: no social proof on this page. The audit matches "Tier 1 & 2 builders"
     // below as a headline metric — its pattern is <number> followed by "builders" — but this
@@ -81,20 +84,7 @@ const plans: Plan[] = [
     // product. Checked line by line by Dennis, 2026-08-09; no customer count, testimonial or
     // partner claim appears anywhere in this file.
     description: "Tier 1 & 2 builders, large architectural, consulting & supplier firms",
-    features: [
-      "Unlimited* MMC Build + MMC Comply runs",
-      "Unlimited* plan uploads",
-      "separator",
-      "Multi-organisation management",
-      "Portfolio-level compliance & risk reporting",
-      "Advanced governance & audit controls",
-      "Custom integrations",
-      "Dedicated account manager",
-      "Priority support & escalation",
-      "Team training (MMC Train)",
-      "SLA-backed performance & uptime",
-      "API access",
-    ],
+    features: [...PLANS.enterprise.features],
     cta: "Join Waitlist",
     popular: false,
   },
@@ -216,7 +206,7 @@ const faqs = [
     // ⚠️ There is also a 10-run cap on the trial (TRIAL_RUN_LIMIT) that no
     // pre-signup surface mentions. Whether to disclose it here is Karen's call
     // and is on SCRUM-391 — deliberately not answered by inventing copy.
-    a: "Yes — every new account starts with a 14-day free trial with all modules unlocked, and you don't need a credit card to start.",
+    a: `Yes — every new account starts with a ${trialLengthAdjective()} free trial with all modules unlocked, and you don't need a credit card to start.`,
   },
   {
     q: "What payment methods do you accept?",
@@ -406,7 +396,12 @@ export function PricingClient() {
                       no self-serve path, so it routes to contact rather than
                       dropping an enterprise buyer into a $49 trial. */}
                   <Link
-                    href={ctaHrefForPlan(plan.monthlyPrice === null, "/contact")}
+                    href={ctaHrefForPlan(
+                      plan.monthlyPrice === null,
+                      "/contact",
+                      plan.planId,
+                      isAnnual ? "year" : "month",
+                    )}
                   >
                     {ctaLabelForPlan(plan.monthlyPrice === null)}{" "}
                     <ArrowRight className="ml-2 h-4 w-4" />

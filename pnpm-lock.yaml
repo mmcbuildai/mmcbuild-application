@@ -133,8 +133,8 @@ importers:
         version: 4.3.6
     devDependencies:
       '@caistech/portfolio-gate':
-        specifier: ^0.17.1
-        version: 0.17.1(@caistech/elevenlabs-convai@0.13.0(@elevenlabs/react@1.12.0(@types/dom-mediacapture-record@1.0.22)(react@19.2.3))(@supabase/supabase-js@2.98.0)(react@19.2.3)(typescript@5.9.3))(@supabase/supabase-js@2.98.0)(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(playwright@1.59.1)(typescript@5.9.3)
+        specifier: ^0.18.0
+        version: 0.18.0(@caistech/elevenlabs-convai@0.13.0(@elevenlabs/react@1.12.0(@types/dom-mediacapture-record@1.0.22)(react@19.2.3))(@supabase/supabase-js@2.98.0)(react@19.2.3)(typescript@5.9.3))(@supabase/supabase-js@2.98.0)(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(playwright@1.59.1)(typescript@5.9.3)
       '@playwright/test':
         specifier: ^1.59.1
         version: 1.59.1
@@ -374,8 +374,8 @@ packages:
     peerDependencies:
       typescript: '>=5.0.0'
 
-  '@caistech/portfolio-gate@0.17.1':
-    resolution: {integrity: sha512-Io9RFjfSiQtNZeWLQejfvvhVegUW+WfuPoBjsSI+p34OBYYdeHtiKUUH0NyRqDT0boEIdOX0r/RKH006ylImZg==, tarball: https://npm.pkg.github.com/download/@caistech/portfolio-gate/0.17.1/9fecb06e0a805663c78b777cc6f5d6153cd0598e}
+  '@caistech/portfolio-gate@0.18.0':
+    resolution: {integrity: sha512-dBccZwzizoyBxwsNLsGvkuGqib+LRz5cD3q6a8Lu/WMXrem64GEZfNWx1grl2qmBucLWJ5evWIC50Vfjq4mmig==, tarball: https://npm.pkg.github.com/download/@caistech/portfolio-gate/0.18.0/075592290906a317c2d9f6b8fec195bab50159f3}
     hasBin: true
     peerDependencies:
       '@caistech/elevenlabs-convai': '>=0.7.5'
@@ -6801,7 +6801,7 @@ snapshots:
     dependencies:
       typescript: 5.9.3
 
-  '@caistech/portfolio-gate@0.17.1(@caistech/elevenlabs-convai@0.13.0(@elevenlabs/react@1.12.0(@types/dom-mediacapture-record@1.0.22)(react@19.2.3))(@supabase/supabase-js@2.98.0)(react@19.2.3)(typescript@5.9.3))(@supabase/supabase-js@2.98.0)(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(playwright@1.59.1)(typescript@5.9.3)':
+  '@caistech/portfolio-gate@0.18.0(@caistech/elevenlabs-convai@0.13.0(@elevenlabs/react@1.12.0(@types/dom-mediacapture-record@1.0.22)(react@19.2.3))(@supabase/supabase-js@2.98.0)(react@19.2.3)(typescript@5.9.3))(@supabase/supabase-js@2.98.0)(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(playwright@1.59.1)(typescript@5.9.3)':
     dependencies:
       '@caistech/elevenlabs-convai': 0.13.0(@elevenlabs/react@1.12.0(@types/dom-mediacapture-record@1.0.22)(react@19.2.3))(@supabase/supabase-js@2.98.0)(react@19.2.3)(typescript@5.9.3)
       '@caistech/health-probe': 0.3.0(typescript@5.9.3)

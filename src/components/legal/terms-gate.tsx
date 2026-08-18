@@ -6,6 +6,11 @@ import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { acceptTerms } from "@/app/(dashboard)/terms/actions";
 import { signOut } from "@/app/(auth)/actions";
+import {
+  accountTrialLengthText,
+  trialAllowanceText,
+  trialLengthAdjective,
+} from "@/lib/legal/commercial-facts";
 
 /**
  * Terms of Use gate. Blocks the authenticated app until the user accepts.
@@ -115,7 +120,20 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
             >
               Terms of Use
             </h2>
-            <p className="mt-0.5 text-sm text-zinc-500">
+            {/*
+              Type sizes on this dialog are deliberately larger on mobile.
+              PRODUCT_STANDARDS §1 sets a 16px base on mobile, and every string
+              here was below it — the body at 14px, the line carrying the link
+              to the full Terms at 12px. It is a blocking legal gate that a
+              builder reads on a phone, on site, and agrees to; the smallest
+              text on it should not be the link to the document itself.
+
+              `sm:` returns each to its original size from 640px up, so the
+              desktop dialog is unchanged. Same shape as the fix made to the
+              consent checkbox in @caistech/corporate-components v0.8.1, for
+              the same reason.
+            */}
+            <p className="mt-0.5 text-base text-zinc-500 sm:text-sm">
               {nudging
                 ? "The rest of the page is unavailable until you accept or decline."
                 : "Updated — please read and accept before continuing."}
@@ -123,24 +141,32 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
           </div>
         </div>
 
-        <div className="space-y-3 overflow-y-auto p-6 text-sm leading-relaxed text-zinc-700">
+        <div className="space-y-3 overflow-y-auto p-6 text-base leading-relaxed text-zinc-700 sm:text-sm">
           <p>
             Our Terms of Use have been updated to cover payment, renewal and
             cancellation. By continuing you agree to them. In summary:
           </p>
           <ul className="list-disc space-y-1.5 pl-5">
             <li>
-              <strong>Subscriptions start with a 14-day free trial</strong>, which
-              includes 10 compliance runs and 5 plan uploads. A payment card is
-              required to begin it, and you are not charged during the trial.
+              <strong>Starting an account is free and takes no payment card.</strong>{" "}
+              You get {accountTrialLengthText()} with {trialAllowanceText()} — the
+              same allowance as a paid Essential subscription. No card is stored and
+              nothing is charged.
             </li>
             <li>
               <strong>
-                At the end of the 14 days your card is charged automatically
+                At the end of those {accountTrialLengthText()} you are not charged.
               </strong>{" "}
-              for the first period, unless you cancel before then, and the
-              subscription renews automatically after that until you cancel. We
-              email you before the first charge. Prices are shown excluding GST.
+              Paid features simply stop until you choose to subscribe. Your projects
+              and past results stay where they are.
+            </li>
+            <li>
+              <strong>Subscribing is a separate step that you choose to take.</strong>{" "}
+              It requires a payment card and starts a further{" "}
+              {trialLengthAdjective()} free trial. After that your card is charged
+              for the first period and the subscription renews automatically until
+              you cancel. We email you before the first charge. Prices are shown
+              excluding GST.
             </li>
             <li>
               <strong>You can cancel at any time from the Billing page</strong> — no
@@ -170,7 +196,7 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
               Australian Consumer Law.</strong>
             </li>
           </ul>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-zinc-500 sm:text-xs">
             This is a summary. The{" "}
             <a
               href="/terms"
@@ -185,7 +211,7 @@ export function TermsGate({ needsTerms }: { needsTerms: boolean }) {
         </div>
 
         {error && (
-          <p className="px-6 text-sm text-red-600">{error}</p>
+          <p className="px-6 text-base text-red-600 sm:text-sm">{error}</p>
         )}
 
         <div className="flex flex-col-reverse gap-2 border-t p-6 sm:flex-row sm:justify-end">

@@ -78,12 +78,25 @@ export function PlanCard({
       </div>
 
       <ul className="space-y-2 flex-1 mb-6">
-        {features.map((feature) => (
-          <li key={feature} className="flex items-start gap-2 text-sm text-slate-600">
-            <Check className="w-4 h-4 text-brandgreen-500 mt-0.5 shrink-0" />
-            {feature}
-          </li>
-        ))}
+        {/*
+          "separator" is a rule, not a feature. The list is shared with the
+          pricing page (SCRUM-399 — the two pages used to keep separate copies
+          and drifted), and it uses this marker to split the allowance from the
+          capability list. Without this branch the word "separator" renders as
+          a bullet with a tick next to it.
+        */}
+        {features.map((feature, i) =>
+          feature === "separator" ? (
+            <li key={`sep-${i}`} className="py-1" aria-hidden="true">
+              <div className="border-t border-slate-200" />
+            </li>
+          ) : (
+            <li key={feature} className="flex items-start gap-2 text-sm text-slate-600">
+              <Check className="w-4 h-4 text-brandgreen-500 mt-0.5 shrink-0" />
+              {feature}
+            </li>
+          ),
+        )}
       </ul>
 
       {isCurrent ? (

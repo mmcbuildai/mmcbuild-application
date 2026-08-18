@@ -99,7 +99,13 @@ export const processPlan = inngest.createFunction(
       const admin = createAdminClient();
       await admin
         .from("plans")
-        .update({ status: "processing" } as never)
+        // Clear last run's diagnostic in the same write that marks this run
+        // started. A stale reason is worse than none: it reads as current, and
+        // the next person debugs the previous run's failure.
+        .update({
+          status: "processing",
+          ingest_fallback_reason: null,
+        } as never)
         .eq("id", plan.id);
     });
 
@@ -246,6 +252,30 @@ export const processPlan = inngest.createFunction(
             console.warn(
               `[processPlan] DWG ${plan.id}: ${reason} — trying DWG → PDF text ingestion.`,
             );
+            // Persist the reason, because the console.warn above is the only
+            // record and it does not survive long enough to be asked about.
+            //
+            // Three different conditions land here — conversion failed, DXF
+            // over the parse cap, DXF parsed but empty — and they imply
+            // completely different fixes. Karen's plan has had four attempts
+            // built against it without anyone being able to say which one
+            // fired: `vercel logs` tails a short window, and by the time the
+            // question is asked the Inngest run has rotated.
+            //
+            // Best-effort and non-fatal: a diagnostic that breaks ingestion is
+            // worse than no diagnostic. Same rule as the artefact retention.
+            try {
+              await admin
+                .from("plans")
+                .update({ ingest_fallback_reason: reason } as never)
+                .eq("id", plan.id);
+            } catch (e) {
+              console.warn(
+                `[processPlan] ${plan.id}: could not record fallback reason: ${
+                  e instanceof Error ? e.message : String(e)
+                }`,
+              );
+            }
             const pdf = await convertViaCloudConvert(
               sourceBuffer,
               plan.file_name,
