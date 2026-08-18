@@ -204,7 +204,7 @@ export async function createCheckoutSession(
   // HubSpot's hutk which needs reading in the browser for a genuine
   // cross-origin reason. See ga4-measurement-protocol.ts for the full why.
   const gaClientId = parseGaClientId((await cookies()).get("_ga")?.value);
-  const gaMetadata = gaClientId ? { ga_client_id: gaClientId } : {};
+  const gaMetadata: Record<string, string> = gaClientId ? { ga_client_id: gaClientId } : {};
 
   // Also stamp the CUSTOMER, so the origin survives beyond this one purchase —
   // a cancellation and re-subscribe would otherwise lose it. Only when absent:
