@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "@/components/ui/sonner";
 import HubSpotTracking from "@/components/analytics/hubspot-tracking";
+import GoogleAnalyticsTracking from "@/components/analytics/google-analytics-tracking";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -40,6 +41,7 @@ export default function RootLayout({
             nothing until NEXT_PUBLIC_HUBSPOT_PORTAL_ID is set — see the
             component for why that gate exists. */}
         <HubSpotTracking />
+        <GoogleAnalyticsTracking />
       </body>
     </html>
   );
