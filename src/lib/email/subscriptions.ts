@@ -9,10 +9,13 @@ import { getPlanByPriceId } from "@/lib/stripe/plans";
  * cancellations — those are not "a user subscribed"). Never throws, so a
  * Resend or lookup failure can't break the webhook handler.
  */
-export async function notifyKarthikOfNewSubscription(
+export async function notifyTeamOfNewSubscription(
   subscription: Stripe.Subscription,
 ): Promise<void> {
-  const to = process.env.KARTHIK_EMAIL || "karthik.rao@mmcbuild.com.au";
+  const to = [
+    process.env.KAREN_EMAIL || "karen.engel@mmcbuild.com.au",
+    process.env.KARTHIK_EMAIL || "karthik.rao@mmcbuild.com.au",
+  ];
   const priceId = subscription.items.data[0]?.price?.id;
   const plan = priceId ? getPlanByPriceId(priceId) : null;
   const orgId = subscription.metadata?.org_id;
@@ -44,9 +47,9 @@ export async function notifyKarthikOfNewSubscription(
   try {
     const { error } = await getResend().emails.send({ from: FROM_EMAIL, to, subject, text });
     if (error) {
-      console.warn("[notifyKarthikOfNewSubscription] resend failed:", error.message);
+      console.warn("[notifyTeamOfNewSubscription] resend failed:", error.message);
     }
   } catch (err) {
-    console.warn("[notifyKarthikOfNewSubscription] resend threw:", err);
+    console.warn("[notifyTeamOfNewSubscription] resend threw:", err);
   }
 }
