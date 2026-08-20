@@ -3,13 +3,17 @@ import { parsePdf } from "@/lib/pdf/parser";
 import { chunkText } from "@/lib/pdf/chunker";
 import { generateEmbeddings } from "@/lib/ai/openai";
 import { callModel } from "@/lib/ai/models/router";
+import { classifyPlanContent, notAPlanMessage } from "@/lib/plans/content-classifier";
 import type { PlanFileKind } from "@/lib/plans/file-kind";
 
 export interface IngestPlanResult {
   pageCount: number;
   chunkCount: number;
-  /** Set when the file format is not auto-extractable (e.g. DWG). */
+  /** Set when the file format is not auto-extractable (e.g. DWG), or when
+   * content-classification rejected the upload as not a plan. */
   manualReview?: boolean;
+  /** Set alongside manualReview — the reason shown to the user. */
+  errorMessage?: string;
 }
 
 const VISION_PROMPT = `You are extracting structured information from a building plan or
@@ -63,6 +67,20 @@ export async function ingestPlan(
     .from("plans")
     .update({ page_count: pageCount } as never)
     .eq("id", planId);
+
+  // Reject a document that isn't a plan at all BEFORE spending on embeddings
+  // — see content-classifier.ts for the full why. Checked on the raw
+  // extracted text, ahead of chunking, so a rejection never touches
+  // document_embeddings.
+  const classification = await classifyPlanContent(extractedText);
+  if (!classification.isPlan) {
+    return {
+      pageCount,
+      chunkCount: 0,
+      manualReview: true,
+      errorMessage: notAPlanMessage(classification.reason),
+    };
+  }
 
   const chunks = chunkText(extractedText, {
     sourceType: "plan",
@@ -133,6 +151,17 @@ export async function ingestPlanFromText(input: {
     .from("plans")
     .update({ page_count: pageCount } as never)
     .eq("id", input.planId);
+
+  // See ingestPlan above — same check, same reasoning.
+  const classification = await classifyPlanContent(input.text);
+  if (!classification.isPlan) {
+    return {
+      pageCount,
+      chunkCount: 0,
+      manualReview: true,
+      errorMessage: notAPlanMessage(classification.reason),
+    };
+  }
 
   const chunks = chunkText(input.text, {
     sourceType: "plan",
