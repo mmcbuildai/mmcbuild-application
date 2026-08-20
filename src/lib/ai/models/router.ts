@@ -25,6 +25,10 @@ const ROUTING_TABLE: Record<AIFunction, string[]> = {
   // falls back to gpt-4o-mini. Separate from plan_vision so the cheap classifier
   // doesn't fall back onto the premium Sonnet/gpt-4o vision tier.
   plan_page_classify: ["claude-haiku-4.5", "gpt-4o-mini"],
+  // "Is this even a building plan?" — a text-only, one-shot check on whatever
+  // was already extracted (no extra vision call). Same cheap tier as
+  // plan_page_classify and for the same reason: this runs on every upload.
+  plan_content_classify: ["claude-haiku-4.5", "gpt-4o-mini"],
   cert_metadata: ["claude-haiku-4.5", "claude-sonnet-4", "gpt-4o-mini"],
   assistant: ["claude-haiku-4.5", "gpt-4o-mini", "claude-sonnet-4"],
   // Marketplace instant-estimate query parser — classification only, never

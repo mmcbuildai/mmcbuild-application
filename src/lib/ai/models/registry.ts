@@ -26,6 +26,7 @@ export type AIFunction =
   | "training_content"
   | "plan_vision"
   | "plan_page_classify"
+  | "plan_content_classify"
   | "cert_metadata"
   | "assistant"
   | "marketplace_parse";

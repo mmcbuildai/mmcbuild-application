@@ -203,7 +203,12 @@ export const processPlan = inngest.createFunction(
           "pdf",
           plan.file_name,
         );
-        if (direct.chunkCount > 0) return direct;
+        // manualReview here (kind is hardcoded "pdf", so this can only be the
+        // content-classifier's "not a plan" rejection — see ingestion.ts) is a
+        // definitive answer, not "we found no content yet". Re-reading the
+        // same document via vision would not change what it actually is, so
+        // don't spend an extra vision call confirming it.
+        if (direct.chunkCount > 0 || direct.manualReview) return direct;
 
         const { readPlanTextViaVision } = await import(
           "@/lib/plans/vision-text-fallback"

@@ -11,8 +11,31 @@ export interface ChunkOptions {
   sourceId?: string;
 }
 
+/**
+ * Strip characters PDF text extraction can produce that Postgres/PostgREST
+ * cannot round-trip, so a plan upload can never crash ingestion with
+ * "unsupported Unicode escape sequence" partway through embedding storage.
+ *
+ * Two failure modes, both seen from real uploads:
+ *   - NUL bytes (U+0000): Postgres's `text` type cannot store these at all —
+ *     a hard Postgres limitation, not a Supabase bug.
+ *   - Unpaired UTF-16 surrogate halves: malformed Unicode that PostgREST's
+ *     JSON layer rejects. Valid surrogate PAIRS (real non-BMP characters) are
+ *     left untouched — only a high surrogate with no following low surrogate,
+ *     or a low surrogate with no preceding high surrogate, is stripped.
+ *
+ * Applied here (the one function every ingestion path routes through —
+ * ingestPlan, ingestPlanFromText, process-certification) rather than at each
+ * call site, so no future caller can reintroduce the crash by skipping it.
+ */
+function sanitizeForPostgresText(input: string): string {
+  return input
+    .replace(/\u0000/g, "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+}
+
 export function chunkText(
-  text: string,
+  rawText: string,
   options: ChunkOptions = {}
 ): DocumentChunk[] {
   const {
@@ -22,6 +45,7 @@ export function chunkText(
     sourceId = "",
   } = options;
 
+  const text = sanitizeForPostgresText(rawText);
   const maxChars = chunkSize * CHARS_PER_TOKEN;
   const overlapChars = overlap * CHARS_PER_TOKEN;
 
