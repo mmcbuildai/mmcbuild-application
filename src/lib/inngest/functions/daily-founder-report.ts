@@ -2,9 +2,10 @@ import { inngest } from "../client";
 import { db } from "@/lib/supabase/db";
 import { sendEmail } from "@/lib/email/resend";
 import { PLANS, normalizePlanId, type PlanId } from "@/lib/stripe/plans";
+import { generateDailyReportPdf, type DailyReportData } from "@/lib/reporting/daily-report-pdf";
 
 /**
- * Daily founder digest — Karen + Karthik, every night.
+ * Daily founder digest — Karen + Karthik, every night, as a PDF attachment.
  *
  * WHY THIS EXISTS
  * Every other alert in this codebase (signup, subscription, cancellation) is
@@ -21,21 +22,21 @@ import { PLANS, normalizePlanId, type PlanId } from "@/lib/stripe/plans";
  * 21:00 is nowhere near Sydney's DST transition (which happens ~2-3am local),
  * so this schedule doesn't hit the edge case Inngest's own docs warn about.
  *
- * SCOPE, deliberately: a snapshot of state (active subs, MRR, AI spend) plus
- * what changed in the last 24 hours (signups, subscriptions, cancellations,
- * per-org usage) and what needs a human (stuck uploads, past-due payments).
- * Not a historical trend report — that's a different, later feature if it
- * turns out to be wanted.
+ * PER-USER, EXCEPT AI SPEND. compliance_checks, design_checks, cost_estimates
+ * and projects all carry created_by, so runs and project creation are
+ * attributed to the actual person. ai_usage_log does NOT carry a user column
+ * (only org_id) — so AI usage stays org-level, honestly, rather than guessing
+ * which user in a multi-seat org triggered which call.
+ *
+ * PDF, NOT AN EMAIL BODY. Generated with the same jsPDF + jspdf-autotable
+ * stack every other report in this codebase already uses (comply, build,
+ * quote), same margins and grey header styling, so this doesn't introduce a
+ * second visual language. The email itself carries just a one-line summary;
+ * the attachment is the report.
  */
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.mmcbuild.com.au";
 
 function fmtMoney(n: number): string {
   return `$${n.toFixed(2)}`;
-}
-
-function fmtCost(n: number): string {
-  return `$${n.toFixed(4)}`;
 }
 
 function planLabel(planId: string | null): string {
@@ -59,7 +60,10 @@ export const dailyFounderReport = inngest.createFunction(
         allSubs,
         aiUsage,
         checksRun,
+        buildRuns,
+        quoteRuns,
         plansUploaded,
+        projectsCreated,
         stuckPlans,
         pastDueSubs,
       ] = await Promise.all([
@@ -82,11 +86,11 @@ export const dailyFounderReport = inngest.createFunction(
           .from("ai_usage_log")
           .select("org_id, provider, input_tokens, output_tokens, estimated_cost_usd")
           .gte("created_at", since),
-        admin
-          .from("compliance_checks")
-          .select("org_id, status")
-          .gte("created_at", since),
-        admin.from("plans").select("org_id, status").gte("created_at", since),
+        admin.from("compliance_checks").select("org_id, created_by").gte("created_at", since),
+        admin.from("design_checks").select("org_id, created_by").gte("created_at", since),
+        admin.from("cost_estimates").select("org_id, created_by").gte("created_at", since),
+        admin.from("plans").select("org_id, created_by, status").gte("created_at", since),
+        admin.from("projects").select("org_id, created_by").gte("created_at", since),
         admin
           .from("plans")
           .select("org_id, file_name, error_message")
@@ -94,35 +98,50 @@ export const dailyFounderReport = inngest.createFunction(
         admin.from("subscriptions").select("org_id, plan_id").eq("status", "past_due"),
       ]);
 
-      // One name lookup for every org referenced anywhere above — cheaper than
-      // a lookup per section, and it's the only reason any of these need a
-      // second query at all.
+      // Two name lookups, done once here rather than per-row below: orgs (for
+      // every section) and profiles (for the per-user activity table). Both
+      // end up as plain Records, not Maps — this whole object is what
+      // step.run persists as JSON for Inngest's replay/durability, and
+      // JSON.stringify(new Map()) silently produces "{}", which would drop
+      // every name with no error anywhere.
       const orgIds = new Set<string>();
-      for (const rows of [
-        newProfiles.data,
-        newSubs.data,
-        cancelledSubs.data,
-        allSubs.data,
-        aiUsage.data,
-        checksRun.data,
-        plansUploaded.data,
-        stuckPlans.data,
-        pastDueSubs.data,
-      ]) {
-        for (const r of (rows ?? []) as { org_id: string }[]) {
-          if (r.org_id) orgIds.add(r.org_id);
-        }
-      }
-      const { data: orgRows } = await admin
-        .from("organisations")
-        .select("id, name")
-        .in("id", Array.from(orgIds));
-      // Plain object, not a Map: this whole return value is what step.run
-      // persists as this step's JSON output for Inngest's replay/durability —
-      // a Map serializes to "{}" (JSON.stringify drops it silently), which
-      // would lose every org name without ever throwing an error.
+      const profileIds = new Set<string>();
+      const collectOrgIds = (rows: { org_id: string }[] | null) => {
+        for (const r of rows ?? []) if (r.org_id) orgIds.add(r.org_id);
+      };
+      const collectProfileIds = (rows: { created_by: string | null }[] | null) => {
+        for (const r of rows ?? []) if (r.created_by) profileIds.add(r.created_by);
+      };
+      collectOrgIds(newProfiles.data);
+      collectOrgIds(newSubs.data);
+      collectOrgIds(cancelledSubs.data);
+      collectOrgIds(allSubs.data);
+      collectOrgIds(aiUsage.data);
+      collectOrgIds(checksRun.data);
+      collectOrgIds(buildRuns.data);
+      collectOrgIds(quoteRuns.data);
+      collectOrgIds(plansUploaded.data);
+      collectOrgIds(projectsCreated.data);
+      collectOrgIds(stuckPlans.data);
+      collectOrgIds(pastDueSubs.data);
+      collectProfileIds(checksRun.data);
+      collectProfileIds(buildRuns.data);
+      collectProfileIds(quoteRuns.data);
+      collectProfileIds(plansUploaded.data);
+      collectProfileIds(projectsCreated.data);
+
+      const [{ data: orgRows }, { data: profileRows }] = await Promise.all([
+        admin.from("organisations").select("id, name").in("id", Array.from(orgIds)),
+        admin.from("profiles").select("id, full_name, email").in("id", Array.from(profileIds)),
+      ]);
       const orgNames: Record<string, string> = Object.fromEntries(
         ((orgRows ?? []) as { id: string; name: string }[]).map((o) => [o.id, o.name]),
+      );
+      const profileNames: Record<string, string> = Object.fromEntries(
+        ((profileRows ?? []) as { id: string; full_name: string | null; email: string }[]).map((p) => [
+          p.id,
+          p.full_name || p.email,
+        ]),
       );
 
       return {
@@ -130,19 +149,9 @@ export const dailyFounderReport = inngest.createFunction(
           full_name: string | null;
           email: string;
           org_id: string;
-          created_at: string;
         }[],
-        newSubs: (newSubs.data ?? []) as {
-          org_id: string;
-          plan_id: string;
-          status: string;
-          created_at: string;
-        }[],
-        cancelledSubs: (cancelledSubs.data ?? []) as {
-          org_id: string;
-          plan_id: string;
-          updated_at: string;
-        }[],
+        newSubs: (newSubs.data ?? []) as { org_id: string; plan_id: string; status: string }[],
+        cancelledSubs: (cancelledSubs.data ?? []) as { org_id: string; plan_id: string }[],
         allSubs: (allSubs.data ?? []) as { org_id: string; plan_id: string; status: string }[],
         aiUsage: (aiUsage.data ?? []) as {
           org_id: string;
@@ -151,8 +160,11 @@ export const dailyFounderReport = inngest.createFunction(
           output_tokens: number | null;
           estimated_cost_usd: number | null;
         }[],
-        checksRun: (checksRun.data ?? []) as { org_id: string; status: string }[],
-        plansUploaded: (plansUploaded.data ?? []) as { org_id: string; status: string }[],
+        checksRun: (checksRun.data ?? []) as { org_id: string; created_by: string | null }[],
+        buildRuns: (buildRuns.data ?? []) as { org_id: string; created_by: string | null }[],
+        quoteRuns: (quoteRuns.data ?? []) as { org_id: string; created_by: string | null }[],
+        plansUploaded: (plansUploaded.data ?? []) as { org_id: string; created_by: string | null }[],
+        projectsCreated: (projectsCreated.data ?? []) as { org_id: string; created_by: string | null }[],
         stuckPlans: (stuckPlans.data ?? []) as {
           org_id: string;
           file_name: string;
@@ -160,64 +172,60 @@ export const dailyFounderReport = inngest.createFunction(
         }[],
         pastDueSubs: (pastDueSubs.data ?? []) as { org_id: string; plan_id: string }[],
         orgNames,
+        profileNames,
       };
     });
 
-    const report = await step.run("build-report", () => {
+    const { pdfBuffer, dateLabel, active, trialing, mrr } = await step.run("build-report", () => {
       const orgName = (id: string) => raw.orgNames[id] ?? "(unknown org)";
-      const lines: string[] = [];
+      const userName = (id: string | null) => (id ? raw.profileNames[id] ?? "(unknown user)" : "(unknown user)");
 
-      lines.push(`MMC Build — Daily Report`);
-      lines.push(new Date().toLocaleDateString("en-AU", { timeZone: "Australia/Sydney", dateStyle: "full" }));
-      lines.push("");
-
-      // ---- Since yesterday ----
-      lines.push("SINCE YESTERDAY");
-      lines.push(`New signups: ${raw.newProfiles.length}`);
-      for (const p of raw.newProfiles) {
-        lines.push(`  - ${p.full_name || p.email} (${orgName(p.org_id)})`);
-      }
-      lines.push(`New subscriptions: ${raw.newSubs.length}`);
-      for (const s of raw.newSubs) {
-        lines.push(`  - ${orgName(s.org_id)} — ${planLabel(s.plan_id)} (${s.status})`);
-      }
-      lines.push(`Cancellations requested: ${raw.cancelledSubs.length}`);
-      for (const c of raw.cancelledSubs) {
-        lines.push(`  - ${orgName(c.org_id)} — ${planLabel(c.plan_id)}`);
-      }
-      lines.push("");
-
-      // ---- Snapshot ----
       const active = raw.allSubs.filter((s) => s.status === "active");
       const trialing = raw.allSubs.filter((s) => s.status === "trialing");
       const mrr = active.reduce((sum, s) => {
         const plan = PLANS[normalizePlanId(s.plan_id) as PlanId];
         return sum + (plan && typeof plan.price === "number" ? plan.price : 0);
       }, 0);
-      const totalCost = raw.aiUsage.reduce((sum, u) => sum + (u.estimated_cost_usd ?? 0), 0);
+      const aiSpendUsd = raw.aiUsage.reduce((sum, u) => sum + (u.estimated_cost_usd ?? 0), 0);
 
-      lines.push("SNAPSHOT");
-      lines.push(`Active subscriptions: ${active.length}`);
-      lines.push(`Trialing: ${trialing.length}`);
-      lines.push(`MRR (active only): ${fmtMoney(mrr)} AUD`);
-      lines.push(`AI spend, last 24h: ${fmtCost(totalCost)} USD`);
-      lines.push("");
-
-      // ---- Engagement, per org ----
-      const orgActivity = new Map<
-        string,
-        { checks: number; uploads: number; calls: number; tokens: number; costByProvider: Map<string, number> }
+      // Per-user activity, keyed by (created_by, org_id) — a person could in
+      // principle act inside more than one org, so the pair is the real key,
+      // not just the user id.
+      type UserKey = string; // `${profileId}::${orgId}`
+      const userActivity = new Map<
+        UserKey,
+        { userId: string; orgId: string; complianceRuns: number; buildRuns: number; quoteRuns: number; plansUploaded: number; projectsCreated: number }
       >();
-      const touch = (orgId: string) => {
-        if (!orgActivity.has(orgId)) {
-          orgActivity.set(orgId, { checks: 0, uploads: 0, calls: 0, tokens: 0, costByProvider: new Map() });
+      const touch = (createdBy: string | null, orgId: string) => {
+        const userId = createdBy ?? "unknown";
+        const key: UserKey = `${userId}::${orgId}`;
+        if (!userActivity.has(key)) {
+          userActivity.set(key, {
+            userId,
+            orgId,
+            complianceRuns: 0,
+            buildRuns: 0,
+            quoteRuns: 0,
+            plansUploaded: 0,
+            projectsCreated: 0,
+          });
         }
-        return orgActivity.get(orgId)!;
+        return userActivity.get(key)!;
       };
-      for (const c of raw.checksRun) touch(c.org_id).checks++;
-      for (const p of raw.plansUploaded) touch(p.org_id).uploads++;
+      for (const r of raw.checksRun) touch(r.created_by, r.org_id).complianceRuns++;
+      for (const r of raw.buildRuns) touch(r.created_by, r.org_id).buildRuns++;
+      for (const r of raw.quoteRuns) touch(r.created_by, r.org_id).quoteRuns++;
+      for (const r of raw.plansUploaded) touch(r.created_by, r.org_id).plansUploaded++;
+      for (const r of raw.projectsCreated) touch(r.created_by, r.org_id).projectsCreated++;
+
+      // AI usage stays ORG-level — ai_usage_log has no created_by column, so
+      // per-user attribution here would be a guess, not a fact.
+      const orgActivity = new Map<string, { calls: number; tokens: number; costByProvider: Map<string, number> }>();
       for (const u of raw.aiUsage) {
-        const entry = touch(u.org_id);
+        if (!orgActivity.has(u.org_id)) {
+          orgActivity.set(u.org_id, { calls: 0, tokens: 0, costByProvider: new Map() });
+        }
+        const entry = orgActivity.get(u.org_id)!;
         entry.calls++;
         entry.tokens += (u.input_tokens ?? 0) + (u.output_tokens ?? 0);
         entry.costByProvider.set(
@@ -226,43 +234,52 @@ export const dailyFounderReport = inngest.createFunction(
         );
       }
 
-      lines.push("ENGAGEMENT — WHO RAN WHAT");
-      if (orgActivity.size === 0) {
-        lines.push("  (nobody used the product in the last 24 hours)");
-      }
-      for (const [orgId, a] of orgActivity) {
-        const costBits = Array.from(a.costByProvider.entries())
-          .map(([provider, cost]) => `${provider} ${fmtCost(cost)}`)
-          .join(", ");
-        lines.push(
-          `  ${orgName(orgId)}: ${a.checks} compliance check(s), ${a.uploads} plan(s) uploaded, ` +
-            `${a.calls} AI call(s), ${a.tokens.toLocaleString("en-AU")} tokens` +
-            (costBits ? ` (${costBits})` : ""),
-        );
-      }
-      lines.push("");
+      const dateLabel = new Date().toLocaleDateString("en-AU", {
+        timeZone: "Australia/Sydney",
+        dateStyle: "full",
+      });
 
-      // ---- Needs attention ----
-      lines.push("NEEDS ATTENTION");
-      if (raw.stuckPlans.length === 0 && raw.pastDueSubs.length === 0) {
-        lines.push("  Nothing outstanding.");
-      }
-      if (raw.stuckPlans.length > 0) {
-        lines.push(`  Uploads stuck in manual_review: ${raw.stuckPlans.length}`);
-        for (const p of raw.stuckPlans) {
-          lines.push(`    - ${orgName(p.org_id)}: ${p.file_name}${p.error_message ? ` — ${p.error_message}` : ""}`);
-        }
-      }
-      if (raw.pastDueSubs.length > 0) {
-        lines.push(`  Past-due payments: ${raw.pastDueSubs.length}`);
-        for (const s of raw.pastDueSubs) {
-          lines.push(`    - ${orgName(s.org_id)} — ${planLabel(s.plan_id)}`);
-        }
-      }
-      lines.push("");
-      lines.push(`— ${APP_URL}/admin`);
+      const reportData: DailyReportData = {
+        dateLabel,
+        signups: raw.newProfiles.map((p) => ({ name: p.full_name || p.email, org: orgName(p.org_id) })),
+        newSubscriptions: raw.newSubs.map((s) => ({
+          org: orgName(s.org_id),
+          plan: planLabel(s.plan_id),
+          status: s.status,
+        })),
+        cancellations: raw.cancelledSubs.map((c) => ({ org: orgName(c.org_id), plan: planLabel(c.plan_id) })),
+        activeSubs: active.length,
+        trialingSubs: trialing.length,
+        mrrAud: mrr,
+        aiSpendUsd,
+        userActivity: Array.from(userActivity.values()).map((a) => ({
+          user: userName(a.userId === "unknown" ? null : a.userId),
+          org: orgName(a.orgId),
+          complianceRuns: a.complianceRuns,
+          buildRuns: a.buildRuns,
+          quoteRuns: a.quoteRuns,
+          projectsCreated: a.projectsCreated,
+        })),
+        orgAiUsage: Array.from(orgActivity.entries()).map(([orgId, a]) => ({
+          org: orgName(orgId),
+          calls: a.calls,
+          tokens: a.tokens,
+          costByProvider: Array.from(a.costByProvider.entries()).map(([provider, cost]) => ({ provider, cost })),
+        })),
+        stuckUploads: raw.stuckPlans.map((p) => ({
+          org: orgName(p.org_id),
+          fileName: p.file_name,
+          reason: p.error_message ?? "—",
+        })),
+        pastDue: raw.pastDueSubs.map((s) => ({ org: orgName(s.org_id), plan: planLabel(s.plan_id) })),
+      };
 
-      return lines.join("\n");
+      // Buffer crosses the step boundary as base64 — Inngest JSON-serializes
+      // step.run's return value, and a raw Buffer/Uint8Array does not survive
+      // that round-trip as binary; base64 text does.
+      const pdfBase64 = generateDailyReportPdf(reportData).toString("base64");
+
+      return { pdfBuffer: pdfBase64, dateLabel, active: active.length, trialing: trialing.length, mrr };
     });
 
     const to = [
@@ -273,8 +290,16 @@ export const dailyFounderReport = inngest.createFunction(
     await step.run("send-report", async () => {
       await sendEmail({
         to,
-        subject: `MMC Build — Daily Report, ${new Date().toLocaleDateString("en-AU", { timeZone: "Australia/Sydney" })}`,
-        text: report,
+        subject: `MMC Build — Daily Report, ${dateLabel}`,
+        text:
+          `Today's report is attached.\n\n` +
+          `Active subscriptions: ${active}  ·  Trialing: ${trialing}  ·  MRR: ${fmtMoney(mrr)} AUD\n`,
+        attachments: [
+          {
+            filename: `mmc-build-daily-report-${new Date().toISOString().slice(0, 10)}.pdf`,
+            content: Buffer.from(pdfBuffer, "base64"),
+          },
+        ],
       });
     });
 

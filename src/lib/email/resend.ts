@@ -73,6 +73,7 @@ export interface SendEmailOptions {
   text?: string;
   from?: string;
   replyTo?: string;
+  attachments?: { filename: string; content: Buffer }[];
 }
 
 /**
@@ -91,5 +92,6 @@ export async function sendEmail(opts: SendEmailOptions) {
     subject: opts.subject,
     ...(html ? { html } : {}),
     ...(text ? { text } : {}),
+    ...(opts.attachments ? { attachments: opts.attachments } : {}),
   } as Parameters<Resend["emails"]["send"]>[0]);
 }
