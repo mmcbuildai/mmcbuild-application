@@ -8,83 +8,63 @@ import { join } from "path";
  *
  * Styled to match the existing report generators (comply/report-pdf.ts,
  * quote/report-pdf.ts): same margins, same grey autoTable header fills, same
- * type scale, same "Page X of Y" footer. The masthead logo and the TL;DR /
- * severity-colour treatment below are the only things those don't already do
- * — none of them needed a summary banner or a multi-tier alert colour before.
+ * type scale, same "Page X of Y" footer.
  *
- * SECTION ORDER IS DELIBERATE. Needs Attention comes right after the
- * headline summary — before Since Yesterday / Snapshot / Engagement — because
- * it's the only section that ever asks someone to DO something. A founder
- * skimming an email attachment should not have to reach page 2 to find out an
- * account is past due.
+ * FOUR SECTIONS, IN THIS ORDER, PER AN EXPLICIT SPEC FROM THE REPORT'S
+ * ACTUAL READER (not a guess at what a founder report "should" have):
+ *   1. Summary — signups/subscriptions/cancellations counts, product runs by
+ *      module + total, AI cost by module + total.
+ *   2. Detail — each signup/subscription/cancellation from the last 24h,
+ *      individually.
+ *   3. Engagement — each real user's run count per product, last 24h AND
+ *      last 7 days side by side (not just 24h — a low-volume beta product
+ *      can go a whole day at 0 and still be perfectly healthy).
+ *   4. Needs Attention — stuck uploads and past-due accounts.
+ * An earlier version of this report also had a TL;DR banner, an all-time
+ * lifetime-totals block, 7-day trend arrows on every daily figure, an
+ * MRR/active/trialing snapshot, and an AI-usage-by-org table. All dropped
+ * here — not because they were wrong, but because the person who reads this
+ * every night asked for exactly the four sections above and nothing else.
  *
- * EVERY DAILY NUMBER CARRIES A 7-DAY-AVERAGE COMPARISON. A bare "0 signups
- * today" is unreadable on its own — is that a bad day or a normal Tuesday?
- * `trend7dAvg` (computed in daily-founder-report.ts from the trailing 7 days,
- * excluding today) gives every daily figure a baseline, with a plain "^"/"v"
- * suffix when today is >=25% away from that average. No colour is used for
- * this — see the note below. (Plain ASCII, not a real ▲/▼ glyph: jsPDF's
- * default Helvetica uses WinAnsiEncoding, which doesn't include the Unicode
- * triangle characters — they rendered as garbage bytes when tried.)
- *
- * COLOUR STAYS MONOCHROME EXCEPT FOR THE TWO ALERT TIERS. Every report PDF in
- * this codebase (comply/, build/, quote/) is grey/black only — no report uses
- * a "brand" accent colour anywhere. Introducing one here for a headline KPI
- * would be the only splash of brand colour in the whole reporting system,
- * which reads as inconsistent rather than distinctive. Visual priority for
- * the TL;DR instead comes from a shaded banner + bold text (weight/space, not
- * hue). The one deliberate exception is Needs Attention, which already used a
- * single muted brown for both severities — split here into a firmer red for
- * past-due (revenue risk, the more urgent of the two) and the original amber
- * for stuck uploads (a product issue, not a money-today issue), so the two
- * are visually distinguishable at a glance without leaving the report's
- * existing muted palette.
+ * "AI COST BY PRODUCT" IS HONEST ABOUT WHAT THE DATA SUPPORTS. Only Comply
+ * calls carry a `check_id` linking an AI call back to the specific run that
+ * triggered it — Build and Quote don't (yet). Cost is grouped by the
+ * `ai_function` tag instead: compliance_primary/compliance_validator →
+ * Comply, design_primary → Build, cost_primary → Quote, everything else
+ * (embeddings, plan classification, R&D classification, assistant chat, …)
+ * → "Other". Build/Quote will show $0 until those code paths start tagging
+ * their AI calls with the module-specific function names — that's a true
+ * $0, not a bug, and the Other bucket exists so the total still reconciles.
  */
 
 export interface DailyReportData {
   dateLabel: string;
   generatedAtLabel: string;
+
+  signupsCount: number;
+  newSubscriptionsCount: number;
+  cancellationsCount: number;
+  runsByProduct: { compliance: number; build: number; quote: number };
+  aiCostByProduct: { compliance: number; build: number; quote: number; other: number };
+
+  signupsCount7d: number;
+  newSubscriptionsCount7d: number;
+  cancellationsCount7d: number;
+  runsByProduct7d: { compliance: number; build: number; quote: number };
+  aiCostByProduct7d: { compliance: number; build: number; quote: number; other: number };
+
   signups: { name: string; org: string }[];
   newSubscriptions: { org: string; plan: string; status: string }[];
   cancellations: { org: string; plan: string }[];
-  activeSubs: number;
-  trialingSubs: number;
-  mrrAud: number;
-  aiSpendUsd: number;
-  totalRunsToday: number;
-  trend7dAvg: {
-    signups: number;
-    newSubscriptions: number;
-    cancellations: number;
-    totalRuns: number;
-    aiSpendUsd: number;
-  };
-  lifetime: {
-    complianceRuns: number;
-    buildRuns: number;
-    quoteRuns: number;
-    plansUploaded: number;
-    projectsCreated: number;
-    totalUsers: number;
-    totalOrgs: number;
-    aiCalls: number;
-    aiSpendUsd: number;
-  };
+
   userActivity: {
     user: string;
     org: string;
-    complianceRuns: number;
-    buildRuns: number;
-    quoteRuns: number;
-    projectsCreated: number;
+    last24h: { complianceRuns: number; buildRuns: number; quoteRuns: number; plansUploaded: number; projectsCreated: number };
+    last7d: { complianceRuns: number; buildRuns: number; quoteRuns: number; plansUploaded: number; projectsCreated: number };
   }[];
-  orgAiUsage: {
-    org: string;
-    calls: number;
-    tokens: number;
-    costByProvider: { provider: string; cost: number }[];
-  }[];
-  stuckUploads: { org: string; fileName: string; reason: string }[];
+
+  stuckUploads: { org: string; fileName: string; reason: string; status: string; nextSteps: string }[];
   pastDue: { org: string; plan: string }[];
 }
 
@@ -93,7 +73,6 @@ const GREY: [number, number, number] = [100, 100, 100];
 const HEAD_FILL: [number, number, number] = [30, 30, 30];
 const PAST_DUE_RED: [number, number, number] = [163, 38, 38];
 const STUCK_AMBER: [number, number, number] = [150, 96, 20];
-const BANNER_FILL: [number, number, number] = [242, 243, 245];
 
 function loadLogoBase64(): string | null {
   try {
@@ -103,34 +82,6 @@ function loadLogoBase64(): string | null {
     console.warn("[daily-report-pdf] could not load logo, continuing without it:", err);
     return null;
   }
-}
-
-function pluralize(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
-
-/** "^"/"v" when today is >=25% away from the 7-day average; blank when it's in line with it. */
-function trendSuffix(today: number, avg: number): string {
-  if (avg <= 0) return today > 0 ? " ^" : "";
-  const ratio = today / avg;
-  if (ratio >= 1.25) return " ^";
-  if (ratio <= 0.75) return " v";
-  return "";
-}
-
-function buildSummaryLine(data: DailyReportData): string {
-  const growthBits: string[] = [];
-  if (data.signups.length) growthBits.push(pluralize(data.signups.length, "new signup"));
-  if (data.newSubscriptions.length) growthBits.push(pluralize(data.newSubscriptions.length, "new subscription"));
-  if (data.cancellations.length) growthBits.push(pluralize(data.cancellations.length, "cancellation"));
-  const growthLine = growthBits.length > 0 ? `${growthBits.join(", ")}.` : "No signups, subscriptions, or cancellations today.";
-
-  const attentionBits: string[] = [];
-  if (data.pastDue.length) attentionBits.push(`${pluralize(data.pastDue.length, "account")} past due`);
-  if (data.stuckUploads.length) attentionBits.push(pluralize(data.stuckUploads.length, "stuck upload"));
-  const attentionLine = attentionBits.length === 0 ? "Nothing needs attention." : `${attentionBits.join(", ")} — needs attention.`;
-
-  return `${growthLine} ${attentionLine}`;
 }
 
 export function generateDailyReportPdf(data: DailyReportData): Buffer {
@@ -181,21 +132,179 @@ export function generateDailyReportPdf(data: DailyReportData): Buffer {
     y += 10;
   };
 
-  // --- TL;DR banner — read this and nothing else if you're short on time ---
-  const summaryText = buildSummaryLine(data);
-  doc.setFontSize(10);
-  const summaryLines = doc.splitTextToSize(summaryText, contentWidth - 10);
-  const bannerHeight = summaryLines.length * 5 + 7;
-  doc.setFillColor(...BANNER_FILL);
-  doc.roundedRect(margin, y, contentWidth, bannerHeight, 2, 2, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...INK);
-  doc.text(summaryLines, margin + 5, y + 6);
-  doc.setFont("helvetica", "normal");
-  y += bannerHeight + 8;
+  // --- 1. Summary ---
+  sectionHeading("Summary");
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [["", "Last 24h", "Last 7d"]],
+    body: [
+      ["New signups", `${data.signupsCount}`, `${data.signupsCount7d}`],
+      ["New subscriptions", `${data.newSubscriptionsCount}`, `${data.newSubscriptionsCount7d}`],
+      ["Cancellation requests", `${data.cancellationsCount}`, `${data.cancellationsCount7d}`],
+    ],
+    headStyles: { fillColor: HEAD_FILL, fontSize: 9 },
+    bodyStyles: { fontSize: 9 },
+    columnStyles: { 1: { cellWidth: 26, halign: "right" }, 2: { cellWidth: 26, halign: "right" } },
+  });
+  afterTable();
 
-  // --- Needs Attention — first substantive section: the only one that ever
-  // asks someone to act, so it goes before the read-only tables below. ---
+  const totalRuns = data.runsByProduct.compliance + data.runsByProduct.build + data.runsByProduct.quote;
+  const totalAiCost =
+    data.aiCostByProduct.compliance + data.aiCostByProduct.build + data.aiCostByProduct.quote + data.aiCostByProduct.other;
+  const totalRuns7d = data.runsByProduct7d.compliance + data.runsByProduct7d.build + data.runsByProduct7d.quote;
+  const totalAiCost7d =
+    data.aiCostByProduct7d.compliance +
+    data.aiCostByProduct7d.build +
+    data.aiCostByProduct7d.quote +
+    data.aiCostByProduct7d.other;
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [["Product", "Runs 24h", "Runs 7d", "AI cost 24h", "AI cost 7d"]],
+    body: [
+      [
+        "Comply",
+        `${data.runsByProduct.compliance}`,
+        `${data.runsByProduct7d.compliance}`,
+        `$${data.aiCostByProduct.compliance.toFixed(2)}`,
+        `$${data.aiCostByProduct7d.compliance.toFixed(2)}`,
+      ],
+      [
+        "Build",
+        `${data.runsByProduct.build}`,
+        `${data.runsByProduct7d.build}`,
+        `$${data.aiCostByProduct.build.toFixed(2)}`,
+        `$${data.aiCostByProduct7d.build.toFixed(2)}`,
+      ],
+      [
+        "Quote",
+        `${data.runsByProduct.quote}`,
+        `${data.runsByProduct7d.quote}`,
+        `$${data.aiCostByProduct.quote.toFixed(2)}`,
+        `$${data.aiCostByProduct7d.quote.toFixed(2)}`,
+      ],
+      [
+        "Other (plan processing, R&D, shared AI)",
+        "—",
+        "—",
+        `$${data.aiCostByProduct.other.toFixed(2)}`,
+        `$${data.aiCostByProduct7d.other.toFixed(2)}`,
+      ],
+      [
+        "Total",
+        `${totalRuns}`,
+        `${totalRuns7d}`,
+        `$${totalAiCost.toFixed(2)}`,
+        `$${totalAiCost7d.toFixed(2)}`,
+      ],
+    ],
+    headStyles: { fillColor: HEAD_FILL, fontSize: 9 },
+    bodyStyles: { fontSize: 8.5 },
+    columnStyles: {
+      1: { cellWidth: 19, halign: "right" },
+      2: { cellWidth: 19, halign: "right" },
+      3: { cellWidth: 26, halign: "right" },
+      4: { cellWidth: 26, halign: "right" },
+    },
+    didParseCell: (hookData) => {
+      if (hookData.row.index === 4 && hookData.section === "body") {
+        hookData.cell.styles.fontStyle = "bold";
+      }
+    },
+  });
+  afterTable();
+
+  // --- 2. Detail: each signup / subscription / cancellation, last 24h ---
+  sectionHeading("Detail — Last 24h");
+  if (data.signups.length === 0 && data.newSubscriptions.length === 0 && data.cancellations.length === 0) {
+    emptyNote("No signups, subscriptions, or cancellations in the last 24 hours.");
+  } else {
+    if (data.signups.length > 0) {
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [["New signup", "Org"]],
+        body: data.signups.map((s) => [s.name, s.org]),
+        headStyles: { fillColor: [70, 70, 70], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+      });
+      afterTable();
+    }
+    if (data.newSubscriptions.length > 0) {
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [["New subscription — Org", "Plan", "Status"]],
+        body: data.newSubscriptions.map((s) => [s.org, s.plan, s.status]),
+        headStyles: { fillColor: [70, 70, 70], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+      });
+      afterTable();
+    }
+    if (data.cancellations.length > 0) {
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [["Cancellation requested — Org", "Plan"]],
+        body: data.cancellations.map((c) => [c.org, c.plan]),
+        headStyles: { fillColor: [70, 70, 70], fontSize: 8 },
+        bodyStyles: { fontSize: 8 },
+      });
+      afterTable();
+    }
+  }
+
+  // --- 3. Engagement: real users only, runs per product, 24h and 7d ---
+  sectionHeading("Engagement — Real Users");
+  if (data.userActivity.length === 0) {
+    emptyNote("No real (non-test) user ran anything or uploaded a plan in the last 7 days.");
+  } else {
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [["User", "Org", "Comply (24h / 7d)", "Build (24h / 7d)", "Quote (24h / 7d)"]],
+      body: data.userActivity.map((u) => [
+        u.user,
+        u.org,
+        `${u.last24h.complianceRuns} / ${u.last7d.complianceRuns}`,
+        `${u.last24h.buildRuns} / ${u.last7d.buildRuns}`,
+        `${u.last24h.quoteRuns} / ${u.last7d.quoteRuns}`,
+      ]),
+      headStyles: { fillColor: HEAD_FILL, fontSize: 9 },
+      bodyStyles: { fontSize: 9 },
+      columnStyles: {
+        2: { halign: "right" },
+        3: { halign: "right" },
+        4: { halign: "right" },
+      },
+    });
+    afterTable();
+
+    // Separate table for plans/projects — not "runs" in the Comply/Build/
+    // Quote sense, but activity that otherwise disappears entirely for a
+    // user whose only engagement is uploading, not running.
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [["User", "Org", "Plans uploaded (24h / 7d)", "Projects created (24h / 7d)"]],
+      body: data.userActivity.map((u) => [
+        u.user,
+        u.org,
+        `${u.last24h.plansUploaded} / ${u.last7d.plansUploaded}`,
+        `${u.last24h.projectsCreated} / ${u.last7d.projectsCreated}`,
+      ]),
+      headStyles: { fillColor: [70, 70, 70], fontSize: 9 },
+      bodyStyles: { fontSize: 9 },
+      columnStyles: {
+        2: { halign: "right" },
+        3: { halign: "right" },
+      },
+    });
+    afterTable();
+  }
+
+  // --- 4. Needs Attention ---
   sectionHeading("Needs Attention");
   if (data.stuckUploads.length === 0 && data.pastDue.length === 0) {
     emptyNote("Nothing outstanding.");
@@ -215,184 +324,18 @@ export function generateDailyReportPdf(data: DailyReportData): Buffer {
       autoTable(doc, {
         startY: y,
         margin: { left: margin, right: margin },
-        head: [["Stuck upload — Org", "File", "Reason"]],
-        body: data.stuckUploads.map((s) => [s.org, s.fileName, s.reason]),
+        head: [["Stuck upload — Org", "File", "Reason", "Latest status", "Next steps"]],
+        body: data.stuckUploads.map((s) => [s.org, s.fileName, s.reason, s.status, s.nextSteps]),
         headStyles: { fillColor: STUCK_AMBER, fontSize: 8 },
-        bodyStyles: { fontSize: 8 },
-        columnStyles: { 2: { cellWidth: contentWidth - 90 } },
+        bodyStyles: { fontSize: 7.5 },
+        columnStyles: {
+          0: { cellWidth: 25 },
+          1: { cellWidth: 25 },
+          3: { cellWidth: 22 },
+        },
       });
       afterTable();
     }
-  }
-
-  // --- Since Yesterday, every figure against its 7-day average ---
-  sectionHeading("Since Yesterday (vs. 7-day average)");
-  autoTable(doc, {
-    startY: y,
-    margin: { left: margin, right: margin },
-    head: [["", "Today", "7d avg"]],
-    body: [
-      [
-        "New signups",
-        `${data.signups.length}${trendSuffix(data.signups.length, data.trend7dAvg.signups)}`,
-        data.trend7dAvg.signups.toFixed(1),
-      ],
-      [
-        "New subscriptions",
-        `${data.newSubscriptions.length}${trendSuffix(data.newSubscriptions.length, data.trend7dAvg.newSubscriptions)}`,
-        data.trend7dAvg.newSubscriptions.toFixed(1),
-      ],
-      [
-        "Cancellations requested",
-        `${data.cancellations.length}${trendSuffix(data.cancellations.length, data.trend7dAvg.cancellations)}`,
-        data.trend7dAvg.cancellations.toFixed(1),
-      ],
-      [
-        "Product runs (Comply + Build + Quote)",
-        `${data.totalRunsToday}${trendSuffix(data.totalRunsToday, data.trend7dAvg.totalRuns)}`,
-        data.trend7dAvg.totalRuns.toFixed(1),
-      ],
-      [
-        "AI spend (USD)",
-        `$${data.aiSpendUsd.toFixed(2)}${trendSuffix(data.aiSpendUsd, data.trend7dAvg.aiSpendUsd)}`,
-        `$${data.trend7dAvg.aiSpendUsd.toFixed(2)}`,
-      ],
-    ],
-    headStyles: { fillColor: HEAD_FILL, fontSize: 9 },
-    bodyStyles: { fontSize: 9 },
-    columnStyles: { 1: { cellWidth: 32, halign: "right" }, 2: { cellWidth: 28, halign: "right" } },
-  });
-  afterTable();
-
-  if (data.signups.length > 0) {
-    autoTable(doc, {
-      startY: y,
-      margin: { left: margin, right: margin },
-      head: [["New signup", "Org"]],
-      body: data.signups.map((s) => [s.name, s.org]),
-      headStyles: { fillColor: [70, 70, 70], fontSize: 8 },
-      bodyStyles: { fontSize: 8 },
-    });
-    afterTable();
-  }
-  if (data.newSubscriptions.length > 0) {
-    autoTable(doc, {
-      startY: y,
-      margin: { left: margin, right: margin },
-      head: [["New subscription — Org", "Plan", "Status"]],
-      body: data.newSubscriptions.map((s) => [s.org, s.plan, s.status]),
-      headStyles: { fillColor: [70, 70, 70], fontSize: 8 },
-      bodyStyles: { fontSize: 8 },
-    });
-    afterTable();
-  }
-  if (data.cancellations.length > 0) {
-    autoTable(doc, {
-      startY: y,
-      margin: { left: margin, right: margin },
-      head: [["Cancellation requested — Org", "Plan"]],
-      body: data.cancellations.map((c) => [c.org, c.plan]),
-      headStyles: { fillColor: [70, 70, 70], fontSize: 8 },
-      bodyStyles: { fontSize: 8 },
-    });
-    afterTable();
-  }
-
-  // --- Snapshot: current state + all-time totals, so a daily number always
-  // has a lifetime figure to sit next to. ---
-  sectionHeading("Snapshot");
-  autoTable(doc, {
-    startY: y,
-    margin: { left: margin, right: margin },
-    body: [
-      ["Active subscriptions", `${data.activeSubs}`],
-      ["Trialing", `${data.trialingSubs}`],
-      ["MRR (active only)", `$${data.mrrAud.toFixed(2)} AUD`],
-      ["Total users (all-time)", `${data.lifetime.totalUsers}`],
-      ["Total orgs (all-time)", `${data.lifetime.totalOrgs}`],
-      [
-        "Total product runs (all-time)",
-        `${data.lifetime.complianceRuns + data.lifetime.buildRuns + data.lifetime.quoteRuns}`,
-      ],
-      [
-        "  — Comply / Build / Quote",
-        `${data.lifetime.complianceRuns} / ${data.lifetime.buildRuns} / ${data.lifetime.quoteRuns}`,
-      ],
-      ["Total plans uploaded (all-time)", `${data.lifetime.plansUploaded}`],
-      ["Total projects created (all-time)", `${data.lifetime.projectsCreated}`],
-      ["AI spend (all-time, USD)", `$${data.lifetime.aiSpendUsd.toFixed(2)}`],
-    ],
-    theme: "plain",
-    bodyStyles: { fontSize: 10 },
-    columnStyles: { 0: { fontStyle: "bold", cellWidth: 70 } },
-  });
-  afterTable();
-
-  // --- Engagement: runs by user ---
-  sectionHeading("Engagement — Runs by User (last 24h)");
-  if (data.userActivity.length === 0) {
-    emptyNote("Nobody used the product in the last 24 hours.");
-  } else {
-    autoTable(doc, {
-      startY: y,
-      margin: { left: margin, right: margin },
-      head: [["User", "Org", "Comply", "Build", "Quote", "Projects created"]],
-      body: data.userActivity.map((u) => [
-        u.user,
-        u.org,
-        `${u.complianceRuns}`,
-        `${u.buildRuns}`,
-        `${u.quoteRuns}`,
-        `${u.projectsCreated}`,
-      ]),
-      headStyles: { fillColor: HEAD_FILL, fontSize: 9 },
-      bodyStyles: { fontSize: 9 },
-      columnStyles: {
-        2: { halign: "right" },
-        3: { halign: "right" },
-        4: { halign: "right" },
-        5: { halign: "right" },
-      },
-    });
-    afterTable();
-  }
-
-  // --- AI usage by org (ai_usage_log has no per-user column, org is the
-  // finest attribution the data actually supports). Capped to the top 10 by
-  // spend so this doesn't grow unbounded as the org count scales. ---
-  sectionHeading("AI Usage by Org (last 24h)");
-  if (data.orgAiUsage.length === 0) {
-    emptyNote("No AI calls in the last 24 hours.");
-  } else {
-    const orgTotalCost = (o: DailyReportData["orgAiUsage"][number]) =>
-      o.costByProvider.reduce((sum, c) => sum + c.cost, 0);
-    const sorted = [...data.orgAiUsage].sort((a, b) => orgTotalCost(b) - orgTotalCost(a));
-    const top = sorted.slice(0, 10);
-    const rest = sorted.slice(10);
-
-    const body = top.map((o) => [
-      o.org,
-      `${o.calls}`,
-      o.tokens.toLocaleString("en-AU"),
-      o.costByProvider.map((c) => `${c.provider} $${c.cost.toFixed(4)}`).join(", "),
-    ]);
-    if (rest.length > 0) {
-      const restCalls = rest.reduce((s, o) => s + o.calls, 0);
-      const restTokens = rest.reduce((s, o) => s + o.tokens, 0);
-      const restCost = rest.reduce((s, o) => s + orgTotalCost(o), 0);
-      body.push([`+ ${pluralize(rest.length, "more org")}`, `${restCalls}`, restTokens.toLocaleString("en-AU"), `$${restCost.toFixed(4)} combined`]);
-    }
-
-    autoTable(doc, {
-      startY: y,
-      margin: { left: margin, right: margin },
-      head: [["Org", "Calls", "Tokens", "Cost (by provider)"]],
-      body,
-      headStyles: { fillColor: HEAD_FILL, fontSize: 9 },
-      bodyStyles: { fontSize: 8 },
-      columnStyles: { 1: { halign: "right" }, 2: { halign: "right" } },
-    });
-    afterTable();
   }
 
   // --- Footer on all pages — same pattern as comply/build/quote reports ---
