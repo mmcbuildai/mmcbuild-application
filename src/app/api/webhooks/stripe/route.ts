@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe/client";
 import { inngest } from "@/lib/inngest/client";
 import { getPlanByPriceId } from "@/lib/stripe/plans";
-import { notifyKarthikOfNewSubscription } from "@/lib/email/subscriptions";
+import { notifyTeamOfNewSubscription } from "@/lib/email/subscriptions";
 import { sendGA4Event } from "@/lib/analytics/ga4-measurement-protocol";
 import { db } from "@/lib/supabase/db";
 import type Stripe from "stripe";
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
           await sendSyncEvent(subscription);
           // Fired here only — checkout.session.completed is the one event that
           // means "a user just subscribed" (not a renewal or plan change).
-          await notifyKarthikOfNewSubscription(subscription);
+          await notifyTeamOfNewSubscription(subscription);
           // GA4 "trial started" conversion — fast signal for Google Ads bidding.
           // A card was just captured (payment_method_collection: "always"), so
           // this is a meaningfully qualified signal, not a throwaway one — but

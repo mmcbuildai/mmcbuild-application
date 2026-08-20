@@ -1,7 +1,7 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { ensureMembership } from "./membership";
 import { recordSignupLead } from "@/lib/hubspot/signup";
-import { notifyKarthikOfNewUser } from "@/lib/email/user-registered";
+import { notifyTeamOfNewUser } from "@/lib/email/user-registered";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -133,14 +133,14 @@ export async function provisionUser(
         .select("name")
         .eq("id", inv.org_id)
         .single();
-      const result = await notifyKarthikOfNewUser({
+      const result = await notifyTeamOfNewUser({
         email,
         fullName,
         orgName: (orgRow as { name?: string } | null)?.name ?? null,
         outcome: "invited",
       });
       if (!result.ok) {
-        console.warn("[provisionUser] Karthik notification (invited) failed:", result.error);
+        console.warn("[provisionUser] team notification (invited) failed:", result.error);
       }
     }
 
@@ -199,14 +199,14 @@ export async function provisionUser(
     orgName: user.orgNameFallback ?? null,
   });
 
-  const notifyResult = await notifyKarthikOfNewUser({
+  const notifyResult = await notifyTeamOfNewUser({
     email,
     fullName,
     orgName: user.orgNameFallback || "My Organisation",
     outcome: "self_signup",
   });
   if (!notifyResult.ok) {
-    console.warn("[provisionUser] Karthik notification (self_signup) failed:", notifyResult.error);
+    console.warn("[provisionUser] team notification (self_signup) failed:", notifyResult.error);
   }
 
   return {

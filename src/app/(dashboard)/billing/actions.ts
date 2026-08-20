@@ -21,6 +21,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import type { Attribution } from "@/lib/attribution/first-touch";
 import { parseGaClientId } from "@/lib/analytics/ga4-measurement-protocol";
+import { notifyTeamOfCancellation } from "@/lib/email/subscriptions";
 
 async function getOrgWithStripeCustomer() {
   const supabase = await createClient();
@@ -407,7 +408,7 @@ export async function cancelSubscription() {
 
   const { data: sub } = await db()
     .from("subscriptions")
-    .select("stripe_subscription_id, status")
+    .select("stripe_subscription_id, status, plan_id")
     .eq("org_id", profile.org_id)
     .in("status", ["active", "past_due", "trialing"])
     .order("created_at", { ascending: false })
@@ -432,12 +433,28 @@ export async function cancelSubscription() {
       .update({ cancel_at_period_end: true, updated_at: new Date().toISOString() })
       .eq("stripe_subscription_id", sub.stripe_subscription_id);
 
+    const wasTrialing = sub.status === "trialing";
+    const endsAt = updated.cancel_at
+      ? new Date(updated.cancel_at * 1000).toISOString()
+      : null;
+
+    // Best-effort internal alert — an early warning while there's still a
+    // retention window, not blocking the customer's own cancellation.
+    const orgRow = await db().from("organisations").select("name").eq("id", profile.org_id).single();
+    const planLabel = PLANS[sub.plan_id as PlanId]?.name ?? sub.plan_id ?? "unknown";
+    await notifyTeamOfCancellation({
+      orgId: profile.org_id,
+      orgName: (orgRow.data as { name?: string } | null)?.name ?? "—",
+      planLabel,
+      wasTrialing,
+      endsAt,
+      cancelledByEmail: user.email ?? "—",
+    });
+
     return {
       ok: true,
-      wasTrialing: sub.status === "trialing",
-      endsAt: updated.cancel_at
-        ? new Date(updated.cancel_at * 1000).toISOString()
-        : null,
+      wasTrialing,
+      endsAt,
     };
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);

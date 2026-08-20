@@ -13,12 +13,16 @@ interface NewUserNotification {
 /**
  * Best-effort internal alert on every NEW profile provisioned (self-signup or
  * accepted invite) — never thrown, so a Resend hiccup can't break provisioning.
- * Mirrors notifyKarenOfNewLead / the beta-feedback KARTHIK_EMAIL pattern.
+ * Sent to both Karen and Karthik, same [KAREN_EMAIL, KARTHIK_EMAIL] pattern
+ * already used for the beta-feedback alert (beta/actions.ts).
  */
-export async function notifyKarthikOfNewUser(
+export async function notifyTeamOfNewUser(
   input: NewUserNotification,
 ): Promise<NotifyResult> {
-  const to = process.env.KARTHIK_EMAIL || "karthik.rao@mmcbuild.com.au";
+  const to = [
+    process.env.KAREN_EMAIL || "karen.engel@mmcbuild.com.au",
+    process.env.KARTHIK_EMAIL || "karthik.rao@mmcbuild.com.au",
+  ];
   const kind = input.outcome === "invited" ? "accepted an invite" : "signed up";
 
   const subject = `New user ${kind} — ${input.fullName || input.email}`;
