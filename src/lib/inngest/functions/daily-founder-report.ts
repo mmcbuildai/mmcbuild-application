@@ -33,6 +33,16 @@ import { generateDailyReportPdf, type DailyReportData } from "@/lib/reporting/da
  * quote), same margins and grey header styling, so this doesn't introduce a
  * second visual language. The email itself carries just a one-line summary;
  * the attachment is the report.
+ *
+ * TWO EXTRA QUERY BATCHES: LIFETIME TOTALS + 7-DAY TREND. Added after the
+ * first version shipped with no context for whether a daily number was normal
+ * — see daily-report-pdf.ts's file comment. Lifetime totals are plain
+ * `count: "exact", head: true` queries (cheap — Postgres counts without
+ * returning rows). The trend queries use the SAME shape over
+ * [since8d, since) — the 7 days immediately before today — rather than
+ * fetching per-row detail, because only a count/sum is needed, not per-user
+ * attribution. Data volumes here are small (dozens to low thousands of rows
+ * per table), so none of this risks the Vercel/Inngest step timeout.
  */
 
 function fmtMoney(n: number): string {
@@ -50,6 +60,7 @@ export const dailyFounderReport = inngest.createFunction(
   { cron: "TZ=Australia/Sydney 0 21 * * *" },
   async ({ step }) => {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const since8d = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
     const admin = db();
 
     const raw = await step.run("gather-data", async () => {
@@ -66,6 +77,22 @@ export const dailyFounderReport = inngest.createFunction(
         projectsCreated,
         stuckPlans,
         pastDueSubs,
+        lifetimeCompliance,
+        lifetimeBuild,
+        lifetimeQuote,
+        lifetimePlans,
+        lifetimeProjects,
+        lifetimeUsers,
+        lifetimeOrgs,
+        lifetimeAiCalls,
+        lifetimeAiCostRows,
+        trendProfiles,
+        trendNewSubs,
+        trendCancelledSubs,
+        trendCompliance,
+        trendBuild,
+        trendQuote,
+        trendAiCostRows,
       ] = await Promise.all([
         admin
           .from("profiles")
@@ -96,6 +123,49 @@ export const dailyFounderReport = inngest.createFunction(
           .select("org_id, file_name, error_message")
           .eq("status", "manual_review"),
         admin.from("subscriptions").select("org_id, plan_id").eq("status", "past_due"),
+        // --- lifetime totals (count-only, no rows returned) ---
+        admin.from("compliance_checks").select("id", { count: "exact", head: true }),
+        admin.from("design_checks").select("id", { count: "exact", head: true }),
+        admin.from("cost_estimates").select("id", { count: "exact", head: true }),
+        admin.from("plans").select("id", { count: "exact", head: true }),
+        admin.from("projects").select("id", { count: "exact", head: true }),
+        admin.from("profiles").select("id", { count: "exact", head: true }),
+        admin.from("organisations").select("id", { count: "exact", head: true }),
+        admin.from("ai_usage_log").select("id", { count: "exact", head: true }),
+        admin.from("ai_usage_log").select("estimated_cost_usd"),
+        // --- trailing 7 days [since8d, since) for the trend baseline ---
+        admin
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", since8d)
+          .lt("created_at", since),
+        admin
+          .from("subscriptions")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", since8d)
+          .lt("created_at", since),
+        admin
+          .from("subscriptions")
+          .select("id", { count: "exact", head: true })
+          .eq("cancel_at_period_end", true)
+          .gte("updated_at", since8d)
+          .lt("updated_at", since),
+        admin
+          .from("compliance_checks")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", since8d)
+          .lt("created_at", since),
+        admin
+          .from("design_checks")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", since8d)
+          .lt("created_at", since),
+        admin
+          .from("cost_estimates")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", since8d)
+          .lt("created_at", since),
+        admin.from("ai_usage_log").select("estimated_cost_usd").gte("created_at", since8d).lt("created_at", since),
       ]);
 
       // Two name lookups, done once here rather than per-row below: orgs (for
@@ -173,6 +243,30 @@ export const dailyFounderReport = inngest.createFunction(
         pastDueSubs: (pastDueSubs.data ?? []) as { org_id: string; plan_id: string }[],
         orgNames,
         profileNames,
+        lifetime: {
+          complianceRuns: lifetimeCompliance.count ?? 0,
+          buildRuns: lifetimeBuild.count ?? 0,
+          quoteRuns: lifetimeQuote.count ?? 0,
+          plansUploaded: lifetimePlans.count ?? 0,
+          projectsCreated: lifetimeProjects.count ?? 0,
+          totalUsers: lifetimeUsers.count ?? 0,
+          totalOrgs: lifetimeOrgs.count ?? 0,
+          aiCalls: lifetimeAiCalls.count ?? 0,
+          aiSpendUsd: (lifetimeAiCostRows.data ?? []).reduce(
+            (sum: number, r: { estimated_cost_usd: number | null }) => sum + (r.estimated_cost_usd ?? 0),
+            0,
+          ),
+        },
+        trend7dCounts: {
+          signups: trendProfiles.count ?? 0,
+          newSubscriptions: trendNewSubs.count ?? 0,
+          cancellations: trendCancelledSubs.count ?? 0,
+          totalRuns: (trendCompliance.count ?? 0) + (trendBuild.count ?? 0) + (trendQuote.count ?? 0),
+          aiSpendUsd: (trendAiCostRows.data ?? []).reduce(
+            (sum: number, r: { estimated_cost_usd: number | null }) => sum + (r.estimated_cost_usd ?? 0),
+            0,
+          ),
+        },
       };
     });
 
@@ -187,6 +281,7 @@ export const dailyFounderReport = inngest.createFunction(
         return sum + (plan && typeof plan.price === "number" ? plan.price : 0);
       }, 0);
       const aiSpendUsd = raw.aiUsage.reduce((sum, u) => sum + (u.estimated_cost_usd ?? 0), 0);
+      const totalRunsToday = raw.checksRun.length + raw.buildRuns.length + raw.quoteRuns.length;
 
       // Per-user activity, keyed by (created_by, org_id) — a person could in
       // principle act inside more than one org, so the pair is the real key,
@@ -238,9 +333,15 @@ export const dailyFounderReport = inngest.createFunction(
         timeZone: "Australia/Sydney",
         dateStyle: "full",
       });
+      const generatedAtLabel = new Date().toLocaleString("en-AU", {
+        timeZone: "Australia/Sydney",
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
 
       const reportData: DailyReportData = {
         dateLabel,
+        generatedAtLabel,
         signups: raw.newProfiles.map((p) => ({ name: p.full_name || p.email, org: orgName(p.org_id) })),
         newSubscriptions: raw.newSubs.map((s) => ({
           org: orgName(s.org_id),
@@ -252,6 +353,15 @@ export const dailyFounderReport = inngest.createFunction(
         trialingSubs: trialing.length,
         mrrAud: mrr,
         aiSpendUsd,
+        totalRunsToday,
+        trend7dAvg: {
+          signups: raw.trend7dCounts.signups / 7,
+          newSubscriptions: raw.trend7dCounts.newSubscriptions / 7,
+          cancellations: raw.trend7dCounts.cancellations / 7,
+          totalRuns: raw.trend7dCounts.totalRuns / 7,
+          aiSpendUsd: raw.trend7dCounts.aiSpendUsd / 7,
+        },
+        lifetime: raw.lifetime,
         userActivity: Array.from(userActivity.values()).map((a) => ({
           user: userName(a.userId === "unknown" ? null : a.userId),
           org: orgName(a.orgId),
