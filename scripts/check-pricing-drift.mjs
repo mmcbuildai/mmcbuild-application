@@ -30,7 +30,19 @@
  * check, so the gap is printed in the output every run.
  */
 
-import { PLANS, SELLABLE_PLAN_IDS } from "../src/lib/stripe/plans.ts";
+// `plans.ts` imports `@/lib/legal/commercial-facts`, a tsconfig path alias plain
+// `node` cannot resolve — which took this guard out for three nights from 10 Aug
+// without it ever reaching an assertion. The hook teaches Node the alias; see
+// scripts/tsconfig-alias-hook.mjs for why that rather than a relative import.
+//
+// The import below MUST stay dynamic. A static `import` is hoisted above every
+// statement in the module, so it would resolve before `register()` ran and fail
+// exactly as before — with the fix sitting right there, apparently applied.
+import { register } from "node:module";
+
+register("./tsconfig-alias-hook.mjs", import.meta.url);
+
+const { PLANS, SELLABLE_PLAN_IDS } = await import("../src/lib/stripe/plans.ts");
 
 const DEFAULT_URL = "https://mmcbuild.com.au/pricing";
 const RETRIES = 3;
