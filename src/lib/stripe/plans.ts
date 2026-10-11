@@ -388,18 +388,26 @@ export const TAX_DISCLOSURE =
  * together so the pair cannot drift.
  */
 /**
- * Re-exported, not declared. The home is `@/lib/legal/commercial-facts`, which
- * has no imports so it can be byte-identical in the marketing repo too.
+ * Re-exported, not declared. The home is `src/lib/legal/commercial-facts`,
+ * which has no imports so it can be byte-identical in the marketing repo too.
  *
  * Kept exported from here because a dozen files already import them from this
  * module, and rewriting those call sites would be churn with no safety gained —
  * the point is one DECLARATION, not one import path.
+ *
+ * ⚠️ Imported by RELATIVE path, not the `@/` alias. `scripts/check-pricing-drift.mjs`
+ * loads this file with plain `node` (no Next.js build step), and Node's module
+ * resolution has no knowledge of the tsconfig `@/*` path alias — only this repo's
+ * bundler/TS tooling does. A `@/` import here is invisible to `tsc`/webpack (both
+ * resolve it fine) but throws `ERR_MODULE_NOT_FOUND` the moment anything runs this
+ * file outside Next.js, which is exactly how the pricing-drift CI gate silently
+ * crashed on every scheduled run for ~2 months (since #179, 2026-08-10).
  */
 export {
   TRIAL_RUN_LIMIT,
   TRIAL_UPLOAD_LIMIT,
   TRIAL_DAYS,
-} from "@/lib/legal/commercial-facts";
+} from "../legal/commercial-facts.ts";
 
 /**
  * Resolve a Stripe price id back to the tier it grants.
